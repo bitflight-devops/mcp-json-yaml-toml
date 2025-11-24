@@ -65,7 +65,6 @@ def _decode_cursor(cursor: str) -> int:
         return offset
 
 
-
 def _paginate_result(result_str: str, cursor: str | None, advisory_hint: str | None = None) -> dict[str, Any]:
     """Paginate a result string at PAGE_SIZE_CHARS boundary.
 
@@ -107,18 +106,49 @@ def _paginate_result(result_str: str, cursor: str | None, advisory_hint: str | N
     return response
 
 
-def _summarize_structure(data: Any, depth: int = 0, max_depth: int = 1) -> Any:
+def _summarize_list_structure(data: list[Any], depth: int, max_depth: int, full_keys_mode: bool) -> Any:
+    """Summarize list structure for _summarize_structure.
+
+    Args:
+        data: List to summarize
+        depth: Current recursion depth
+        max_depth: Maximum depth to traverse
+        full_keys_mode: If True, show representative structure
+
+    Returns:
+        Summarized list structure
+    """
+    if not data:
+        return []
+
+    if full_keys_mode:
+        # Show representative structure based on first item type
+        first_item = data[0]
+        if isinstance(first_item, (dict, list)):
+            return [_summarize_structure(first_item, depth + 1, max_depth, full_keys_mode)]
+        else:
+            return [type(first_item).__name__]
+    else:
+        # Original behavior: summary + sample
+        summary = f"<list with {len(data)} items>"
+        sample = _summarize_structure(data[0], depth + 1, max_depth, full_keys_mode)
+        return {"__summary__": summary, "first_item_sample": sample}
+
+
+def _summarize_structure(data: Any, depth: int = 0, max_depth: int = 1, full_keys_mode: bool = False) -> Any:
     """Create a summary of the data structure.
 
     Args:
         data: The data to summarize
         depth: Current recursion depth
-        max_depth: Maximum depth to traverse
+        max_depth: Maximum depth to traverse (ignored if full_keys_mode=True)
+        full_keys_mode: If True, recursively show all keys and types without depth limits
 
     Returns:
-        Summarized data structure
+        Summarized data structure showing keys and types
     """
-    if depth > max_depth:
+    # In full_keys_mode, ignore max_depth and show complete structure
+    if not full_keys_mode and depth > max_depth:
         if isinstance(data, dict):
             return f"<dict with {len(data)} keys>"
         elif isinstance(data, list):
@@ -127,21 +157,17 @@ def _summarize_structure(data: Any, depth: int = 0, max_depth: int = 1) -> Any:
             return type(data).__name__
 
     if isinstance(data, dict):
-        # Return keys with their types/summaries
-        return {k: _summarize_structure(v, depth + 1, max_depth) for k, v in data.items()}
+        # Return keys with their types/summaries recursively
+        return {k: _summarize_structure(v, depth + 1, max_depth, full_keys_mode) for k, v in data.items()}
     elif isinstance(data, list):
-        if not data:
-            return []
-        # Show summary and first item as sample
-        summary = f"<list with {len(data)} items>"
-        sample = _summarize_structure(data[0], depth + 1, max_depth)
-        return {"__summary__": summary, "first_item_sample": sample}
+        return _summarize_list_structure(data, depth, max_depth, full_keys_mode)
     else:
-        # Primitive
-        s = str(data)
-        if len(s) > 100:
-            return s[:97] + "..."
-        return data
+        # Primitive - show type name in full_keys_mode, otherwise show value
+        if full_keys_mode:
+            return type(data).__name__
+        else:
+            s = str(data)
+            return s if len(s) <= 100 else s[:97] + "..."
 
 
 def _detect_file_format(file_path: Path) -> FormatType:
@@ -191,6 +217,327 @@ def _find_schema_file(config_path: Path) -> Path | None:
     return None
 
 
+def _handle_data_get_schema(path: Path, schema_manager: SchemaManager) -> dict[str, Any]:
+    """Handle GET operation with data_type='schema'.
+
+    Args:
+        path: Path to configuration file
+        schema_manager: Schema manager instance
+
+    Returns:
+        Response dict with schema information
+    """
+    schema_info = schema_manager.get_schema_info_for_file(path)
+    schema_data = schema_manager.get_schema_for_file(path)
+
+    if schema_data:
+        response = {
+            "success": True,
+            "file": str(path),
+            "schema": schema_data,
+            "message": "Schema found via Schema Store",
+        }
+        if schema_info:
+            response["schema_info"] = schema_info
+        return response
+    else:
+        return {"success": False, "file": str(path), "message": f"No schema found for file: {path.name}"}
+
+
+def _handle_data_get_structure(
+    path: Path, key_path: str | None, input_format: FormatType, cursor: str | None, schema_info: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Handle GET operation with return_type='keys'.
+
+    Args:
+        path: Path to configuration file
+        key_path: Optional key path to query
+        input_format: File format type
+        cursor: Optional pagination cursor
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict with structure summary
+
+    Raises:
+        ToolError: If query fails
+    """
+    expression = "." if not key_path else (f".{key_path}" if not key_path.startswith(".") else key_path)
+    try:
+        result = execute_yq(expression, input_file=path, input_format=input_format, output_format="json")
+        response: dict[str, Any]
+        if result.data is None:
+            response = {
+                "success": True,
+                "result": None,
+                "format": "json",
+                "file": str(path),
+                "structure_summary": "Empty or invalid data",
+            }
+            if schema_info:
+                response["schema_info"] = schema_info
+            return response
+
+        summary = _summarize_structure(result.data, max_depth=1, full_keys_mode=True)
+        summary_str = orjson.dumps(summary, option=orjson.OPT_INDENT_2).decode()
+
+        if len(summary_str) > PAGE_SIZE_CHARS or cursor is not None:
+            pagination = _paginate_result(summary_str, cursor)
+            response = {
+                "success": True,
+                "result": pagination["data"],
+                "format": "json",
+                "file": str(path),
+                "paginated": True,
+            }
+            if "nextCursor" in pagination:
+                response["nextCursor"] = pagination["nextCursor"]
+            return response
+        else:
+            response = {"success": True, "result": summary, "format": "json", "file": str(path)}
+            if schema_info:
+                response["schema_info"] = schema_info
+            return response
+    except YQExecutionError as e:
+        raise ToolError(f"Query failed: {e}") from e
+
+
+def _handle_data_get_value(
+    path: Path,
+    key_path: str,
+    input_format: FormatType,
+    output_fmt: FormatType,
+    cursor: str | None,
+    schema_info: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Handle GET operation with return_type='all' for data values.
+
+    Args:
+        path: Path to configuration file
+        key_path: Key path to query
+        input_format: File format type
+        output_fmt: Output format
+        cursor: Optional pagination cursor
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict with data value
+
+    Raises:
+        ToolError: If query fails
+    """
+    expression = f".{key_path}" if not key_path.startswith(".") else key_path
+
+    try:
+        result = execute_yq(expression, input_file=path, input_format=input_format, output_format=output_fmt)
+        result_str = (
+            result.stdout if output_fmt != "json" else orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
+        )
+
+        if len(result_str) > PAGE_SIZE_CHARS or cursor is not None:
+            hint = None
+            if isinstance(result.data, list):
+                hint = "Result is a list. Use '.[start:end]' to slice or '. | length' to count."
+            elif isinstance(result.data, dict):
+                hint = "Result is an object. Use '.key' to select or '. | keys' to list keys."
+
+            pagination = _paginate_result(result_str, cursor, advisory_hint=hint)
+            response = {
+                "success": True,
+                "result": pagination["data"],
+                "format": output_fmt,
+                "file": str(path),
+                "paginated": True,
+            }
+            if "nextCursor" in pagination:
+                response["nextCursor"] = pagination["nextCursor"]
+            if "advisory" in pagination:
+                response["advisory"] = pagination["advisory"]
+            return response
+        else:
+            response = {
+                "success": True,
+                "result": result_str if output_fmt != "json" else result.data,
+                "format": output_fmt,
+                "file": str(path),
+            }
+            if schema_info:
+                response["schema_info"] = schema_info
+            return response
+    except YQExecutionError as e:
+        raise ToolError(f"Query failed: {e}") from e
+
+
+def _set_toml_value_handler(
+    path: Path, key_path: str, parsed_value: Any, in_place: bool, schema_info: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Handle TOML set operation."""
+    from mcp_json_yaml_toml.toml_utils import set_toml_value
+
+    try:
+        modified_toml = set_toml_value(path, key_path, parsed_value)
+        if in_place:
+            path.write_text(modified_toml, encoding="utf-8")
+            response = {
+                "success": True,
+                "modified_in_place": True,
+                "result": "File modified successfully",
+                "file": str(path),
+            }
+        else:
+            response = {"success": True, "modified_in_place": False, "result": modified_toml, "file": str(path)}
+        if schema_info:
+            response["schema_info"] = schema_info
+    except Exception as e:
+        raise ToolError(f"TOML set operation failed: {e}") from e
+    else:
+        return response
+
+
+def _optimize_yaml_if_needed(path: Path) -> bool:
+    """Optimize YAML file with anchors if applicable."""
+    original_content = path.read_text(encoding="utf-8")
+    if "&" not in original_content and "*" not in original_content:
+        return False
+
+    from mcp_json_yaml_toml.yaml_optimizer import optimize_yaml_file
+
+    reparse_result = execute_yq(".", input_file=path, input_format="yaml", output_format="json")
+    if reparse_result.data is None:
+        return False
+
+    optimized_yaml = optimize_yaml_file(reparse_result.data)
+    if optimized_yaml:
+        path.write_text(optimized_yaml, encoding="utf-8")
+        return True
+    return False
+
+
+def _handle_data_set(
+    path: Path, key_path: str, value: str, input_format: FormatType, in_place: bool, schema_info: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Handle SET operation.
+
+    Args:
+        path: Path to configuration file
+        key_path: Key path to set
+        value: JSON string value to set
+        input_format: File format type
+        in_place: Whether to modify file in place
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict with operation result
+
+    Raises:
+        ToolError: If operation fails
+    """
+    try:
+        parsed_value = orjson.loads(value)
+    except orjson.JSONDecodeError as e:
+        raise ToolError(f"Invalid JSON value: {e}") from e
+
+    if input_format == "toml":
+        return _set_toml_value_handler(path, key_path, parsed_value, in_place, schema_info)
+
+    # YAML/JSON use yq
+    yq_value = orjson.dumps(parsed_value).decode() if isinstance(parsed_value, str) else value
+    expression = f".{key_path} = {yq_value}" if not key_path.startswith(".") else f"{key_path} = {yq_value}"
+
+    try:
+        result = execute_yq(
+            expression, input_file=path, input_format=input_format, output_format=input_format, in_place=in_place
+        )
+    except YQExecutionError as e:
+        raise ToolError(f"Set operation failed: {e}") from e
+    else:
+        optimized = False
+        if in_place and input_format == "yaml":
+            optimized = _optimize_yaml_if_needed(path)
+
+        response = {
+            "success": True,
+            "modified_in_place": in_place,
+            "result": result.stdout if not in_place else "File modified successfully",
+            "file": str(path),
+        }
+
+        if optimized:
+            response["optimized"] = True
+            response["message"] = "File modified and optimized with YAML anchors"
+
+        if schema_info:
+            response["schema_info"] = schema_info
+
+        return response
+
+
+def _handle_data_delete(
+    path: Path, key_path: str, input_format: FormatType, in_place: bool, schema_info: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Handle DELETE operation.
+
+    Args:
+        path: Path to configuration file
+        key_path: Key path to delete
+        input_format: File format type
+        in_place: Whether to modify file in place
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict with operation result
+
+    Raises:
+        ToolError: If operation fails
+    """
+    # TOML requires special handling since yq cannot write TOML
+    if input_format == "toml":
+        from mcp_json_yaml_toml.toml_utils import delete_toml_key
+
+        try:
+            modified_toml = delete_toml_key(path, key_path)
+
+            if in_place:
+                path.write_text(modified_toml, encoding="utf-8")
+                response = {
+                    "success": True,
+                    "modified_in_place": True,
+                    "result": "File modified successfully",
+                    "file": str(path),
+                }
+            else:
+                response = {"success": True, "modified_in_place": False, "result": modified_toml, "file": str(path)}
+
+            if schema_info:
+                response["schema_info"] = schema_info
+        except KeyError as e:
+            raise ToolError(f"TOML delete operation failed: {e}") from e
+        except Exception as e:
+            raise ToolError(f"TOML delete operation failed: {e}") from e
+        else:
+            return response
+
+    # YAML/JSON use yq
+    expression = f"del(.{key_path})" if not key_path.startswith(".") else f"del({key_path})"
+
+    try:
+        result = execute_yq(
+            expression, input_file=path, input_format=input_format, output_format=input_format, in_place=in_place
+        )
+        response = {
+            "success": True,
+            "modified_in_place": in_place,
+            "result": result.stdout if not in_place else "File modified successfully",
+            "file": str(path),
+        }
+        if schema_info:
+            response["schema_info"] = schema_info
+    except YQExecutionError as e:
+        raise ToolError(f"Delete operation failed: {e}") from e
+    else:
+        return response
+
+
 def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
     """Validate data against JSON schema.
 
@@ -226,6 +573,128 @@ def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
         return False, f"Unexpected schema validation error: {e}"
     else:
         return True, "Schema validation passed"
+
+
+def _dispatch_get_operation(
+    path: Path,
+    data_type: Literal["data", "schema"],
+    return_type: Literal["keys", "all"],
+    key_path: str | None,
+    output_format: Literal["json", "yaml", "toml"] | None,
+    cursor: str | None,
+    schema_info: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Dispatch GET operation to appropriate handler.
+
+    Args:
+        path: Path to configuration file
+        data_type: Type of request (data or schema)
+        return_type: Return type (keys or all)
+        key_path: Optional key path
+        output_format: Optional output format
+        cursor: Optional pagination cursor
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict from handler
+
+    Raises:
+        ToolError: If format disabled or validation fails
+    """
+    if data_type == "schema":
+        return _handle_data_get_schema(path, schema_manager)
+
+    input_format = _detect_file_format(path)
+    if not is_format_enabled(input_format):
+        enabled = parse_enabled_formats()
+        raise ToolError(
+            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
+        )
+
+    if output_format is None:
+        output_fmt: FormatType = input_format
+    else:
+        validated = validate_format(output_format)
+        output_fmt = validated.value
+
+    if return_type == "keys":
+        return _handle_data_get_structure(path, key_path, input_format, cursor, schema_info)
+
+    if key_path is None:
+        raise ToolError("key_path is required when operation='get' and data_type='data'")
+
+    return _handle_data_get_value(path, key_path, input_format, output_fmt, cursor, schema_info)
+
+
+def _dispatch_set_operation(
+    path: Path,
+    key_path: str | None,
+    value: str | None,
+    value_type: Literal["string", "number", "boolean", "null", "json"] | None,
+    in_place: bool,
+    schema_info: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Dispatch SET operation to handler.
+
+    Args:
+        path: Path to configuration file
+        key_path: Key path to set
+        value: JSON string value
+        value_type: How to interpret the value parameter
+        in_place: Whether to modify in place
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict from handler
+
+    Raises:
+        ToolError: If validation fails or format disabled
+    """
+    if key_path is None:
+        raise ToolError("key_path is required for operation='set'")
+    if value is None:
+        raise ToolError("value is required for operation='set'")
+
+    input_format = _detect_file_format(path)
+    if not is_format_enabled(input_format):
+        enabled = parse_enabled_formats()
+        raise ToolError(
+            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
+        )
+
+    # Note: value_type is accepted but not yet implemented - reserved for future type coercion control
+    _ = value_type  # Explicitly mark as unused for now
+    return _handle_data_set(path, key_path, value, input_format, in_place, schema_info)
+
+
+def _dispatch_delete_operation(
+    path: Path, key_path: str | None, in_place: bool, schema_info: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Dispatch DELETE operation to handler.
+
+    Args:
+        path: Path to configuration file
+        key_path: Key path to delete
+        in_place: Whether to modify in place
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict from handler
+
+    Raises:
+        ToolError: If validation fails or format disabled
+    """
+    if key_path is None:
+        raise ToolError("key_path is required for operation='delete'")
+
+    input_format = _detect_file_format(path)
+    if not is_format_enabled(input_format):
+        enabled = parse_enabled_formats()
+        raise ToolError(
+            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
+        )
+
+    return _handle_data_delete(path, key_path, input_format, in_place, schema_info)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -270,7 +739,9 @@ def data_query(
         result = execute_yq(expression, input_file=path, input_format=input_format, output_format=output_format)  # type: ignore[arg-type]
 
         # Prepare result string for pagination
-        result_str = result.stdout if output_format != "json" else orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
+        result_str = (
+            result.stdout if output_format != "json" else orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
+        )
 
         # Apply pagination if result is large
         if len(result_str) > PAGE_SIZE_CHARS or cursor is not None:
@@ -311,10 +782,27 @@ def data_query(
 def data(
     file_path: Annotated[str, Field(description="Path to configuration file")],
     operation: Annotated[Literal["get", "set", "delete"], Field(description="Operation: 'get', 'set', or 'delete'")],
-    key_path: Annotated[str | None, Field(description="Dot-separated key path (required for set/delete, optional for get)")] = None,
-    value: Annotated[str | None, Field(description="Value to set as JSON string (required for operation='set')")] = None,
-    type: Annotated[Literal["data", "schema"], Field(description="Type for get: 'data' or 'schema'")] = "data",
-    return_type: Annotated[Literal["keys", "all"], Field(description="Return type for get: 'keys' (structure) or 'all' (full data)")] = "all",
+    key_path: Annotated[
+        str | None, Field(description="Dot-separated key path (required for set/delete, optional for get)")
+    ] = None,
+    value: Annotated[
+        str | None, Field(description="Value to set as JSON string (required for operation='set')")
+    ] = None,
+    value_type: Annotated[
+        Literal["string", "number", "boolean", "null", "json"] | None,
+        Field(
+            description="How to interpret the value parameter for SET operations. "
+            "'string': treat value as literal string (no JSON parsing). "
+            "'number': parse value as JSON number. "
+            "'boolean': parse value as JSON boolean. "
+            "'null': set to null/None (value parameter ignored). "
+            "'json' or None (default): parse value as JSON (current behavior, maintains backward compatibility)."
+        ),
+    ] = None,
+    data_type: Annotated[Literal["data", "schema"], Field(description="Type for get: 'data' or 'schema'")] = "data",
+    return_type: Annotated[
+        Literal["keys", "all"], Field(description="Return type for get: 'keys' (structure) or 'all' (full data)")
+    ] = "all",
     output_format: Annotated[Literal["json", "yaml", "toml"] | None, Field(description="Output format")] = None,
     in_place: Annotated[bool, Field(description="Modify file in place (for set/delete)")] = False,
     cursor: Annotated[str | None, Field(description="Pagination cursor")] = None,
@@ -333,256 +821,189 @@ def data(
     - delete: Remove key/element at key_path
     """
     path = Path(file_path).expanduser().resolve()
-    
+
     if not path.exists():
         raise ToolError(f"File not found: {file_path}")
-    
-    # Get schema info for this file (lightweight, doesn't fetch full schema)
-    schema_info = schema_manager.get_schema_info_for_file(path)
-    
-    # Handle GET operation
-    if operation == "get":
-        # Schema request
-        if type == "schema":
-            schema_data = schema_manager.get_schema_for_file(path)
-            if schema_data:
-                response = {
-                    "success": True,
-                    "file": str(path),
-                    "schema": schema_data,
-                    "message": "Schema found via Schema Store"
-                }
-                if schema_info:
-                    response["schema_info"] = schema_info
-                return response
-            else:
-                return {
-                    "success": False,
-                    "file": str(path),
-                    "message": f"No schema found for file: {path.name}"
-                }
-        
-        # Data/structure request
-        input_format = _detect_file_format(path)
-        if not is_format_enabled(input_format):
-            enabled = parse_enabled_formats()
-            raise ToolError(f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}")
-        
-        output_fmt = input_format if output_format is None else validate_format(output_format).value
-        
-        # Structure request (keys only)
-        if return_type == "keys":
-            expression = "." if not key_path else (f".{key_path}" if not key_path.startswith(".") else key_path)
-            try:
-                result = execute_yq(expression, input_file=path, input_format=input_format, output_format="json")
-                if result.data is None:
-                    response = {"success": True, "result": None, "format": "json", "file": str(path), "structure_summary": "Empty or invalid data"}
-                    if schema_info:
-                        response["schema_info"] = schema_info
-                    return response
-                
-                summary = _summarize_structure(result.data, max_depth=1)
-                summary_str = orjson.dumps(summary, option=orjson.OPT_INDENT_2).decode()
-                
-                if len(summary_str) > PAGE_SIZE_CHARS or cursor is not None:
-                    pagination = _paginate_result(summary_str, cursor)
-                    response = {"success": True, "result": pagination["data"], "format": "json", "file": str(path), "paginated": True}
-                    if "nextCursor" in pagination:
-                        response["nextCursor"] = pagination["nextCursor"]
-                    return response
-                else:
-                    response = {"success": True, "result": summary, "format": "json", "file": str(path)}
-                    if schema_info:
-                        response["schema_info"] = schema_info
-                    return response
-            except YQExecutionError as e:
-                raise ToolError(f"Query failed: {e}") from e
-        
-        # Data request (full data)
-        if key_path is None:
-            raise ToolError("key_path is required when operation='get' and type='data'")
-        
-        expression = f".{key_path}" if not key_path.startswith(".") else key_path
-        
-        try:
-            result = execute_yq(expression, input_file=path, input_format=input_format, output_format=output_fmt)
-            result_str = result.stdout if output_fmt != "json" else orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
-            
-            if len(result_str) > PAGE_SIZE_CHARS or cursor is not None:
-                hint = None
-                if isinstance(result.data, list):
-                    hint = "Result is a list. Use '.[start:end]' to slice or '. | length' to count."
-                elif isinstance(result.data, dict):
-                    hint = "Result is an object. Use '.key' to select or '. | keys' to list keys."
-                
-                pagination = _paginate_result(result_str, cursor, advisory_hint=hint)
-                response = {"success": True, "result": pagination["data"], "format": output_fmt, "file": str(path), "paginated": True}
-                if "nextCursor" in pagination:
-                    response["nextCursor"] = pagination["nextCursor"]
-                if "advisory" in pagination:
-                    response["advisory"] = pagination["advisory"]
-                return response
-            else:
-                response = {"success": True, "result": result_str if output_fmt != "json" else result.data, "format": output_fmt, "file": str(path)}
-                if schema_info:
-                    response["schema_info"] = schema_info
-                return response
-        except YQExecutionError as e:
-            raise ToolError(f"Query failed: {e}") from e
-    
-    # Handle SET operation
-    elif operation == "set":
-        if key_path is None:
-            raise ToolError("key_path is required for operation='set'")
-        if value is None:
-            raise ToolError("value is required for operation='set'")
-        
-        input_format = _detect_file_format(path)
-        if not is_format_enabled(input_format):
-            enabled = parse_enabled_formats()
-            raise ToolError(f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}")
-        
-        try:
-            parsed_value = orjson.loads(value)
-        except orjson.JSONDecodeError as e:
-            raise ToolError(f"Invalid JSON value: {e}") from e
-        
-        # TOML requires special handling since yq cannot write TOML
-        if input_format == "toml":
-            from mcp_json_yaml_toml.toml_utils import set_toml_value
-            
-            try:
-                modified_toml = set_toml_value(path, key_path, parsed_value)
-                
-                if in_place:
-                    path.write_text(modified_toml, encoding="utf-8")
-                    response = {
-                        "success": True,
-                        "modified_in_place": True,
-                        "result": "File modified successfully",
-                        "file": str(path)
-                    }
-                else:
-                    response = {
-                        "success": True,
-                        "modified_in_place": False,
-                        "result": modified_toml,
-                        "file": str(path)
-                    }
-                
-                if schema_info:
-                    response["schema_info"] = schema_info
-                return response
-            except Exception as e:
-                raise ToolError(f"TOML set operation failed: {e}") from e
-        
-        # YAML/JSON use yq
-        yq_value = orjson.dumps(parsed_value).decode() if isinstance(parsed_value, str) else value
-        expression = f".{key_path} = {yq_value}" if not key_path.startswith(".") else f"{key_path} = {yq_value}"
-        
-        try:
-            result = execute_yq(expression, input_file=path, input_format=input_format, output_format=input_format, in_place=in_place)
-            
-            # Optimize YAML files with anchors if in_place and format is YAML
-            optimized = False
-            if in_place and input_format == "yaml":
-                # Check if file already uses anchors before optimizing
-                # This respects the original file's conventions and avoids adding
-                # anchors to files whose parsers might not support them
-                original_content = path.read_text(encoding="utf-8")
-                file_uses_anchors = "&" in original_content or "*" in original_content
-                
-                if file_uses_anchors:
-                    from mcp_json_yaml_toml.yaml_optimizer import optimize_yaml_file
-                    
-                    # Re-parse the modified file to get the data
-                    reparse_result = execute_yq(".", input_file=path, input_format="yaml", output_format="json")
-                    
-                    if reparse_result.data is not None:
-                        # Try to optimize
-                        optimized_yaml = optimize_yaml_file(reparse_result.data)
-                        
-                        if optimized_yaml:
-                            # Write optimized YAML back to file
-                            path.write_text(optimized_yaml, encoding="utf-8")
-                            optimized = True
-            
-            response = {
-                "success": True,
-                "modified_in_place": in_place,
-                "result": result.stdout if not in_place else "File modified successfully",
-                "file": str(path)
-            }
-            
-            if optimized:
-                response["optimized"] = True
-                response["message"] = "File modified and optimized with YAML anchors"
-            
-            if schema_info:
-                response["schema_info"] = schema_info
-            return response
-        except YQExecutionError as e:
-            raise ToolError(f"Set operation failed: {e}") from e
-    
-    # Handle DELETE operation
-    elif operation == "delete":
-        if key_path is None:
-            raise ToolError("key_path is required for operation='delete'")
-        
-        input_format = _detect_file_format(path)
-        if not is_format_enabled(input_format):
-            enabled = parse_enabled_formats()
-            raise ToolError(f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}")
-        
-        # TOML requires special handling since yq cannot write TOML
-        if input_format == "toml":
-            from mcp_json_yaml_toml.toml_utils import delete_toml_key
-            
-            try:
-                modified_toml = delete_toml_key(path, key_path)
-                
-                if in_place:
-                    path.write_text(modified_toml, encoding="utf-8")
-                    response = {
-                        "success": True,
-                        "modified_in_place": True,
-                        "result": "File modified successfully",
-                        "file": str(path)
-                    }
-                else:
-                    response = {
-                        "success": True,
-                        "modified_in_place": False,
-                        "result": modified_toml,
-                        "file": str(path)
-                    }
-                
-                if schema_info:
-                    response["schema_info"] = schema_info
-                return response
-            except KeyError as e:
-                raise ToolError(f"TOML delete operation failed: {e}") from e
-            except Exception as e:
-                raise ToolError(f"TOML delete operation failed: {e}") from e
-        
-        # YAML/JSON use yq
-        expression = f"del(.{key_path})" if not key_path.startswith(".") else f"del({key_path})"
-        
-        try:
-            result = execute_yq(expression, input_file=path, input_format=input_format, output_format=input_format, in_place=in_place)
-            response = {"success": True, "modified_in_place": in_place, "result": result.stdout if not in_place else "File modified successfully", "file": str(path)}
-            if schema_info:
-                response["schema_info"] = schema_info
-            return response
-        except YQExecutionError as e:
-            raise ToolError(f"Delete operation failed: {e}") from e
 
+    schema_info = schema_manager.get_schema_info_for_file(path)
+
+    if operation == "get":
+        return _dispatch_get_operation(path, data_type, return_type, key_path, output_format, cursor, schema_info)
+    elif operation == "set":
+        return _dispatch_set_operation(path, key_path, value, value_type, in_place, schema_info)
+    elif operation == "delete":
+        return _dispatch_delete_operation(path, key_path, in_place, schema_info)
+
+    raise ToolError(f"Unknown operation: {operation}")
+
+
+def _handle_schema_validate(file_path: str | None, schema_path: str | None) -> dict[str, Any]:
+    """Handle validate action."""
+    if not file_path:
+        raise ToolError("file_path required for validate action")
+    file_path_obj = Path(file_path).expanduser().resolve()
+    if not file_path_obj.exists():
+        raise ToolError(f"File not found: {file_path}")
+
+    input_format = _detect_file_format(file_path_obj)
+    if not is_format_enabled(input_format):
+        enabled = parse_enabled_formats()
+        raise ToolError(
+            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
+        )
+
+    validation_results: dict[str, Any] = {
+        "file": str(file_path_obj),
+        "format": input_format,
+        "syntax_valid": False,
+        "schema_validated": False,
+    }
+
+    try:
+        result = execute_yq(".", input_file=file_path_obj, input_format=input_format, output_format="json")
+        validation_results["syntax_valid"] = True
+        validation_results["syntax_message"] = "Syntax is valid"
+
+        schema_file: Path | None = None
+        if schema_path:
+            schema_file = Path(schema_path).expanduser().resolve()
+            if not schema_file.exists():
+                raise ToolError(f"Schema file not found: {schema_path}")
+        else:
+            schema_data = schema_manager.get_schema_for_file(file_path_obj)
+            if schema_data:
+                import tempfile
+
+                with tempfile.NamedTemporaryFile(mode="wb", suffix=".json", delete=False) as tmp:
+                    tmp.write(orjson.dumps(schema_data))
+                    schema_file = Path(tmp.name)
+            else:
+                schema_file = _find_schema_file(file_path_obj)
+
+        if schema_file:
+            validation_results["schema_file"] = str(schema_file)
+            is_valid, message = _validate_against_schema(result.data, schema_file)
+            validation_results["schema_validated"] = is_valid
+            validation_results["schema_message"] = message
+        else:
+            validation_results["schema_message"] = "No schema file found or provided"
+
+        validation_results["overall_valid"] = validation_results["syntax_valid"] and (
+            validation_results["schema_validated"] if schema_file else True
+        )
+    except YQExecutionError as e:
+        validation_results["syntax_message"] = f"Syntax error: {e}"
+        validation_results["overall_valid"] = False
+
+    return validation_results
+
+
+def _handle_schema_scan(search_paths: list[str] | None, max_depth: int) -> dict[str, Any]:
+    """Handle scan action."""
+    if not search_paths:
+        raise ToolError("search_paths required for scan action")
+    paths = [Path(p).expanduser().resolve() for p in search_paths]
+    discovered = schema_manager.scan_for_schema_dirs(paths, max_depth=max_depth)
+    return {
+        "success": True,
+        "action": "scan",
+        "discovered_count": len(discovered),
+        "discovered_dirs": [str(p) for p in discovered],
+    }
+
+
+def _handle_schema_add_dir(path: str | None) -> dict[str, Any]:
+    """Handle add_dir action."""
+    if not path:
+        raise ToolError("path required for add_dir action")
+    dir_path = Path(path).expanduser().resolve()
+    if not dir_path.exists():
+        raise ToolError(f"Directory not found: {path}")
+    if not dir_path.is_dir():
+        raise ToolError(f"Not a directory: {path}")
+
+    schema_manager.add_custom_dir(dir_path)
+    return {
+        "success": True,
+        "action": "add_dir",
+        "directory": str(dir_path),
+        "message": "Directory added to schema cache locations",
+    }
+
+
+def _handle_schema_add_catalog(name: str | None, uri: str | None) -> dict[str, Any]:
+    """Handle add_catalog action."""
+    if not name or not uri:
+        raise ToolError("name and uri required for add_catalog action")
+    schema_manager.add_custom_catalog(name, uri)
+    return {"success": True, "action": "add_catalog", "name": name, "uri": uri, "message": "Custom catalog added"}
+
+
+def _handle_schema_associate(file_path: str | None, schema_url: str | None, schema_name: str | None) -> dict[str, Any]:
+    """Handle associate action."""
+    if not file_path:
+        raise ToolError("file_path required for associate action")
+    file_path_obj = Path(file_path).expanduser().resolve()
+    if not file_path_obj.exists():
+        raise ToolError(f"File not found: {file_path}")
+
+    url = schema_url
+    name = schema_name
+
+    if not url and schema_name:
+        catalog = schema_manager._get_catalog()
+        if catalog:
+            for schema_info in catalog.get("schemas", []):
+                if schema_info.get("name") == schema_name:
+                    url = schema_info.get("url")
+                    break
+        if not url:
+            raise ToolError(f"Schema '{schema_name}' not found in catalog")
+
+    if not url:
+        raise ToolError("Either schema_url or schema_name must be provided")
+
+    schema_manager.add_file_association(file_path_obj, url, name)
+    return {
+        "success": True,
+        "action": "associate",
+        "file": str(file_path_obj),
+        "schema_name": name or "unknown",
+        "schema_url": url,
+        "message": "File associated with schema",
+    }
+
+
+def _handle_schema_disassociate(file_path: str | None) -> dict[str, Any]:
+    """Handle disassociate action."""
+    if not file_path:
+        raise ToolError("file_path required for disassociate action")
+    file_path_obj = Path(file_path).expanduser().resolve()
+    removed = schema_manager.remove_file_association(file_path_obj)
+    return {
+        "success": True,
+        "action": "disassociate",
+        "file": str(file_path_obj),
+        "removed": removed,
+        "message": "Association removed" if removed else "No association found",
+    }
+
+
+def _handle_schema_list() -> dict[str, Any]:
+    """Handle list action."""
+    config = schema_manager.get_config()
+    return {"success": True, "action": "list", "config": config}
 
 
 @mcp.tool()
 def data_schema(
-    action: Annotated[Literal["validate", "scan", "add_dir", "add_catalog", "associate", "disassociate", "list"], Field(description="Action: validate, scan, add_dir, add_catalog, associate, disassociate, or list")],
-    file_path: Annotated[str | None, Field(description="Path to file (for validate/associate/disassociate actions)")] = None,
+    action: Annotated[
+        Literal["validate", "scan", "add_dir", "add_catalog", "associate", "disassociate", "list"],
+        Field(description="Action: validate, scan, add_dir, add_catalog, associate, disassociate, or list"),
+    ],
+    file_path: Annotated[
+        str | None, Field(description="Path to file (for validate/associate/disassociate actions)")
+    ] = None,
     schema_path: Annotated[str | None, Field(description="Path to schema file (for validate action)")] = None,
     schema_url: Annotated[str | None, Field(description="Schema URL (for associate action)")] = None,
     schema_name: Annotated[str | None, Field(description="Schema name from catalog (for associate action)")] = None,
@@ -602,186 +1023,30 @@ def data_schema(
     - associate: Bind file to schema URL or name
     - disassociate: Remove file-to-schema association
     - list: Show current schema configuration
-    
+
     Examples:
       - action="validate", file_path="config.json"
-      - action="associate", file_path="gitlab-ci.yml", schema_name="gitlab-ci"
-      - action="disassociate", file_path="gitlab-ci.yml"
+      - action="associate", file_path=".gitlab-ci.yml", schema_name="gitlab-ci"
+      - action="disassociate", file_path=".gitlab-ci.yml"
       - action="list"
     """
-    # Handle VALIDATE action
-    if action == "validate":
-        if not file_path:
-            raise ToolError("file_path required for validate action")
-        
-        path = Path(file_path).expanduser().resolve()
-        if not path.exists():
-            raise ToolError(f"File not found: {file_path}")
-        
-        input_format = _detect_file_format(path)
-        if not is_format_enabled(input_format):
-            enabled = parse_enabled_formats()
-            raise ToolError(f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}")
-        
-        validation_results: dict[str, Any] = {
-            "file": str(path),
-            "format": input_format,
-            "syntax_valid": False,
-            "schema_validated": False,
-        }
-        
-        try:
-            result = execute_yq(".", input_file=path, input_format=input_format, output_format="json")
-            validation_results["syntax_valid"] = True
-            validation_results["syntax_message"] = "Syntax is valid"
-            
-            schema_file: Path | None = None
-            if schema_path:
-                schema_file = Path(schema_path).expanduser().resolve()
-                if not schema_file.exists():
-                    raise ToolError(f"Schema file not found: {schema_path}")
-            else:
-                schema_data = schema_manager.get_schema_for_file(path)
-                if schema_data:
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(mode='wb', suffix='.json', delete=False) as tmp:
-                        tmp.write(orjson.dumps(schema_data))
-                        schema_file = Path(tmp.name)
-                else:
-                    schema_file = _find_schema_file(path)
-            
-            if schema_file:
-                validation_results["schema_file"] = str(schema_file)
-                is_valid, message = _validate_against_schema(result.data, schema_file)
-                validation_results["schema_validated"] = is_valid
-                validation_results["schema_message"] = message
-            else:
-                validation_results["schema_message"] = "No schema file found or provided"
-            
-            validation_results["overall_valid"] = validation_results["syntax_valid"] and (
-                validation_results["schema_validated"] if schema_file else True
-            )
-        except YQExecutionError as e:
-            validation_results["syntax_message"] = f"Syntax error: {e}"
-            validation_results["overall_valid"] = False
-        
-        return validation_results
-    
-    # Handle SCAN action
-    elif action == "scan":
-        if not search_paths:
-            raise ToolError("search_paths required for scan action")
-        
-        paths = [Path(p).expanduser().resolve() for p in search_paths]
-        discovered = schema_manager.scan_for_schema_dirs(paths, max_depth=max_depth)
-        
-        return {
-            "success": True,
-            "action": "scan",
-            "discovered_count": len(discovered),
-            "discovered_dirs": [str(p) for p in discovered]
-        }
-    
-    # Handle ADD_DIR action
-    elif action == "add_dir":
-        if not path:
-            raise ToolError("path required for add_dir action")
-        
-        dir_path = Path(path).expanduser().resolve()
-        if not dir_path.exists():
-            raise ToolError(f"Directory not found: {path}")
-        if not dir_path.is_dir():
-            raise ToolError(f"Not a directory: {path}")
-        
-        schema_manager.add_custom_dir(dir_path)
-        
-        return {
-            "success": True,
-            "action": "add_dir",
-            "directory": str(dir_path),
-            "message": "Directory added to schema cache locations"
-        }
-    
-    # Handle ADD_CATALOG action
-    elif action == "add_catalog":
-        if not name or not uri:
-            raise ToolError("name and uri required for add_catalog action")
-        
-        schema_manager.add_custom_catalog(name, uri)
-        
-        return {
-            "success": True,
-            "action": "add_catalog",
-            "name": name,
-            "uri": uri,
-            "message": "Custom catalog added"
-        }
-    
-    # Handle ASSOCIATE action
-    elif action == "associate":
-        if not file_path:
-            raise ToolError("file_path required for associate action")
-        
-        path = Path(file_path).expanduser().resolve()
-        if not path.exists():
-            raise ToolError(f"File not found: {file_path}")
-        
-        # Get schema URL - either from schema_url parameter or look up schema_name in catalog
-        url = schema_url
-        name = schema_name
-        
-        if not url and schema_name:
-            # Look up schema URL from catalog by name
-            catalog = schema_manager._get_catalog()
-            if catalog:
-                for schema_info in catalog.get("schemas", []):
-                    if schema_info.get("name") == schema_name:
-                        url = schema_info.get("url")
-                        break
-            
-            if not url:
-                raise ToolError(f"Schema '{schema_name}' not found in catalog")
-        
-        if not url:
-            raise ToolError("Either schema_url or schema_name must be provided")
-        
-        schema_manager.add_file_association(path, url, name)
-        
-        return {
-            "success": True,
-            "action": "associate",
-            "file": str(path),
-            "schema_name": name or "unknown",
-            "schema_url": url,
-            "message": "File associated with schema"
-        }
-    
-    # Handle DISASSOCIATE action
-    elif action == "disassociate":
-        if not file_path:
-            raise ToolError("file_path required for disassociate action")
-        
-        path = Path(file_path).expanduser().resolve()
-        removed = schema_manager.remove_file_association(path)
-        
-        return {
-            "success": True,
-            "action": "disassociate",
-            "file": str(path),
-            "removed": removed,
-            "message": "Association removed" if removed else "No association found"
-        }
-    
-    # Handle LIST action
-    elif action == "list":
-        config = schema_manager.get_config()
-        
-        return {
-            "success": True,
-            "action": "list",
-            "config": config
-        }
-
+    match action:
+        case "validate":
+            return _handle_schema_validate(file_path, schema_path)
+        case "scan":
+            return _handle_schema_scan(search_paths, max_depth)
+        case "add_dir":
+            return _handle_schema_add_dir(path)
+        case "add_catalog":
+            return _handle_schema_add_catalog(name, uri)
+        case "associate":
+            return _handle_schema_associate(file_path, schema_url, schema_name)
+        case "disassociate":
+            return _handle_schema_disassociate(file_path)
+        case "list":
+            return _handle_schema_list()
+        case _:
+            raise ToolError(f"Unknown action: {action}")
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -814,14 +1079,15 @@ def data_convert(
         )
 
     # Validate output format
-    output_fmt = validate_format(output_format).value
+    validated = validate_format(output_format)
+    output_fmt: FormatType = validated.value
 
     if input_format == output_fmt:
         raise ToolError(f"Input and output formats are the same: {input_format}")
 
     try:
         # Convert
-        result = execute_yq(".", input_file=path, input_format=input_format, output_format=output_fmt)  # type: ignore[arg-type]
+        result = execute_yq(".", input_file=path, input_format=input_format, output_format=output_fmt)
 
         # Write to file if requested
         if output_file:
@@ -935,12 +1201,11 @@ def data_merge(
         raise ToolError(f"Merge failed: {e}") from e
 
 
-
 @mcp.prompt()
 def explain_config(file_path: str) -> str:
     """Generate a prompt to explain a configuration file."""
     return f"""Please analyze and explain the configuration file at '{file_path}'.
-    
+
     1. Identify the file format (JSON, YAML, TOML).
     2. Summarize the key sections and their purpose.
     3. Highlight any critical settings or potential misconfigurations.
@@ -952,7 +1217,7 @@ def explain_config(file_path: str) -> str:
 def suggest_improvements(file_path: str) -> str:
     """Generate a prompt to suggest improvements for a configuration file."""
     return f"""Please review the configuration file at '{file_path}' and suggest improvements.
-    
+
     Consider:
     1. Security best practices (e.g., exposed secrets).
     2. Performance optimizations.
@@ -965,7 +1230,7 @@ def suggest_improvements(file_path: str) -> str:
 def convert_to_schema(file_path: str) -> str:
     """Generate a prompt to create a JSON schema from a configuration file."""
     return f"""Please generate a JSON schema based on the configuration file at '{file_path}'.
-    
+
     1. Infer types for all fields.
     2. Mark fields as required or optional based on common patterns.
     3. Add descriptions for fields where the purpose is clear.
