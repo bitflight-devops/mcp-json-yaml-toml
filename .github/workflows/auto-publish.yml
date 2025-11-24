@@ -1,0 +1,64 @@
+name: Auto Tag, Build, and Publish
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Bump version and create tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: false
+          create_annotated_tag: true
+
+      - name: Fetch tags and checkout new tag
+        if: steps.tag_version.outputs.new_tag
+        run: |
+          git fetch --tags
+          git checkout ${{ steps.tag_version.outputs.new_tag }}
+
+      - name: Install uv
+        if: steps.tag_version.outputs.new_tag
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        if: steps.tag_version.outputs.new_tag
+        run: uv python install
+
+      - name: Build package
+        if: steps.tag_version.outputs.new_tag
+        run: uv build
+
+      - name: Publish to PyPI
+        if: steps.tag_version.outputs.new_tag
+        run: uv publish
+
+      - name: Create GitHub Release
+        if: steps.tag_version.outputs.new_tag
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
+          artifacts: "dist/*"
+          draft: false
+          prerelease: false

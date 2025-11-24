@@ -1,0 +1,101 @@
+# Pre-commit configuration for python_picotool repository
+
+repos:
+  - repo: https://github.com/mxr/sync-pre-commit-deps
+    rev: v0.0.3
+    hooks:
+      - id: sync-pre-commit-deps
+
+  # Standard pre-commit hooks for general file maintenance
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.lock$
+      - id: end-of-file-fixer
+        exclude: \.lock$
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=10000"] # 10MB limit
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+
+  # Python formatting and linting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.4
+    hooks:
+      - id: ruff
+        name: Lint Python with ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+        name: Format Python with ruff
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.18.1
+    hooks:
+      - id: markdownlint-cli2
+        language_version: "latest"
+        args: ["--fix"]
+  # YAML/JSON formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        name: Format YAML, JSON, and Markdown files
+        types_or: [yaml, json, markdown]
+        exclude: \.lock$
+
+  # Shell formatting
+  - repo: https://github.com/pecigonzalo/pre-commit-shfmt
+    rev: v2.2.0
+    hooks:
+      - id: shell-fmt-go
+        args:
+          - "--apply-ignore"
+          - -w
+          - -i
+          - "4"
+          - -ci
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run -q --no-sync --with pep723-loader --with mypy pep723-loader mypy
+        language: system
+        types: [python]
+        pass_filenames: true
+      - id: basedpyright
+        name: basedpyright
+        entry: uv run -q --no-sync --with pep723-loader --with basedpyright pep723-loader basedpyright
+        language: system
+        types: [python]
+        pass_filenames: true
+        require_serial: true
+
+# Configuration for specific hooks
+default_language_version:
+  python: python3
+
+# Exclude patterns
+exclude: |
+  (?x)^(
+    \.git/|
+    \.venv/|
+    __pycache__/|
+    \.mypy_cache/|
+    \.cache/|
+    \.pytest_cache/|
+    \.lock$|
+    typings/
+  )

@@ -1,132 +1,143 @@
-# MCP Config Tools
+# mcp-json-yaml-toml
 
-A Model Context Protocol (MCP) server for querying and modifying JSON, YAML, and TOML configuration files using the powerful `yq` command-line tool.
+[![Test](https://github.com/bitflight-devops/mcp-json-yaml-toml/actions/workflows/test.yml/badge.svg)](https://github.com/bitflight-devops/mcp-json-yaml-toml/actions/workflows/test.yml)
+[![Publish](https://github.com/bitflight-devops/mcp-json-yaml-toml/actions/workflows/auto-publish.yml/badge.svg)](https://github.com/bitflight-devops/mcp-json-yaml-toml/actions/workflows/auto-publish.yml)
+[![codecov](https://codecov.io/gh/bitflight-devops/mcp-json-yaml-toml/branch/main/graph/badge.svg)](https://codecov.io/gh/bitflight-devops/mcp-json-yaml-toml)
+[![PyPI version](https://badge.fury.io/py/mcp-json-yaml-toml.svg)](https://badge.fury.io/py/mcp-json-yaml-toml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
-## Overview
+**Smart JSON/YAML/TOML tools for MCP agents.**
 
-This MCP server provides AI agents with the ability to:
+Safely query, modify, validate, and convert configuration files while preserving comments, formatting, and structure. Perfect for AI assistants managing infrastructure code, config files, and deployment manifests across multiple formats.
 
-- Query configuration files using yq's expressive query language
-- Modify configuration values safely and efficiently
-- Support multiple configuration formats (JSON, YAML, TOML)
-- Handle complex nested structures and arrays
-- Validate configuration changes before applying
+---
 
-## Features
+## What You Get
 
-- **Multi-format Support**: Works seamlessly with JSON, YAML, and TOML files
-- **Powerful Querying**: Leverages yq's jq-compatible query syntax
-- **Safe Modifications**: Validates changes before writing to disk
-- **Smart YAML Optimization**: Automatically maintains DRY principles by generating anchors/aliases for duplicate structures
-- **Fidelity Preservation**: Preserves comments and formatting for both YAML (via ruamel.yaml) and TOML (via tomlkit)
-- **Cross-Platform**: Bundles yq binaries for Linux, macOS, and Windows
-- **Type-Safe**: Full Python type hints and strict mypy compliance
-- **Fast**: Uses orjson for high-performance JSON processing
+This MCP server gives AI agents intelligent tools for configuration management:
 
-## Installation
+- **Multi-format support**: Seamlessly work with JSON, YAML, and TOML files using a unified interface
+- **Powerful querying**: Use yq's jq-compatible expressions to extract and analyze nested data
+- **Safe modifications**: Validate changes before writing; preserve comments and formatting
+- **Format conversion**: Automatically convert between JSON, YAML, and TOML with zero data loss
+- **Config merging**: Intelligently merge base configs with environment-specific overrides
+- **Schema validation**: Leverage SchemaStore.org catalogs or custom schemas for validation
+- **YAML optimization**: Automatically generate anchors/aliases for duplicate structures to maintain DRY
+- **Cross-platform**: Works on Linux, macOS, and Windows with bundled yq binaries
+
+## Why It Matters
+
+Configuration management is error-prone when done manually:
+
+- Editing YAML indentation mistakes break deployments
+- Format conversions introduce subtle bugs
+- Duplicate config sections violate DRY principles
+- Manual schema validation catches problems only in production
+
+**With mcp-json-yaml-toml**, your AI assistant can:
+
+- Safely validate and modify configs before pushing to infrastructure
+- Convert legacy configs to modern formats without losing data
+- Detect and fix common configuration problems
+- Ensure consistency across deployment environments
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.11 or higher
+- An MCP client (Claude Desktop, Cursor, VS Code, etc.)
+
+### Installation
 
 ```bash
 # Using uv (recommended)
-uv pip install mcp-config-tools
+uv pip install mcp-json-yaml-toml
 
 # Using pip
-pip install mcp-config-tools
+pip install mcp-json-yaml-toml
 ```
 
-## Usage
+### Claude Desktop Configuration
 
-### As MCP Server
+1. Open your Claude Desktop configuration file:
+   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
-Add to your MCP client configuration:
+2. Add the server to your `mcpServers` section:
 
 ```json
 {
   "mcpServers": {
-    "config-tools": {
-      "command": "mcp-config-tools",
-      "args": []
+    "json-yaml-toml": {
+      "command": "mcp-json-yaml-toml"
     }
   }
 }
 ```
 
-### Available Tools
+3. Restart Claude Desktop to activate the server.
 
-The MCP server provides 5 focused tools:
+### Try It Now
 
-- **data**: Unified CRUD for configuration files
-  - `operation="get"`: Retrieve data, schema, or structure
-    - `type="data", return_type="all"`: Get data at key_path
-    - `type="data", return_type="keys"`: Get structure (keys only)  
-    - `type="schema"`: Get JSON schema from Schema Store
-  - `operation="set"`: Update/create value
-  - `operation="delete"`: Remove key/element
-  
-- **data_query**: Execute advanced yq expressions against files
+Ask Claude Desktop questions like:
 
-- **data_schema**: Unified schema operations
-  - `action="validate"`: Validate syntax and schema
-  - `action="scan"`: Recursively search for schema directories
-  - `action="add_dir"`: Add custom schema directory
-  - `action="add_catalog"`: Add custom schema catalog  
-  - `action="list"`: Show schema configuration
+- **"Validate this Kubernetes manifest against the schema"** - Checks your k8s YAML for correctness
+- **"Convert this package.json to TOML format"** - Transforms between formats while preserving data
+- **"Find all deprecated config fields in this file"** - Uses schema metadata to detect issues
+- **"Merge this environment override with the base config"** - Intelligently combines configs for different deployments
 
-- **data_convert**: Transform files between JSON, YAML, and TOML formats
+---
 
-- **data_merge**: Deep merge two configuration files
+## Available Tools
 
-### Prompts
+The server provides 5 focused tools optimized for LLM interaction:
 
-The server provides pre-defined prompts to help AI agents interact with configuration files:
+| Tool           | Purpose                              | Key Operations                                     |
+| -------------- | ------------------------------------ | -------------------------------------------------- |
+| `data`         | Unified CRUD for configuration files | Get, set, delete values at any path                |
+| `data_query`   | Advanced data extraction             | Run yq expressions to extract/transform data       |
+| `data_schema`  | Schema validation and management     | Validate syntax, discover schemas, manage catalogs |
+| `data_convert` | Format conversion                    | Convert between JSON, YAML, TOML formats           |
+| `data_merge`   | Configuration merging                | Deep merge configs with environment overrides      |
 
-- **explain_config**: Analyze and explain a configuration file
-- **suggest_improvements**: Suggest security, performance, and structural improvements
-- **convert_to_schema**: Generate a JSON schema from a configuration file
+See [docs/TOOLS.md](docs/TOOLS.md) for detailed parameter reference and examples.
 
-### Schema Store Integration
+---
 
-The server integrates with [SchemaStore.org](https://www.schemastore.org/json/) for automatic JSON schema discovery and validation.
+## Configuration
 
-**Features:**
-- Automatic schema discovery for common file types (`pyproject.toml`, `package.json`, `.gitlab-ci.yml`, etc.)
-- Checks IDE caches first (VS Code, Cursor, JetBrains) to avoid network requests
-- Local schema caching (~/.cache/mcp-json-yaml-toml/schemas, 24h expiry)
-- Concurrent schema checking using ThreadPoolExecutor for performance
-- Configurable discovery with `data_schema`
+### Environment Variables
 
-### Configuration
+| Variable                   | Default                       | Purpose                                       |
+| -------------------------- | ----------------------------- | --------------------------------------------- |
+| `MCP_CONFIG_FORMATS`       | `json,yaml,toml`              | Comma-separated list of enabled formats       |
+| `MCP_SCHEMA_CACHE_DIRS`    | `~/.cache/mcp-json-yaml-toml` | Colon-separated paths to search for schemas   |
+| `YAML_ANCHOR_OPTIMIZATION` | `true`                        | Enable automatic YAML anchor/alias generation |
 
-The server can be configured via environment variables:
+### Example: Restrict to JSON and YAML
 
-- **MCP_CONFIG_FORMATS**: Comma-separated list of enabled formats (default: "json,yaml,toml"). Example: `export MCP_CONFIG_FORMATS="json,yaml"`
-- **MCP_SCHEMA_CACHE_DIRS**: Colon-separated list of additional directories to search for schemas. Example: `export MCP_SCHEMA_CACHE_DIRS="/opt/schemas:/usr/local/share/schemas"`
-
-### YAML Anchor Optimization
-
-The server automatically detects duplicate structures in YAML files and generates anchors/aliases to maintain DRY principles. This feature is **context-aware** and only activates if the file already uses anchors.
-
-Configuration variables:
-- **YAML_ANCHOR_OPTIMIZATION**: Enable/disable optimization (default: `true`)
-- **YAML_ANCHOR_MIN_SIZE**: Minimum number of keys/items for a structure to be anchored (default: `3`)
-- **YAML_ANCHOR_MIN_DUPLICATES**: Minimum number of occurrences to trigger anchoring (default: `2`)
-
-**Runtime Configuration:**
 ```bash
-# Scan directories for schemas (persists results)
-data_schema(action="scan", search_paths=["~/.config"])
-
-# Add custom schema directory
-data_schema(action="add_dir", path="/path/to/schemas")
-
-# Add custom schema catalog
-data_schema(action="add_catalog", name="company", uri="https://...")
+export MCP_CONFIG_FORMATS="json,yaml"
+mcp-json-yaml-toml
 ```
 
-Schema discovery looks for:
-- Directories named `schemas` or `jsonSchemas`
-- Directories containing `catalog.json`
-- Directories with `.schema.json` files
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for exhaustive configuration reference.
 
+---
+
+## Further Reading
+
+For more detailed information, see:
+
+- **[docs/TOOLS.md](docs/TOOLS.md)** - Complete reference for all tools, parameters, and examples
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - Exhaustive configuration options and environment variables
+- **[docs/CLIENTS.md](docs/CLIENTS.md)** - Setup guides for Cursor, VS Code, Windsurf, and other MCP clients
+- **[docs/ADVANCED.md](docs/ADVANCED.md)** - Advanced usage patterns and real-world scenarios
+
+---
 
 ## Development
 
@@ -134,8 +145,8 @@ Schema discovery looks for:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/mcp-config-tools.git
-cd mcp-config-tools
+git clone https://github.com/bitflight-devops/mcp-json-yaml-toml.git
+cd mcp-json-yaml-toml
 
 # Install with development dependencies
 uv pip install -e ".[dev]"
@@ -151,7 +162,7 @@ pre-commit install
 uv run pytest
 
 # Run specific test file
-uv run pytest tests/test_server.py
+uv run pytest packages/mcp_json_yaml_toml/tests/test_server.py
 
 # Run with verbose output
 uv run pytest -v
@@ -167,40 +178,51 @@ uv run ruff format
 uv run ruff check --fix
 
 # Type check
-uv run mypy src/
+uv run mypy packages/
 
 # Run all checks
 uv run pre-commit run --all-files
 ```
 
+---
+
 ## Project Structure
 
+```text
+mcp-json-yaml-toml/
+├── packages/mcp_json_yaml_toml/  # Main package
+│   ├── server.py                 # MCP server implementation
+│   ├── yq_wrapper.py             # yq binary wrapper
+│   ├── schemas.py                # JSON Schema management
+│   ├── yaml_optimizer.py         # YAML anchor/alias optimization
+│   ├── toml_utils.py             # TOML file operations
+│   ├── config.py                 # Configuration management
+│   └── tests/                    # Test suite
+├── docs/                         # Documentation
+│   ├── TOOLS.md                  # Tool reference
+│   ├── CONFIGURATION.md          # Configuration guide
+│   ├── CLIENTS.md                # Client setup guides
+│   └── ADVANCED.md               # Advanced usage
+├── scripts/                      # Utility scripts
+├── fixtures/                     # Test fixtures
+├── pyproject.toml                # Project configuration
+└── README.md                     # This file
 ```
-mcp-config-tools/
-├── src/
-│   └── mcp_config_tools/
-│       ├── __init__.py
-│       ├── server.py           # Main MCP server
-│       ├── yq_wrapper.py       # yq binary wrapper
-│       └── binaries/           # Platform-specific yq binaries
-│           ├── yq-linux-amd64
-│           ├── yq-darwin-amd64
-│           └── yq-windows-amd64.exe
-├── tests/
-│   ├── __init__.py
-│   └── test_server.py
-├── pyproject.toml
-└── README.md
-```
+
+---
 
 ## Requirements
 
 - Python 3.11 or higher
 - Bundled yq binaries (no external installation required)
 
+---
+
 ## License
 
 MIT License - see LICENSE file for details
+
+---
 
 ## Contributing
 
