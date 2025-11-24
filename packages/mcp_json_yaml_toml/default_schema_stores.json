@@ -1,0 +1,9 @@
+{
+  "ide_patterns": [
+    "~/.config/Cursor/User/globalStorage/redhat.vscode-yaml/schemas",
+    "~/Library/Application Support/Cursor/User/globalStorage/redhat.vscode-yaml/schemas",
+    "~/.vscode/extensions/redhat.vscode-yaml-*/schemas",
+    "~/.cache/JetBrains/*/jsonSchemas",
+    "~/Library/Caches/JetBrains/*/jsonSchemas"
+  ]
+}

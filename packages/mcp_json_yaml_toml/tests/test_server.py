@@ -1,0 +1,693 @@
+"""Tests for MCP server tools.
+
+Comprehensive tests for all MCP tools: data_query, data, data_schema, data_convert, and data_merge.
+
+Note: FastMCP decorates functions as FunctionTool objects. Access the underlying
+function via .fn attribute (e.g., server.data_query.fn()).
+"""
+
+import json
+from pathlib import Path
+
+import pytest
+from fastmcp.exceptions import ToolError
+
+from mcp_json_yaml_toml import server
+
+# Extract underlying functions from FastMCP FunctionTool wrappers
+data_query_fn = server.data_query.fn
+data_fn = server.data.fn
+data_schema_fn = server.data_schema.fn
+data_convert_fn = server.data_convert.fn
+data_merge_fn = server.data_merge.fn
+
+
+class TestDataQuery:
+    """Test data_query tool."""
+
+    @pytest.mark.integration
+    def test_data_query_json_success(self, sample_json_config: Path) -> None:
+        """Test data_query successfully queries JSON file.
+
+        Tests: JSON querying functionality
+        How: Query .name from sample JSON config
+        Why: Verify basic query operation works
+        """
+        # Arrange - sample JSON config
+        # Act - query name field
+        result = data_query_fn(str(sample_json_config), ".name")
+
+        # Assert - returns correct data
+        assert result["success"] is True
+        assert result["result"] == "test-app"
+        assert result["format"] == "json"
+        assert result["file"] == str(sample_json_config)
+
+    @pytest.mark.integration
+    def test_data_query_nested_field(self, sample_json_config: Path) -> None:
+        """Test data_query queries nested field.
+
+        Tests: Nested field access
+        How: Query .database.host from config
+        Why: Verify nested object traversal works
+        """
+        # Arrange - sample config with nested data
+        # Act - query nested field
+        result = data_query_fn(str(sample_json_config), ".database.host")
+
+        # Assert - returns nested value
+        assert result["success"] is True
+        assert result["result"] == "localhost"
+
+    @pytest.mark.integration
+    def test_data_query_array_element(self, sample_json_config: Path) -> None:
+        """Test data_query queries array element.
+
+        Tests: Array indexing
+        How: Query .servers[0] from config
+        Why: Verify array access works
+        """
+        # Arrange - config with array
+        # Act - query first array element
+        result = data_query_fn(str(sample_json_config), ".servers[0]")
+
+        # Assert - returns array element
+        assert result["success"] is True
+        assert result["result"] == "server1.example.com"
+
+    @pytest.mark.integration
+    def test_data_query_yaml_to_json(self, sample_yaml_config: Path) -> None:
+        """Test data_query converts YAML to JSON output.
+
+        Tests: Format conversion in query
+        How: Query YAML file with JSON output format
+        Why: Verify output format conversion
+        """
+        # Arrange - YAML config
+        # Act - query with JSON output
+        result = data_query_fn(str(sample_yaml_config), ".name", output_format="json")
+
+        # Assert - returns JSON data
+        assert result["success"] is True
+        assert result["result"] == "test-app"
+        assert result["format"] == "json"
+
+    @pytest.mark.integration
+    def test_data_query_file_not_found(self) -> None:
+        """Test data_query raises error for missing file.
+
+        Tests: Missing file handling
+        How: Query non-existent file
+        Why: Verify error handling for missing files
+        """
+        # Arrange - non-existent file path
+        # Act & Assert - raises ToolError
+        with pytest.raises(ToolError, match="File not found"):
+            data_query_fn("/nonexistent/file.json", ".name")
+
+    @pytest.mark.integration
+    def test_data_query_invalid_expression(self, sample_json_config: Path) -> None:
+        """Test data_query raises error for invalid yq expression.
+
+        Tests: Invalid expression handling
+        How: Use malformed yq expression
+        Why: Verify error handling for bad queries
+        """
+        # Arrange - sample config
+        # Act & Assert - raises ToolError
+        with pytest.raises(ToolError, match="Query failed"):
+            data_query_fn(str(sample_json_config), ".bad[")
+
+    def test_data_query_disabled_format(self, sample_json_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test data_query raises error for disabled format.
+
+        Tests: Format filtering enforcement
+        How: Disable JSON format and try to query JSON file
+        Why: Verify format restrictions are enforced
+        """
+        # Arrange - disable JSON format
+        monkeypatch.setenv("MCP_CONFIG_FORMATS", "yaml,toml")
+
+        # Act & Assert - raises ToolError
+        with pytest.raises(ToolError, match="Format 'json' is not enabled"):
+            data_query_fn(str(sample_json_config), ".name")
+
+
+class TestData:
+    """Test unified data tool (get, set, delete)."""
+
+    # --- GET Operations ---
+
+    @pytest.mark.integration
+    def test_data_get_simple_key(self, sample_json_config: Path) -> None:
+        """Test data get retrieves simple key.
+
+        Tests: Simple key retrieval
+        How: Get 'name' key from config
+        Why: Verify basic get operation
+        """
+        # Arrange - sample config
+        # Act - get name key
+        result = data_fn(str(sample_json_config), operation="get", key_path="name")
+
+        # Assert - returns value
+        assert result["success"] is True
+        assert result["result"] == "test-app"
+
+    @pytest.mark.integration
+    def test_data_get_nested_key(self, sample_json_config: Path) -> None:
+        """Test data get retrieves nested key.
+
+        Tests: Nested key access
+        How: Get 'database.port' from config
+        Why: Verify dot-notation path traversal
+        """
+        # Arrange - config with nested structure
+        # Act - get nested key
+        result = data_fn(str(sample_json_config), operation="get", key_path="database.port")
+
+        # Assert - returns nested value
+        assert result["success"] is True
+        assert result["result"] == 5432
+
+    @pytest.mark.integration
+    def test_data_get_array_index(self, sample_json_config: Path) -> None:
+        """Test data get retrieves array element.
+
+        Tests: Array indexing via get
+        How: Get 'servers[1]' from config
+        Why: Verify array access in get
+        """
+        # Arrange - config with array
+        # Act - get array element
+        result = data_fn(str(sample_json_config), operation="get", key_path="servers[1]")
+
+        # Assert - returns element
+        assert result["success"] is True
+        assert result["result"] == "server2.example.com"
+
+    @pytest.mark.integration
+    def test_data_get_structure(self, sample_json_config: Path) -> None:
+        """Test data get retrieves structure (keys only).
+
+        Tests: Structure retrieval
+        How: Get structure of 'database'
+        Why: Verify structure summary
+        """
+        # Arrange - sample config
+        # Act - get structure
+        result = data_fn(str(sample_json_config), operation="get", return_type="keys", key_path="database")
+
+        # Assert - returns structure summary
+        assert result["success"] is True
+        assert "host" in result["result"]
+        assert "port" in result["result"]
+
+    @pytest.mark.integration
+    def test_data_get_schema(self, sample_json_config: Path, sample_json_schema: Path, tmp_path: Path) -> None:
+        """Test data get retrieves schema.
+
+        Tests: Schema retrieval
+        How: Get schema for file
+        Why: Verify schema lookup
+        """
+        # Arrange - config with schema
+        config_path = tmp_path / "app.json"
+        schema_path = tmp_path / "app.schema.json"
+        config_path.write_text(sample_json_config.read_text())
+        schema_path.write_text(sample_json_schema.read_text())
+
+        # Act - get schema
+        result = data_fn(str(config_path), operation="get", type="schema")
+
+        # Assert - returns schema
+        assert result["success"] is True
+        assert result["schema"]["type"] == "object"
+
+    # --- SET Operations ---
+
+    @pytest.mark.integration
+    def test_data_set_simple_value_dry_run(self, sample_json_config: Path) -> None:
+        """Test data set modifies value without in_place.
+
+        Tests: Dry-run set operation
+        How: Set value with in_place=False
+        Why: Verify set works without file modification
+        """
+        # Arrange - sample config
+        # Act - set value without in_place
+        result = data_fn(str(sample_json_config), operation="set", key_path="name", value='"new-name"', in_place=False)
+
+        # Assert - returns modified content
+        assert result["success"] is True
+        assert result["modified_in_place"] is False
+        assert "new-name" in result["result"]
+
+        # Verify original file unchanged
+        original_data = json.loads(sample_json_config.read_text())
+        assert original_data["name"] == "test-app"
+
+    @pytest.mark.integration
+    def test_data_set_nested_value(self, sample_json_config: Path) -> None:
+        """Test data set modifies nested value.
+
+        Tests: Nested value modification
+        How: Set database.port to new value
+        Why: Verify nested modification works
+        """
+        # Arrange - sample config
+        # Act - set nested value
+        result = data_fn(str(sample_json_config), operation="set", key_path="database.port", value="3306", in_place=False)
+
+        # Assert - returns modified content
+        assert result["success"] is True
+        modified_data = json.loads(result["result"])
+        assert modified_data["database"]["port"] == 3306
+
+    @pytest.mark.integration
+    def test_data_set_in_place(self, sample_json_config: Path, tmp_path: Path) -> None:
+        """Test data set modifies file in place.
+
+        Tests: In-place file modification
+        How: Create temp copy and set with in_place=True
+        Why: Verify in-place modification works
+        """
+        # Arrange - create temp copy
+        temp_config = tmp_path / "temp_config.json"
+        temp_config.write_text(sample_json_config.read_text())
+
+        # Act - set value in place
+        result = data_fn(str(temp_config), operation="set", key_path="name", value='"modified"', in_place=True)
+
+        # Assert - file modified
+        assert result["success"] is True
+        assert result["modified_in_place"] is True
+        modified_data = json.loads(temp_config.read_text())
+        assert modified_data["name"] == "modified"
+
+    # --- DELETE Operations ---
+
+    @pytest.mark.integration
+    def test_data_delete_simple_key(self, sample_json_config: Path) -> None:
+        """Test data delete removes simple key.
+
+        Tests: Simple key deletion
+        How: Delete 'version' key
+        Why: Verify basic delete operation
+        """
+        # Arrange - sample config
+        # Act - delete key
+        result = data_fn(str(sample_json_config), operation="delete", key_path="version", in_place=False)
+
+        # Assert - key removed
+        assert result["success"] is True
+        assert result["modified_in_place"] is False
+        modified_data = json.loads(result["result"])
+        assert "version" not in modified_data
+        assert "name" in modified_data  # Other keys preserved
+
+    @pytest.mark.integration
+    def test_data_delete_in_place(self, sample_json_config: Path, tmp_path: Path) -> None:
+        """Test data delete modifies file in place.
+
+        Tests: In-place deletion
+        How: Create temp copy and delete with in_place=True
+        Why: Verify in-place deletion works
+        """
+        # Arrange - create temp copy
+        temp_config = tmp_path / "temp_config.json"
+        temp_config.write_text(sample_json_config.read_text())
+
+        # Act - delete in place
+        result = data_fn(str(temp_config), operation="delete", key_path="version", in_place=True)
+
+        # Assert - file modified
+        assert result["success"] is True
+        assert result["modified_in_place"] is True
+        modified_data = json.loads(temp_config.read_text())
+        assert "version" not in modified_data
+
+
+class TestDataSchema:
+    """Test unified data_schema tool."""
+
+    @pytest.mark.integration
+    def test_data_schema_validate_valid_syntax(self, sample_json_config: Path) -> None:
+        """Test data_schema validate passes for valid file.
+
+        Tests: Valid file validation
+        How: Validate syntactically correct JSON
+        Why: Verify validation succeeds for valid files
+        """
+        # Arrange - valid JSON config
+        # Act - validate
+        result = data_schema_fn(action="validate", file_path=str(sample_json_config))
+
+        # Assert - validation passes
+        assert result["syntax_valid"] is True
+        assert result["overall_valid"] is True
+        assert "Syntax is valid" in result["syntax_message"]
+
+    @pytest.mark.integration
+    def test_data_schema_validate_invalid_syntax(self, invalid_json_config: Path) -> None:
+        """Test data_schema validate fails for invalid syntax.
+
+        Tests: Invalid syntax detection
+        How: Validate malformed JSON
+        Why: Verify syntax errors are caught
+        """
+        # Arrange - invalid JSON
+        # Act - validate
+        result = data_schema_fn(action="validate", file_path=str(invalid_json_config))
+
+        # Assert - validation fails
+        assert result["syntax_valid"] is False
+        assert result["overall_valid"] is False
+        assert "Syntax error" in result["syntax_message"]
+
+    @pytest.mark.integration
+    def test_data_schema_validate_with_schema_success(self, sample_json_config: Path, sample_json_schema: Path) -> None:
+        """Test data_schema validate with matching schema.
+
+        Tests: Schema validation success
+        How: Validate config against matching schema
+        Why: Verify schema validation works
+        """
+        # Arrange - valid config and matching schema
+        # Act - validate with schema
+        result = data_schema_fn(action="validate", file_path=str(sample_json_config), schema_path=str(sample_json_schema))
+
+        # Assert - passes schema validation
+        assert result["syntax_valid"] is True
+        assert result["schema_validated"] is True
+        assert result["overall_valid"] is True
+        assert "Schema validation passed" in result["schema_message"]
+
+    @pytest.mark.integration
+    def test_data_schema_scan(self, tmp_path: Path) -> None:
+        """Test data_schema scan finds schemas.
+
+        Tests: Schema scanning
+        How: Scan directory with schemas
+        Why: Verify scanning works
+        """
+        # Arrange - create schema file
+        schema_path = tmp_path / "test.schema.json"
+        schema_path.write_text("{}")
+
+        # Act - scan
+        result = data_schema_fn(action="scan", search_paths=[str(tmp_path)])
+
+        # Assert - finds schema dir
+        assert result["success"] is True
+        assert result["discovered_count"] > 0
+        assert str(tmp_path) in result["discovered_dirs"]
+
+    @pytest.mark.integration
+    def test_data_schema_add_dir(self, tmp_path: Path) -> None:
+        """Test data_schema add_dir adds directory.
+
+        Tests: Add schema directory
+        How: Add custom directory
+        Why: Verify directory registration
+        """
+        # Arrange - directory
+        # Act - add dir
+        result = data_schema_fn(action="add_dir", path=str(tmp_path))
+
+        # Assert - added
+        assert result["success"] is True
+        assert result["directory"] == str(tmp_path)
+
+    @pytest.mark.integration
+    def test_data_schema_add_catalog(self) -> None:
+        """Test data_schema add_catalog adds catalog.
+
+        Tests: Add schema catalog
+        How: Add custom catalog
+        Why: Verify catalog registration
+        """
+        # Arrange
+        # Act - add catalog
+        result = data_schema_fn(action="add_catalog", name="test", uri="http://example.com/catalog.json")
+
+        # Assert - added
+        assert result["success"] is True
+        assert result["name"] == "test"
+
+    @pytest.mark.integration
+    def test_data_schema_list(self) -> None:
+        """Test data_schema list shows config.
+
+        Tests: List configuration
+        How: List schemas
+        Why: Verify list operation
+        """
+        # Arrange
+        # Act - list
+        result = data_schema_fn(action="list")
+
+        # Assert - returns config
+        assert result["success"] is True
+        assert "config" in result
+
+
+class TestDataConvert:
+    """Test data_convert tool."""
+
+    @pytest.mark.integration
+    def test_data_convert_json_to_yaml(self, sample_json_config: Path) -> None:
+        """Test data_convert converts JSON to YAML.
+
+        Tests: JSON to YAML conversion
+        How: Convert JSON file to YAML format
+        Why: Verify basic format conversion
+        """
+        # Arrange - JSON config
+        # Act - convert to YAML
+        result = data_convert_fn(str(sample_json_config), "yaml")
+
+        # Assert - conversion successful
+        assert result["success"] is True
+        assert result["input_format"] == "json"
+        assert result["output_format"] == "yaml"
+        assert "name: test-app" in result["result"]
+
+    @pytest.mark.integration
+    def test_data_convert_yaml_to_json(self, sample_yaml_config: Path) -> None:
+        """Test data_convert converts YAML to JSON.
+
+        Tests: YAML to JSON conversion
+        How: Convert YAML file to JSON format
+        Why: Verify reverse conversion
+        """
+        # Arrange - YAML config
+        # Act - convert to JSON
+        result = data_convert_fn(str(sample_yaml_config), "json")
+
+        # Assert - conversion successful
+        assert result["success"] is True
+        assert result["input_format"] == "yaml"
+        assert result["output_format"] == "json"
+        # Parse to verify valid JSON
+        converted_data = json.loads(result["result"])
+        assert converted_data["name"] == "test-app"
+
+    @pytest.mark.integration
+    @pytest.mark.xfail(reason="yq TOML encoder not fully implemented for complex objects")
+    def test_data_convert_json_to_toml(self, sample_json_config: Path) -> None:
+        """Test data_convert converts JSON to TOML.
+
+        Tests: JSON to TOML conversion
+        How: Convert JSON file to TOML format
+        Why: Verify TOML output format
+
+        Note: Currently expected to fail as yq's TOML encoder only supports
+        scalar values. This test documents the limitation.
+        """
+        # Arrange - JSON config
+        # Act - convert to TOML
+        result = data_convert_fn(str(sample_json_config), "toml")
+
+        # Assert - conversion successful
+        assert result["success"] is True
+        assert result["input_format"] == "json"
+        assert result["output_format"] == "toml"
+        assert 'name = "test-app"' in result["result"]
+
+    @pytest.mark.integration
+    def test_data_convert_with_output_file(self, sample_json_config: Path, tmp_path: Path) -> None:
+        """Test data_convert writes to output file.
+
+        Tests: File output for conversion
+        How: Convert and write to specified file
+        Why: Verify file writing capability
+        """
+        # Arrange - JSON config and output path
+        output_file = tmp_path / "output.yaml"
+
+        # Act - convert with output file
+        result = data_convert_fn(str(sample_json_config), "yaml", output_file=str(output_file))
+
+        # Assert - file written
+        assert result["success"] is True
+        assert result["output_file"] == str(output_file)
+        assert output_file.exists()
+        content = output_file.read_text()
+        assert "name: test-app" in content
+
+    @pytest.mark.integration
+    def test_data_convert_same_format_error(self, sample_json_config: Path) -> None:
+        """Test data_convert rejects same input/output format.
+
+        Tests: Format validation
+        How: Try to convert JSON to JSON
+        Why: Ensure meaningless conversions are rejected
+        """
+        # Arrange - JSON config
+        # Act & Assert - raises ToolError
+        with pytest.raises(ToolError, match="Input and output formats are the same"):
+            data_convert_fn(str(sample_json_config), "json")
+
+    @pytest.mark.integration
+    def test_data_convert_file_not_found(self) -> None:
+        """Test data_convert raises error for missing file.
+
+        Tests: Missing file error handling
+        How: Convert non-existent file
+        Why: Verify error handling
+        """
+        # Arrange - non-existent file
+        # Act & Assert - raises ToolError
+        with pytest.raises(ToolError, match="File not found"):
+            data_convert_fn("/nonexistent/file.json", "yaml")
+
+
+class TestDataMerge:
+    """Test data_merge tool."""
+
+    @pytest.mark.integration
+    def test_data_merge_two_json_files(self, sample_json_config: Path, tmp_path: Path) -> None:
+        """Test data_merge merges two JSON files.
+
+        Tests: Basic merge operation
+        How: Create two JSON files and merge them
+        Why: Verify merge functionality works
+        """
+        # Arrange - two JSON configs
+        file1 = tmp_path / "config1.json"
+        file2 = tmp_path / "config2.json"
+        file1.write_text(json.dumps({"name": "app1", "version": "1.0"}))
+        file2.write_text(json.dumps({"version": "2.0", "author": "test"}))
+
+        # Act - merge files
+        result = data_merge_fn(str(file1), str(file2), output_format="json")
+
+        # Assert - merged correctly
+        assert result["success"] is True
+        merged_data = json.loads(result["result"])
+        assert merged_data["name"] == "app1"  # From file1
+        assert merged_data["version"] == "2.0"  # Overridden by file2
+        assert merged_data["author"] == "test"  # Added from file2
+
+    @pytest.mark.integration
+    def test_data_merge_deep_merge(self, tmp_path: Path) -> None:
+        """Test data_merge performs deep merge.
+
+        Tests: Deep merge strategy
+        How: Merge nested objects
+        Why: Verify nested merging works correctly
+        """
+        # Arrange - configs with nested objects
+        file1 = tmp_path / "config1.json"
+        file2 = tmp_path / "config2.json"
+        file1.write_text(json.dumps({"database": {"host": "localhost", "port": 5432}}))
+        file2.write_text(json.dumps({"database": {"port": 3306, "user": "admin"}}))
+
+        # Act - merge
+        result = data_merge_fn(str(file1), str(file2), output_format="json")
+
+        # Assert - deep merged
+        merged_data = json.loads(result["result"])
+        assert merged_data["database"]["host"] == "localhost"  # Preserved
+        assert merged_data["database"]["port"] == 3306  # Overridden
+        assert merged_data["database"]["user"] == "admin"  # Added
+
+    @pytest.mark.integration
+    def test_data_merge_different_formats(self, sample_json_config: Path, sample_yaml_config: Path) -> None:
+        """Test data_merge merges different formats.
+
+        Tests: Cross-format merging
+        How: Merge JSON and YAML files
+        Why: Verify format-agnostic merging
+        """
+        # Arrange - JSON and YAML configs
+        # Act - merge different formats
+        result = data_merge_fn(str(sample_json_config), str(sample_yaml_config), output_format="json")
+
+        # Assert - merged successfully
+        assert result["success"] is True
+        merged_data = json.loads(result["result"])
+        assert "name" in merged_data
+        assert "database" in merged_data
+
+    @pytest.mark.integration
+    def test_data_merge_with_output_file(self, tmp_path: Path) -> None:
+        """Test data_merge writes to output file.
+
+        Tests: File output for merge
+        How: Merge and write to specified file
+        Why: Verify file writing capability
+        """
+        # Arrange - two configs and output path
+        file1 = tmp_path / "config1.json"
+        file2 = tmp_path / "config2.json"
+        output_file = tmp_path / "merged.json"
+        file1.write_text(json.dumps({"key1": "value1"}))
+        file2.write_text(json.dumps({"key2": "value2"}))
+
+        # Act - merge with output file
+        result = data_merge_fn(str(file1), str(file2), output_file=str(output_file))
+
+        # Assert - file written
+        assert result["success"] is True
+        assert result["output_file"] == str(output_file)
+        assert output_file.exists()
+        merged_data = json.loads(output_file.read_text())
+        assert "key1" in merged_data
+        assert "key2" in merged_data
+
+    @pytest.mark.integration
+    def test_data_merge_file1_not_found(self, sample_json_config: Path) -> None:
+        """Test data_merge raises error if first file missing.
+
+        Tests: First file validation
+        How: Merge with non-existent first file
+        Why: Verify error handling
+        """
+        # Arrange - non-existent first file
+        # Act & Assert - raises ToolError
+        with pytest.raises(ToolError, match="First file not found"):
+            data_merge_fn("/nonexistent/file.json", str(sample_json_config))
+
+
+class TestPrompts:
+    """Test prompt templates."""
+
+    def test_explain_config(self) -> None:
+        """Test explain_config prompt generation."""
+        prompt = server.explain_config.fn("config.json")
+        assert "analyze and explain" in prompt
+        assert "config.json" in prompt
+
+    def test_suggest_improvements(self) -> None:
+        """Test suggest_improvements prompt generation."""
+        prompt = server.suggest_improvements.fn("config.yaml")
+        assert "suggest improvements" in prompt
+        assert "config.yaml" in prompt
+
+    def test_convert_to_schema(self) -> None:
+        """Test convert_to_schema prompt generation."""
+        prompt = server.convert_to_schema.fn("data.toml")
+        assert "generate a JSON schema" in prompt
+        assert "data.toml" in prompt

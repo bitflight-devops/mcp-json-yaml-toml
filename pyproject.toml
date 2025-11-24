@@ -1,0 +1,237 @@
+[project]
+name = "mcp-json-yaml-toml"
+description = "MCP server for querying and modifying JSON, YAML, and TOML configuration files using yq"
+readme = "README.md"
+dynamic = ["version"]
+authors = [{ name = "Jamie Nelson", email = "jamie@bitflight.io" }]
+maintainers = [{ name = "Jamie Nelson", email = "jamie@bitflight.io" }]
+license = { text = "MIT" }
+classifiers = [
+	"Development Status :: 4 - Beta",
+	"Intended Audience :: Developers",
+	"License :: OSI Approved :: MIT License",
+	"Operating System :: POSIX :: Linux",
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3.11",
+	"Programming Language :: Python :: 3.12",
+	"Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = [
+	"mcp",
+	"model-context-protocol",
+	"config",
+	"json",
+	"yaml",
+	"toml",
+	"yq",
+]
+requires-python = ">=3.11,<3.13"
+dependencies = [
+	"fastmcp>=0.3.0",
+	"orjson>=3.10.0",
+	"ruamel.yaml>=0.18.0",
+	"tomlkit>=0.13.0",
+	"httpx>=0.27.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+    "pytest>=8.4.2",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.9.4",
+    "hatchling>=1.14.0",
+    "hatch-vcs>=0.5.0",
+    "mypy>=1.18.2",
+    "pytest-asyncio>=1.2.0",
+    "basedpyright>=1.33.0",
+    "pre-commit>=4.4.0",
+]
+
+[project.scripts]
+mcp-json-yaml-toml = "mcp_json_yaml_toml.server:main"
+
+[project.urls]
+Homepage = "https://github.com/bitflight-devops/mcp-json-yaml-toml"
+Repository = "https://github.com/bitflight-devops/mcp-json-yaml-toml"
+Issues = "https://github.com/bitflight-devops/mcp-json-yaml-toml/issues"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+fix = true
+preview = true
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"
+line-ending = "lf"
+skip-magic-trailing-comma = true
+preview = true
+
+[tool.ruff.lint]
+extend-select = [
+	"E",
+	"W",  # see: https://pypi.org/project/pycodestyle
+	"F",  # see: https://pypi.org/project/pyflakes
+	"I",  #see: https://pypi.org/project/isort/
+	"UP", # see: https://docs.astral.sh/ruff/rules/#pyupgrade-up
+	# flake8-2020
+	"YTT",
+	# flake8-bandit
+	"S",
+	# flake8-bugbear
+	"B",
+	# flake8-builtins
+	"A",
+	# flake8-comprehensions
+	"C4",
+	# flake8-debugger
+	"T10",
+	# flake8-simplify
+	"SIM",
+	# mccabe
+	"C90",
+	# pygrep-hooks
+	"PGH",
+	# ruff
+	"RUF",
+	# tryceratops
+	"TRY",
+	# pydocstyle
+	"DOC",
+	# docstrings
+	"D",
+]
+
+ignore = [
+	"COM812", # Missing trailing comma
+	"COM819", # Missing trailing comma
+	"D107",   # Missing docstring in __init__
+	"D415",   # First line should end with a period
+	"E111",   # Indentation is not a multiple of four
+	"E117",   # Over-indented for visual indent
+	"E203",   # whitespace before ':'
+	"E402",   # todo: use noqa per line
+	"E501",   # Line length exceeds maximum limit
+	"ISC001", # isort configuration is missing
+	"ISC002", # isort configuration is missing
+	"Q000",   # Remove bad quotes
+	"Q001",   # Remove bad quotes
+	"Q002",   # Remove bad quotes
+	"Q003",   # Remove bad quotes
+	"TRY003", # Exception message should not be too long
+	"S404",   # module is possibly insecure,
+	"S603", # subprocess-without-shell-equals-true,
+	"S606", # start-process-with-no-shell
+	"DOC201", # Missing return section in docstring
+	"DOC501", # Missing raises section
+	"DOC502", # Missing raises section
+	"T201",   # Allow print statements - not all print() is debug code
+]
+
+unfixable = ["F401", "S404", "S603", "S606", "DOC501"]
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 120
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+split-on-trailing-comma = false
+force-single-line = false
+force-wrap-aliases = false
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*" = ["S101", "S603", "S607", "D102", "D200", "D100"]
+"**/test_*.py" = ["S101", "S603", "S607", "D102", "D200", "D100"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+extra_checks = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+show_error_codes = true
+pretty = true
+disable_error_code = "call-arg"
+mypy_path = []
+
+[[tool.mypy.overrides]]
+module = "mcp_json_yaml_toml.tests.*"
+disable_error_code = ["operator"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disable_error_code = ["no-untyped-def"]
+
+[tool.basedpyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+reportMissingImports = false
+reportMissingTypeStubs = false
+reportUnnecessaryTypeIgnoreComment = "error"
+reportPrivateImportUsage = false
+include = ["packages", "scripts"]
+extraPaths = ["packages", "scripts", "tests","."]
+exclude = ["**/node_modules", "**/__pycache__", ".*", "__*", "**/typings"]
+ignore = ["**/typings"]
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+addopts = [
+	"--cov=packages/mcp_json_yaml_toml",
+	"--cov-report=term-missing",
+	"-v",
+]
+testpaths = ["packages/mcp_json_yaml_toml/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+pythonpath = [".", "packages/"]
+markers = [
+	"slow: tests that take significant time to run",
+	"integration: integration tests that test multiple components together",
+]
+
+[tool.coverage.run]
+omit = [
+	"*/tests/*",  # Exclude all test code from coverage measurement
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 70
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+
+[tool.hatch.build.targets.sdist]
+include = [
+	"packages/mcp_json_yaml_toml",
+	"README.md",
+	"pyproject.toml",
+]
+
+[tool.hatch.build.targets.wheel]
+include = ["packages/mcp_json_yaml_toml"]
+
+[tool.hatch.build.targets.wheel.sources]
+"packages/mcp_json_yaml_toml" = "mcp_json_yaml_toml"
+
+[tool.hatch.version]
+source = "vcs"

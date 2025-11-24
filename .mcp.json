@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "mcp-json-yaml-toml": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        ".",
+        "mcp-json-yaml-toml"
+      ],
+      "env": {}
+    }
+  }
+}

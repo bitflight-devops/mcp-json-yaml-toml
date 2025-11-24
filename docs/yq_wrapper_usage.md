@@ -1,0 +1,324 @@
+# YQ Wrapper Usage Guide
+
+## Overview
+
+The `yq_wrapper` module provides a Python interface to the bundled yq v4.48.2 binary for querying and manipulating YAML, JSON, TOML, and other configuration formats.
+
+## Features
+
+- **Cross-platform support**: Automatic binary selection for Linux (amd64), macOS (amd64, arm64), Windows (amd64)
+- **Type-safe**: Full type hints with mypy --strict compliance
+- **Error handling**: Structured exceptions with AI-friendly error messages
+- **Format conversion**: Seamless conversion between JSON, YAML, TOML, XML, CSV, TSV, and properties files
+- **Pydantic models**: Structured result objects with automatic JSON parsing
+
+## Installation
+
+The yq binaries are bundled with the package. No external dependencies required beyond Python 3.11+.
+
+## Quick Start
+
+```python
+from mcp_json_yaml_toml.yq_wrapper import execute_yq, get_yq_binary_path
+
+# Simple YAML to JSON conversion
+yaml_data = """
+name: myapp
+version: 1.0.0
+"""
+
+result = execute_yq(
+    ".",  # Expression: select everything
+    input_data=yaml_data,
+    input_format="yaml",
+    output_format="json"
+)
+
+print(result.data)
+# Output: {'name': 'myapp', 'version': '1.0.0'}
+```
+
+## API Reference
+
+### Functions
+
+#### `get_yq_binary_path() -> Path`
+
+Get the path to the platform-specific yq binary.
+
+**Returns:**
+- Path to the yq binary executable
+
+**Raises:**
+- `YQBinaryNotFoundError`: If the binary for this platform cannot be found
+
+**Example:**
+```python
+from mcp_json_yaml_toml.yq_wrapper import get_yq_binary_path
+
+binary_path = get_yq_binary_path()
+print(f"Using yq at: {binary_path}")
+```
+
+#### `execute_yq(...) -> YQResult`
+
+Execute yq command with the given expression and input.
+
+**Parameters:**
+- `expression` (str): yq expression to evaluate (e.g., '.name', '.items[]', '.users[] | select(.age > 25)')
+- `input_data` (str | None): Input data as string (mutually exclusive with input_file)
+- `input_file` (Path | str | None): Path to input file (mutually exclusive with input_data)
+- `input_format` (FormatType): Format of input data (default: "yaml")
+- `output_format` (FormatType): Format for output (default: "json")
+- `in_place` (bool): Modify file in place (only valid with input_file)
+- `null_input` (bool): Don't read input, useful for creating new content
+
+**Returns:**
+- `YQResult`: Object with stdout, stderr, returncode, and parsed data
+
+**Raises:**
+- `YQBinaryNotFoundError`: If yq binary cannot be found
+- `YQExecutionError`: If yq execution fails
+- `ValueError`: If arguments are invalid
+
+#### `validate_yq_binary() -> tuple[bool, str]`
+
+Validate that the yq binary exists and is executable.
+
+**Returns:**
+- Tuple of (is_valid, message) where message describes the result
+
+**Example:**
+```python
+from mcp_json_yaml_toml.yq_wrapper import validate_yq_binary
+
+is_valid, message = validate_yq_binary()
+if is_valid:
+    print(f"✓ {message}")
+else:
+    print(f"✗ {message}")
+```
+
+### Models
+
+#### `YQResult`
+
+Pydantic model representing the result of a yq execution.
+
+**Fields:**
+- `stdout` (str): Standard output from yq command
+- `stderr` (str): Standard error from yq command (default: "")
+- `returncode` (int): Exit code from yq process (default: 0)
+- `data` (Any): Parsed output data if output_format="json" (default: None)
+
+### Exceptions
+
+#### `YQError`
+
+Base exception for yq execution errors.
+
+#### `YQBinaryNotFoundError(YQError)`
+
+Raised when the platform-specific yq binary cannot be found.
+
+#### `YQExecutionError(YQError)`
+
+Raised when yq execution fails.
+
+**Attributes:**
+- `stderr` (str): Raw stderr output from yq
+- `returncode` (int): Process exit code
+
+## Usage Examples
+
+### Example 1: Query JSON Data
+
+```python
+from mcp_json_yaml_toml.yq_wrapper import execute_yq
+
+json_data = '''
+{
+  "users": [
+    {"name": "alice", "age": 30, "active": true},
+    {"name": "bob", "age": 25, "active": false},
+    {"name": "charlie", "age": 35, "active": true}
+  ]
+}
+'''
+
+# Get all active users
+result = execute_yq(
+    '.users[] | select(.active == true)',
+    input_data=json_data,
+    input_format="json",
+    output_format="json"
+)
+
+print(result.stdout)
+```
+
+### Example 2: Convert TOML to YAML
+
+```python
+from pathlib import Path
+from mcp_json_yaml_toml.yq_wrapper import execute_yq
+
+# Assuming you have a pyproject.toml file
+result = execute_yq(
+    '.',
+    input_file=Path("pyproject.toml"),
+    input_format="toml",
+    output_format="yaml"
+)
+
+print(result.stdout)
+```
+
+### Example 3: Modify YAML File In-Place
+
+```python
+from pathlib import Path
+from mcp_json_yaml_toml.yq_wrapper import execute_yq
+
+config_file = Path("config.yaml")
+
+# Update version field in YAML file
+execute_yq(
+    '.version = "2.0.0"',
+    input_file=config_file,
+    input_format="yaml",
+    output_format="yaml",
+    in_place=True
+)
+
+print(f"Updated {config_file}")
+```
+
+### Example 4: Create New YAML from Scratch
+
+```python
+from mcp_json_yaml_toml.yq_wrapper import execute_yq
+
+# Create new YAML structure using null input
+result = execute_yq(
+    '''{
+        "name": "myapp",
+        "version": "1.0.0",
+        "dependencies": ["dep1", "dep2"]
+    }''',
+    null_input=True,
+    output_format="yaml"
+)
+
+print(result.stdout)
+# Output:
+# name: myapp
+# version: 1.0.0
+# dependencies:
+#   - dep1
+#   - dep2
+```
+
+### Example 5: Error Handling
+
+```python
+from mcp_json_yaml_toml.yq_wrapper import execute_yq, YQExecutionError
+
+try:
+    result = execute_yq(
+        '.invalid.path',
+        input_data='{"name": "test"}',
+        input_format="json",
+        output_format="json"
+    )
+except YQExecutionError as e:
+    print(f"Error: {e}")
+    print(f"Exit code: {e.returncode}")
+    print(f"Details: {e.stderr}")
+```
+
+### Example 6: Complex Filtering
+
+```python
+from mcp_json_yaml_toml.yq_wrapper import execute_yq
+
+yaml_data = """
+services:
+  - name: web
+    port: 80
+    replicas: 3
+  - name: api
+    port: 8080
+    replicas: 5
+  - name: db
+    port: 5432
+    replicas: 1
+"""
+
+# Get services with more than 2 replicas
+result = execute_yq(
+    '.services[] | select(.replicas > 2)',
+    input_data=yaml_data,
+    input_format="yaml",
+    output_format="json"
+)
+
+# Note: For multiple results, yq returns newline-separated JSON objects
+for line in result.stdout.strip().split('\n'):
+    import orjson
+    service = orjson.loads(line)
+    print(f"{service['name']}: {service['replicas']} replicas")
+```
+
+## Supported Formats
+
+The wrapper supports all formats that yq v4.48.2 supports:
+
+- **json**: JavaScript Object Notation
+- **yaml**: YAML Ain't Markup Language
+- **toml**: Tom's Obvious Minimal Language
+- **xml**: eXtensible Markup Language
+- **csv**: Comma-Separated Values
+- **tsv**: Tab-Separated Values
+- **props**: Java properties files
+
+## Platform Support
+
+The wrapper automatically detects your platform and uses the appropriate binary:
+
+| Platform | Architecture | Binary Name |
+|----------|-------------|-------------|
+| Linux | x86_64/amd64 | yq-linux-amd64 |
+| macOS | x86_64/amd64 | yq-darwin-amd64 |
+| macOS | arm64 | yq-darwin-arm64 |
+| Windows | x86_64/amd64 | yq-windows-amd64.exe |
+
+## Performance Notes
+
+- Subprocess overhead: ~10-50ms per execution
+- Binary size: ~10-12 MB per platform
+- Timeout: 30 seconds (configurable in code)
+- Memory: Minimal (subprocess-based)
+
+## Troubleshooting
+
+### Binary Not Found
+
+If you get `YQBinaryNotFoundError`, ensure:
+1. The binaries/ directory exists in your package
+2. The binary for your platform is present
+3. On Unix systems, the binary has execute permissions
+
+### Execution Timeout
+
+If operations timeout (30s default), you may need to:
+1. Process data in smaller chunks
+2. Modify the timeout in the source code
+3. Use streaming for large files
+
+### Parse Errors
+
+If JSON parsing fails but yq succeeds:
+- Check the `stdout` field for raw output
+- The `data` field will be None
+- A warning will be added to `stderr`
