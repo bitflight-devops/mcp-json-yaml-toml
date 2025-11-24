@@ -1,13 +1,6 @@
 """Tests for YAML optimizer module."""
 
-import pytest
-
-from mcp_json_yaml_toml.yaml_optimizer import (
-    assign_anchors,
-    find_duplicates,
-    get_optimization_stats,
-    optimize_yaml,
-)
+from mcp_json_yaml_toml.yaml_optimizer import assign_anchors, find_duplicates, get_optimization_stats, optimize_yaml
 
 
 class TestFindDuplicates:
@@ -27,7 +20,7 @@ class TestFindDuplicates:
         assert len(duplicates) == 1
 
         # Should have 2 occurrences
-        duplicate_group = list(duplicates.values())[0]
+        duplicate_group = next(iter(duplicates.values()))
         assert len(duplicate_group) == 2
 
         # Paths should be job1 and job2
@@ -90,12 +83,7 @@ class TestAssignAnchors:
 
     def test_assign_anchors_simple(self) -> None:
         """Test basic anchor assignment."""
-        duplicates = {
-            "hash1": [
-                ("job1", {"image": "node:18"}),
-                ("job2", {"image": "node:18"}),
-            ]
-        }
+        duplicates = {"hash1": [("job1", {"image": "node:18"}), ("job2", {"image": "node:18"})]}
 
         anchors = assign_anchors(duplicates)
 
@@ -105,12 +93,7 @@ class TestAssignAnchors:
 
     def test_assign_anchors_sanitization(self) -> None:
         """Test anchor name sanitization."""
-        duplicates = {
-            "hash1": [
-                ("jobs.build-prod", {"image": "node:18"}),
-                ("jobs.build-dev", {"image": "node:18"}),
-            ]
-        }
+        duplicates = {"hash1": [("jobs.build-prod", {"image": "node:18"}), ("jobs.build-dev", {"image": "node:18"})]}
 
         anchors = assign_anchors(duplicates)
 

@@ -1,59 +1,69 @@
+"""Verification tests for MCP JSON/YAML/TOML server features.
+
+This module contains verification tests for data_query tool and pagination hints.
+"""
+
 import sys
-import json
 from pathlib import Path
+from typing import Any
 
 # Add package to path
 sys.path.insert(0, str(Path.cwd() / "packages"))
 
-from mcp_json_yaml_toml.server import data_structure, data_query, data_get
+from mcp_json_yaml_toml.server import data_query
 
-def call_tool(tool, *args, **kwargs):
-    func = getattr(tool, "fn", tool)
-    return func(*args, **kwargs)
 
-def test_structure():
-    print("Testing data_structure...")
-    claude_json = Path("fixtures/claude.json").resolve()
-    
-    if not claude_json.exists():
-        print(f"Fixture not found: {claude_json}")
-        return
+def call_tool(tool: object, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Call a FastMCP tool function, extracting .fn if present.
 
-    # Test depth 1
-    print(f"Analyzing {claude_json} with depth 1")
-    result = call_tool(data_structure, str(claude_json), depth=1)
-    print("Result keys:", list(result["result"].keys()))
-    
-    # Test depth 2
-    print(f"\nAnalyzing {claude_json} with depth 2")
-    result = call_tool(data_structure, str(claude_json), depth=2)
-    # Print a summary of the result
-    print("Result summary (truncated):")
-    print(json.dumps(result["result"], indent=2)[:500])
+    Args:
+        tool: Either a FastMCP FunctionTool wrapper or a callable function.
+        *args: Positional arguments to pass to the tool function.
+        **kwargs: Keyword arguments to pass to the tool function.
 
-def test_hints():
+    Returns:
+        The dictionary result from calling the tool function.
+
+    Raises:
+        TypeError: If the tool is not callable.
+    """
+    # FastMCP wraps tools in FunctionTool which has .fn attribute
+    # If no .fn attribute, assume tool is already callable
+    fn_attr = getattr(tool, "fn", None)
+    func = fn_attr if fn_attr is not None else tool
+    if not callable(func):
+        raise TypeError(f"Tool {tool!r} is not callable and has no .fn attribute")
+    result = func(*args, **kwargs)
+    if not isinstance(result, dict):
+        raise TypeError(f"Expected dict result, got {type(result)}")
+    return result
+
+
+def test_hints() -> None:
+    """Test pagination hints with a large file query."""
     print("\nTesting hints...")
-    gitlab_ci = Path("fixtures/gitlab-ci.yml").resolve()
-    
-    if not gitlab_ci.exists():
-        print(f"Fixture not found: {gitlab_ci}")
+    github_test_yml = Path(".github/workflows/test.yml").resolve()
+
+    if not github_test_yml.exists():
+        print(f"Fixture not found: {github_test_yml}")
         return
 
     # Query that returns the whole file (which is large)
-    print(f"Querying {gitlab_ci} as JSON to trigger pagination")
-    result = call_tool(data_query, str(gitlab_ci), ".", output_format="json")
-    
+    print(f"Querying {github_test_yml} as JSON to trigger pagination")
+    result = call_tool(data_query, str(github_test_yml), ".", output_format="json")
+
     if result.get("paginated"):
         print("Pagination active")
         print("Advisory:", result.get("advisory"))
     else:
         print("Result was not paginated (size:", len(str(result.get("result"))), ")")
 
+
 if __name__ == "__main__":
     try:
-        test_structure()
         test_hints()
     except Exception as e:
         print(f"Test failed: {e}")
         import traceback
+
         traceback.print_exc()

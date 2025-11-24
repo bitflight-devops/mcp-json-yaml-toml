@@ -218,7 +218,7 @@ class TestData:
         schema_path.write_text(sample_json_schema.read_text())
 
         # Act - get schema
-        result = data_fn(str(config_path), operation="get", type="schema")
+        result = data_fn(str(config_path), operation="get", data_type="schema")
 
         # Assert - returns schema
         assert result["success"] is True
@@ -257,7 +257,9 @@ class TestData:
         """
         # Arrange - sample config
         # Act - set nested value
-        result = data_fn(str(sample_json_config), operation="set", key_path="database.port", value="3306", in_place=False)
+        result = data_fn(
+            str(sample_json_config), operation="set", key_path="database.port", value="3306", in_place=False
+        )
 
         # Assert - returns modified content
         assert result["success"] is True
@@ -375,7 +377,9 @@ class TestDataSchema:
         """
         # Arrange - valid config and matching schema
         # Act - validate with schema
-        result = data_schema_fn(action="validate", file_path=str(sample_json_config), schema_path=str(sample_json_schema))
+        result = data_schema_fn(
+            action="validate", file_path=str(sample_json_config), schema_path=str(sample_json_schema)
+        )
 
         # Assert - passes schema validation
         assert result["syntax_valid"] is True
@@ -675,19 +679,37 @@ class TestPrompts:
     """Test prompt templates."""
 
     def test_explain_config(self) -> None:
-        """Test explain_config prompt generation."""
-        prompt = server.explain_config.fn("config.json")
+        """Test explain_config prompt generation.
+
+        Note: FastMCP's FunctionPrompt.fn is typed as returning
+        PromptResult | Awaitable[PromptResult], but for sync prompt functions
+        that return str, it actually returns str at runtime.
+        We use cast() to assert the known runtime type.
+        """
+        from typing import cast
+
+        prompt = cast(str, server.explain_config.fn("config.json"))
         assert "analyze and explain" in prompt
         assert "config.json" in prompt
 
     def test_suggest_improvements(self) -> None:
-        """Test suggest_improvements prompt generation."""
-        prompt = server.suggest_improvements.fn("config.yaml")
+        """Test suggest_improvements prompt generation.
+
+        Note: See test_explain_config docstring for type cast explanation.
+        """
+        from typing import cast
+
+        prompt = cast(str, server.suggest_improvements.fn("config.yaml"))
         assert "suggest improvements" in prompt
         assert "config.yaml" in prompt
 
     def test_convert_to_schema(self) -> None:
-        """Test convert_to_schema prompt generation."""
-        prompt = server.convert_to_schema.fn("data.toml")
+        """Test convert_to_schema prompt generation.
+
+        Note: See test_explain_config docstring for type cast explanation.
+        """
+        from typing import cast
+
+        prompt = cast(str, server.convert_to_schema.fn("data.toml"))
         assert "generate a JSON schema" in prompt
         assert "data.toml" in prompt

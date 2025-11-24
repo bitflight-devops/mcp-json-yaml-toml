@@ -1,7 +1,8 @@
 """Integration tests for YAML anchor optimization."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from mcp_json_yaml_toml import server
 
@@ -31,7 +32,7 @@ services:
             operation="set",
             key_path="services.cache",
             value='{"image": "nginx", "ports": ["80:80"], "restart": "always"}',
-            in_place=True
+            in_place=True,
         )
 
         # Should succeed
@@ -50,7 +51,7 @@ services:
     def test_set_operation_preserves_existing_anchors(self, tmp_path: Path) -> None:
         """Test that existing anchors are preserved."""
         # Create a YAML file that already has anchors
-        test_file = tmp_path / "gitlab-ci.yml"
+        test_file = tmp_path / ".gitlab-ci.yml"
         test_file.write_text("""default: &default
   image: node:18
   cache:
@@ -70,7 +71,7 @@ job1:
             operation="set",
             key_path="job2",
             value='{"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m", "script": ["npm build"]}',
-            in_place=True
+            in_place=True,
         )
 
         # Should succeed
@@ -92,11 +93,7 @@ job1:
 
         # Modify it
         result = server.data.fn(
-            file_path=str(test_file),
-            operation="set",
-            key_path="job2",
-            value='{"image": "node:18"}',
-            in_place=True
+            file_path=str(test_file), operation="set", key_path="job2", value='{"image": "node:18"}', in_place=True
         )
 
         # Should succeed
@@ -124,7 +121,7 @@ job1:
             operation="set",
             key_path="job2",
             value='{"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"}',
-            in_place=False
+            in_place=False,
         )
 
         # Should succeed

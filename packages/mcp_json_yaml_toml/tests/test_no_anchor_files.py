@@ -1,7 +1,8 @@
 """Test that files without anchors are NOT optimized."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from mcp_json_yaml_toml import server
 
@@ -30,7 +31,7 @@ def test_no_optimization_for_files_without_anchors(tmp_path: Path) -> None:
         operation="set",
         key_path="services.cache",
         value='{"image": "nginx", "ports": ["80:80"], "restart": "always"}',
-        in_place=True
+        in_place=True,
     )
 
     # Should succeed
@@ -44,6 +45,6 @@ def test_no_optimization_for_files_without_anchors(tmp_path: Path) -> None:
     modified_content = test_file.read_text()
     assert "&" not in modified_content  # Should NOT have anchor
     assert "*" not in modified_content  # Should NOT have alias
-    
+
     # Should have the new service though
     assert "cache:" in modified_content

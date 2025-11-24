@@ -1,7 +1,8 @@
 """Test that tomlkit preserves comments and formatting."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from mcp_json_yaml_toml import server
 
@@ -23,11 +24,7 @@ name = "myapp"
 
     # Add a new key
     result = server.data.fn(
-        file_path=str(test_file),
-        operation="set",
-        key_path="database.username",
-        value='"admin"',
-        in_place=True
+        file_path=str(test_file), operation="set", key_path="database.username", value='"admin"', in_place=True
     )
 
     # Should succeed
@@ -54,12 +51,7 @@ username = "admin"
 """)
 
     # Delete a key
-    result = server.data.fn(
-        file_path=str(test_file),
-        operation="delete",
-        key_path="database.username",
-        in_place=True
-    )
+    result = server.data.fn(file_path=str(test_file), operation="delete", key_path="database.username", in_place=True)
 
     # Should succeed
     assert result["success"] is True

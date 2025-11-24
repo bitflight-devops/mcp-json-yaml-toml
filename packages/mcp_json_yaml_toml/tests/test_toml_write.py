@@ -1,7 +1,8 @@
 """Tests for TOML write operations."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from mcp_json_yaml_toml import server
 
@@ -21,11 +22,7 @@ port = 5432
 
         # Add a new key
         result = server.data.fn(
-            file_path=str(test_file),
-            operation="set",
-            key_path="database.username",
-            value='"admin"',
-            in_place=True
+            file_path=str(test_file), operation="set", key_path="database.username", value='"admin"', in_place=True
         )
 
         # Should succeed
@@ -51,7 +48,7 @@ name = "myapp"
             operation="set",
             key_path="app.database",
             value='{"host": "localhost", "port": 5432}',
-            in_place=True
+            in_place=True,
         )
 
         assert result["success"] is True
@@ -73,10 +70,7 @@ username = "admin"
 
         # Delete a key
         result = server.data.fn(
-            file_path=str(test_file),
-            operation="delete",
-            key_path="database.username",
-            in_place=True
+            file_path=str(test_file), operation="delete", key_path="database.username", in_place=True
         )
 
         # Should succeed
@@ -98,11 +92,7 @@ name = "test"
 
         # Modify without in_place
         result = server.data.fn(
-            file_path=str(test_file),
-            operation="set",
-            key_path="app.version",
-            value='"1.0.0"',
-            in_place=False
+            file_path=str(test_file), operation="set", key_path="app.version", value='"1.0.0"', in_place=False
         )
 
         # Should succeed

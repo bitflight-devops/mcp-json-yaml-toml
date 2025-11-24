@@ -5,12 +5,17 @@ with comprehensive type hints, proper fixture scoping, and external fixture file
 for better maintainability.
 """
 
+from __future__ import annotations
+
 import json
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
 import pytest
 from pytest_mock import MockerFixture
+
+from mcp_json_yaml_toml.tests.mcp_protocol_client import MCPClient
 
 # ==============================================================================
 # Test Configuration
@@ -357,3 +362,50 @@ def pytest_configure(config: Any) -> None:
     config.addinivalue_line("markers", "unit: marks unit tests with mocked dependencies")
     config.addinivalue_line("markers", "integration: marks integration tests with real yq binary")
     config.addinivalue_line("markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')")
+    config.addinivalue_line("markers", "protocol: marks tests that use actual MCP JSON-RPC protocol")
+
+
+# ==============================================================================
+# MCP Protocol Client Fixtures
+# ==============================================================================
+
+
+@pytest.fixture(scope="function")
+def mcp_client() -> Generator[MCPClient, None, None]:
+    """Provide an MCP client connected via JSON-RPC protocol.
+
+    Tests: MCP protocol communication
+    How: Spawn MCP server subprocess, yield initialized client, cleanup on exit
+    Why: Enable tests to verify actual protocol behavior including serialization
+
+    This fixture spawns a new MCP server process for each test function,
+    ensuring complete isolation. The server communicates via stdin/stdout
+    using JSON-RPC 2.0 protocol.
+
+    Yields:
+        MCPClient: Initialized client ready for tool calls
+    """
+    client = MCPClient()
+    client.start()
+    yield client
+    client.stop()
+
+
+@pytest.fixture(scope="module")
+def mcp_client_module() -> Generator[MCPClient, None, None]:
+    """Provide an MCP client shared across a test module.
+
+    Tests: MCP protocol communication (shared instance)
+    How: Spawn MCP server subprocess once per module
+    Why: Improve test performance when isolation per-test is not needed
+
+    Use this fixture when tests within a module don't modify shared state
+    and can safely reuse the same MCP server process.
+
+    Yields:
+        MCPClient: Initialized client ready for tool calls
+    """
+    client = MCPClient()
+    client.start()
+    yield client
+    client.stop()
