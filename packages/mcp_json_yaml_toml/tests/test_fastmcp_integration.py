@@ -78,19 +78,13 @@ async def test_data_set_json(client: Client[Any], tmp_path: Path) -> None:
     # Execute
     result = await client.call_tool(
         "data",
-        arguments={
-            "file_path": str(test_file),
-            "operation": "set",
-            "key_path": "settings.theme",
-            "value": '"dark"',
-            "in_place": True,
-        },
+        arguments={"file_path": str(test_file), "operation": "set", "key_path": "settings.theme", "value": '"dark"'},
     )
 
     # Verify response
     response = extract_text_response(result)
     assert response["success"] is True
-    assert response["modified_in_place"] is True
+    assert response["result"] == "File modified successfully"
 
     # Verify file content
     new_content = json.loads(test_file.read_text())
@@ -107,7 +101,7 @@ async def test_data_delete_json(client: Client[Any], tmp_path: Path) -> None:
 
     # Execute
     result = await client.call_tool(
-        "data", arguments={"file_path": str(test_file), "operation": "delete", "key_path": "temp", "in_place": True}
+        "data", arguments={"file_path": str(test_file), "operation": "delete", "key_path": "temp"}
     )
 
     # Verify

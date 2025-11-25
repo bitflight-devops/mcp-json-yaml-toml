@@ -146,9 +146,7 @@ def get_value_via_protocol(mcp_client: MCPClient, file_path: Path, key_path: str
     return result["result"]
 
 
-def set_value_via_protocol(
-    mcp_client: MCPClient, file_path: Path, key_path: str, json_value: str, in_place: bool = True
-) -> dict[str, Any]:
+def set_value_via_protocol(mcp_client: MCPClient, file_path: Path, key_path: str, json_value: str) -> dict[str, Any]:
     """Set a value in config file using the MCP protocol.
 
     Args:
@@ -156,20 +154,12 @@ def set_value_via_protocol(
         file_path: Path to configuration file
         key_path: Dot-separated key path
         json_value: Value as JSON string
-        in_place: Whether to modify file in place
 
     Returns:
         Result dictionary from data tool
     """
     return mcp_client.call_tool(
-        "data",
-        {
-            "file_path": str(file_path),
-            "operation": "set",
-            "key_path": key_path,
-            "value": json_value,
-            "in_place": in_place,
-        },
+        "data", {"file_path": str(file_path), "operation": "set", "key_path": key_path, "value": json_value}
     )
 
 
@@ -784,6 +774,7 @@ class TestDryRunTypePreservation:
     @pytest.mark.protocol
     @pytest.mark.integration
     @pytest.mark.parametrize("file_format", ["json", "yaml", "toml"])
+    @pytest.mark.skip(reason="Removed: dry-run mode no longer exists after in_place parameter removal")
     def test_dry_run_preserves_string_type(
         self,
         file_format: str,
@@ -803,12 +794,10 @@ class TestDryRunTypePreservation:
         config_path = config_map[file_format]
 
         # Act - set a numeric-looking string in dry-run mode via MCP protocol
-        result = set_value_via_protocol(mcp_client, config_path, "string_numeric", '"9.99"', in_place=False)
+        result = set_value_via_protocol(mcp_client, config_path, "string_numeric", '"9.99"')
 
         # Assert - result contains properly quoted string
         assert result["success"] is True
-        assert result["modified_in_place"] is False
-
         # The result should show the string is quoted (not a bare number)
         output_content = result["result"]
         if file_format == "json":
@@ -885,7 +874,6 @@ class TestAIAgentUsagePatternsBug:
                 "key_path": "string_numeric",
                 "value": "3.12",  # The string we want to set
                 "value_type": "string",  # Treat as literal string (no JSON parsing)
-                "in_place": True,
             },
         )
 
@@ -923,7 +911,6 @@ class TestAIAgentUsagePatternsBug:
                 "key_path": "string_integer",
                 "value": "8080",  # The string we want to set
                 "value_type": "string",  # Treat as literal string
-                "in_place": True,
             },
         )
 
@@ -963,7 +950,6 @@ class TestAIAgentUsagePatternsBug:
                 "key_path": "string_bool",
                 "value": "true",  # The string we want to set
                 "value_type": "string",  # Treat as literal string
-                "in_place": True,
             },
         )
 
@@ -1005,7 +991,6 @@ class TestAIAgentUsagePatternsBug:
                 "key_path": "string_value",
                 "value": "null",  # The string we want to set
                 "value_type": "string",  # Treat as literal string
-                "in_place": True,
             },
         )
 
@@ -1073,7 +1058,6 @@ class TestAIAgentVersionStringsBug:
                 "key_path": "string_numeric",
                 "value": version_string,
                 "value_type": "string",  # Treat as literal string
-                "in_place": True,
             },
         )
 
@@ -1134,7 +1118,6 @@ class TestAIAgentVersionStringsBug:
                     "operation": "set",
                     "key_path": "string_value",
                     "value": version_string,  # Not valid JSON
-                    "in_place": True,
                 },
             },
         )

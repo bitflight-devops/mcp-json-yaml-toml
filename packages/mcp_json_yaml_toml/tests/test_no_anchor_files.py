@@ -31,12 +31,11 @@ def test_no_optimization_for_files_without_anchors(tmp_path: Path) -> None:
         operation="set",
         key_path="services.cache",
         value='{"image": "nginx", "ports": ["80:80"], "restart": "always"}',
-        in_place=True,
     )
 
     # Should succeed
     assert result["success"] is True
-    assert result["modified_in_place"] is True
+    assert result["result"] == "File modified successfully"
 
     # Should NOT have optimized (file doesn't use anchors)
     assert result.get("optimized") is not True

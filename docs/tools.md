@@ -24,18 +24,19 @@ Get, set, or delete data at specific paths in JSON, YAML, or TOML files.
 
 ### Parameters
 
-| Parameter       | Type    | Required | Description                                                                                                       |
-| --------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
-| `file_path`     | string  | Yes      | Path to JSON, YAML, or TOML file                                                                                  |
-| `operation`     | enum    | Yes      | One of: `get`, `set`, `delete`                                                                                    |
-| `key_path`      | string  | No\*     | Dot-separated path (e.g., `project.name`)                                                                         |
-| `value`         | string  | No\*     | Value for `set` operation (interpretation depends on `value_type`)                                                |
-| `value_type`    | enum    | No       | For `set`: How to interpret `value` parameter: `string`, `number`, `boolean`, `null`, or `json` (default: `json`) |
-| `return_type`   | enum    | No       | For `get`: `keys` (structure) or `all` (full data)                                                                |
-| `data_type`     | enum    | No       | For `get`: `data` or `schema` (default: `data`)                                                                   |
-| `in_place`      | boolean | No       | Modify file directly (default: false)                                                                             |
-| `output_format` | enum    | No       | Output format: `json`, `yaml`, `toml`                                                                             |
-| `cursor`        | string  | No       | Pagination cursor for large results                                                                               |
+| Parameter       | Type   | Required | Description                                                                                                       |
+| --------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `file_path`     | string | Yes      | Path to JSON, YAML, or TOML file                                                                                  |
+| `operation`     | enum   | Yes      | One of: `get`, `set`, `delete`                                                                                    |
+| `key_path`      | string | No\*     | Dot-separated path (e.g., `project.name`)                                                                         |
+| `value`         | string | No\*     | Value for `set` operation (interpretation depends on `value_type`)                                                |
+| `value_type`    | enum   | No       | For `set`: How to interpret `value` parameter: `string`, `number`, `boolean`, `null`, or `json` (default: `json`) |
+| `return_type`   | enum   | No       | For `get`: `keys` (structure) or `all` (full data)                                                                |
+| `data_type`     | enum   | No       | For `get`: `data` or `schema` (default: `data`)                                                                   |
+| `output_format` | enum   | No       | Output format: `json`, `yaml`, `toml`                                                                             |
+| `cursor`        | string | No       | Pagination cursor for large results                                                                               |
+
+> **Note:** The `set` and `delete` operations always modify the file directly (in-place). Changes are written immediately to preserve comments and formatting.
 
 \*Required for certain operations
 
@@ -60,8 +61,7 @@ Returns: `"mcp-json-yaml-toml"`
   "file_path": "config.json",
   "operation": "set",
   "key_path": "database.host",
-  "value": "\"localhost\"",
-  "in_place": true
+  "value": "\"localhost\""
 }
 ```
 
@@ -73,8 +73,7 @@ Returns: `"mcp-json-yaml-toml"`
   "operation": "set",
   "key_path": "description",
   "value": "This is a literal string",
-  "value_type": "string",
-  "in_place": true
+  "value_type": "string"
 }
 ```
 
@@ -86,8 +85,7 @@ Returns: `"mcp-json-yaml-toml"`
   "operation": "set",
   "key_path": "timeout_seconds",
   "value": "30",
-  "value_type": "number",
-  "in_place": true
+  "value_type": "number"
 }
 ```
 
@@ -99,8 +97,7 @@ Returns: `"mcp-json-yaml-toml"`
   "operation": "set",
   "key_path": "features.experimental",
   "value": "true",
-  "value_type": "boolean",
-  "in_place": true
+  "value_type": "boolean"
 }
 ```
 
@@ -111,8 +108,7 @@ Returns: `"mcp-json-yaml-toml"`
   "file_path": "config.yaml",
   "operation": "set",
   "key_path": "legacy_field",
-  "value_type": "null",
-  "in_place": true
+  "value_type": "null"
 }
 ```
 
@@ -122,8 +118,7 @@ Returns: `"mcp-json-yaml-toml"`
 {
   "file_path": "settings.yaml",
   "operation": "delete",
-  "key_path": "deprecated.feature",
-  "in_place": true
+  "key_path": "deprecated.feature"
 }
 ```
 
@@ -291,6 +286,19 @@ Convert JSON, YAML, or TOML files between formats.
 | `output_format` | enum   | Yes      | Target format: `json`, `yaml`, `toml`         |
 | `output_file`   | string | No       | Output file path (returns content if omitted) |
 
+### Supported Conversions
+
+| From | To   | Supported |
+| ---- | ---- | --------- |
+| JSON | YAML | ✅        |
+| JSON | TOML | ❌        |
+| YAML | JSON | ✅        |
+| YAML | TOML | ❌        |
+| TOML | JSON | ✅        |
+| TOML | YAML | ✅        |
+
+> **Note:** Conversion from JSON or YAML to TOML is not supported. The underlying yq tool cannot encode complex nested structures to TOML format. Use TOML as a source format only.
+
 ### Examples
 
 #### Convert TOML to YAML
@@ -302,13 +310,12 @@ Convert JSON, YAML, or TOML files between formats.
 }
 ```
 
-#### Convert and save
+#### Convert TOML to JSON
 
 ```json
 {
-  "file_path": "config.json",
-  "output_format": "toml",
-  "output_file": "config.toml"
+  "file_path": "pyproject.toml",
+  "output_format": "json"
 }
 ```
 
@@ -318,6 +325,16 @@ Convert JSON, YAML, or TOML files between formats.
 {
   "file_path": "docker-compose.yml",
   "output_format": "json"
+}
+```
+
+#### Convert JSON to YAML and save
+
+```json
+{
+  "file_path": "config.json",
+  "output_format": "yaml",
+  "output_file": "config.yaml"
 }
 ```
 

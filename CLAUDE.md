@@ -19,7 +19,7 @@ When working in this repository, activate these skills for comprehensive develop
 
 ## Project Overview
 
-This is an MCP (Model Context Protocol) server that provides AI agents with tools to query and modify JSON, YAML, and TOML configuration files using the `yq` command-line tool. The server is built with FastMCP and provides a unified interface for configuration management.
+This is an MCP (Model Context Protocol) server that provides AI agents with tools to query and modify JSON, YAML, and TOML files using the `yq` command-line tool. The server is built with FastMCP and provides a unified interface for working with structured data in these formats (including configuration files, manifests, API responses, and other structured data).
 
 ## Common Development Commands
 

@@ -227,43 +227,49 @@ class TestData:
     # --- SET Operations ---
 
     @pytest.mark.integration
-    def test_data_set_simple_value_dry_run(self, sample_json_config: Path) -> None:
-        """Test data set modifies value without in_place.
+    def test_data_set_simple_value(self, sample_json_config: Path, tmp_path: Path) -> None:
+        """Test data set modifies value.
 
-        Tests: Dry-run set operation
-        How: Set value with in_place=False
-        Why: Verify set works without file modification
+        Tests: Set operation
+        How: Set value on temp copy
+        Why: Verify set operation writes to file
         """
-        # Arrange - sample config
-        # Act - set value without in_place
-        result = data_fn(str(sample_json_config), operation="set", key_path="name", value='"new-name"', in_place=False)
+        # Arrange - create temp copy
+        temp_config = tmp_path / "test_config.json"
+        temp_config.write_text(sample_json_config.read_text())
 
-        # Assert - returns modified content
+        # Act - set value
+        result = data_fn(str(temp_config), operation="set", key_path="name", value='"new-name"')
+
+        # Assert - file modified
         assert result["success"] is True
-        assert result["modified_in_place"] is False
-        assert "new-name" in result["result"]
+        assert result["result"] == "File modified successfully"
 
-        # Verify original file unchanged
-        original_data = json.loads(sample_json_config.read_text())
-        assert original_data["name"] == "test-app"
+        # Verify file was modified
+        modified_data = json.loads(temp_config.read_text())
+        assert modified_data["name"] == "new-name"
 
     @pytest.mark.integration
-    def test_data_set_nested_value(self, sample_json_config: Path) -> None:
+    def test_data_set_nested_value(self, sample_json_config: Path, tmp_path: Path) -> None:
         """Test data set modifies nested value.
 
         Tests: Nested value modification
         How: Set database.port to new value
         Why: Verify nested modification works
         """
-        # Arrange - sample config
-        # Act - set nested value
-        result = data_fn(
-            str(sample_json_config), operation="set", key_path="database.port", value="3306", in_place=False
-        )
+        # Arrange - create temp copy
+        temp_config = tmp_path / "test_config.json"
+        temp_config.write_text(sample_json_config.read_text())
 
-        # Assert - returns modified content
+        # Act - set nested value
+        result = data_fn(str(temp_config), operation="set", key_path="database.port", value="3306")
+
+        # Assert - file modified
         assert result["success"] is True
-        modified_data = json.loads(result["result"])
+        assert result["result"] == "File modified successfully"
+
+        # Verify file was modified
+        modified_data = json.loads(temp_config.read_text())
         assert modified_data["database"]["port"] == 3306
 
     @pytest.mark.integration
@@ -279,32 +285,37 @@ class TestData:
         temp_config.write_text(sample_json_config.read_text())
 
         # Act - set value in place
-        result = data_fn(str(temp_config), operation="set", key_path="name", value='"modified"', in_place=True)
+        result = data_fn(str(temp_config), operation="set", key_path="name", value='"modified"')
 
         # Assert - file modified
         assert result["success"] is True
-        assert result["modified_in_place"] is True
+        assert result["result"] == "File modified successfully"
         modified_data = json.loads(temp_config.read_text())
         assert modified_data["name"] == "modified"
 
     # --- DELETE Operations ---
 
     @pytest.mark.integration
-    def test_data_delete_simple_key(self, sample_json_config: Path) -> None:
+    def test_data_delete_simple_key(self, sample_json_config: Path, tmp_path: Path) -> None:
         """Test data delete removes simple key.
 
         Tests: Simple key deletion
         How: Delete 'version' key
         Why: Verify basic delete operation
         """
-        # Arrange - sample config
-        # Act - delete key
-        result = data_fn(str(sample_json_config), operation="delete", key_path="version", in_place=False)
+        # Arrange - create temp copy
+        temp_config = tmp_path / "test_config.json"
+        temp_config.write_text(sample_json_config.read_text())
 
-        # Assert - key removed
+        # Act - delete key
+        result = data_fn(str(temp_config), operation="delete", key_path="version")
+
+        # Assert - file modified
         assert result["success"] is True
-        assert result["modified_in_place"] is False
-        modified_data = json.loads(result["result"])
+        assert result["result"] == "File modified successfully"
+
+        # Verify file was modified
+        modified_data = json.loads(temp_config.read_text())
         assert "version" not in modified_data
         assert "name" in modified_data  # Other keys preserved
 
@@ -321,11 +332,11 @@ class TestData:
         temp_config.write_text(sample_json_config.read_text())
 
         # Act - delete in place
-        result = data_fn(str(temp_config), operation="delete", key_path="version", in_place=True)
+        result = data_fn(str(temp_config), operation="delete", key_path="version")
 
         # Assert - file modified
         assert result["success"] is True
-        assert result["modified_in_place"] is True
+        assert result["result"] == "File modified successfully"
         modified_data = json.loads(temp_config.read_text())
         assert "version" not in modified_data
 
@@ -498,26 +509,21 @@ class TestDataConvert:
         assert converted_data["name"] == "test-app"
 
     @pytest.mark.integration
-    @pytest.mark.xfail(reason="yq TOML encoder not fully implemented for complex objects")
-    def test_data_convert_json_to_toml(self, sample_json_config: Path) -> None:
-        """Test data_convert converts JSON to TOML.
+    def test_data_convert_json_to_toml_not_supported(self, sample_json_config: Path) -> None:
+        """Test data_convert rejects JSON to TOML conversion.
 
-        Tests: JSON to TOML conversion
-        How: Convert JSON file to TOML format
-        Why: Verify TOML output format
-
-        Note: Currently expected to fail as yq's TOML encoder only supports
-        scalar values. This test documents the limitation.
+        Tests: JSON to TOML conversion rejection
+        How: Attempt conversion and verify error
+        Why: yq cannot encode complex nested structures to TOML format
         """
         # Arrange - JSON config
-        # Act - convert to TOML
-        result = data_convert_fn(str(sample_json_config), "toml")
+        # Act & Assert - conversion rejected with clear message
+        with pytest.raises(ToolError) as exc_info:
+            data_convert_fn(str(sample_json_config), "toml")
 
-        # Assert - conversion successful
-        assert result["success"] is True
-        assert result["input_format"] == "json"
-        assert result["output_format"] == "toml"
-        assert 'name = "test-app"' in result["result"]
+        error_message = str(exc_info.value)
+        assert "not supported" in error_message.lower()
+        assert "TOML" in error_message
 
     @pytest.mark.integration
     def test_data_convert_with_output_file(self, sample_json_config: Path, tmp_path: Path) -> None:

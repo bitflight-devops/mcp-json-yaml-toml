@@ -22,12 +22,12 @@ port = 5432
 
         # Add a new key
         result = server.data.fn(
-            file_path=str(test_file), operation="set", key_path="database.username", value='"admin"', in_place=True
+            file_path=str(test_file), operation="set", key_path="database.username", value='"admin"'
         )
 
         # Should succeed
         assert result["success"] is True
-        assert result["modified_in_place"] is True
+        assert result["result"] == "File modified successfully"
 
         # Read the file and verify
         modified_content = test_file.read_text()
@@ -48,7 +48,6 @@ name = "myapp"
             operation="set",
             key_path="app.database",
             value='{"host": "localhost", "port": 5432}',
-            in_place=True,
         )
 
         assert result["success"] is True
@@ -69,13 +68,11 @@ username = "admin"
 """)
 
         # Delete a key
-        result = server.data.fn(
-            file_path=str(test_file), operation="delete", key_path="database.username", in_place=True
-        )
+        result = server.data.fn(file_path=str(test_file), operation="delete", key_path="database.username")
 
         # Should succeed
         assert result["success"] is True
-        assert result["modified_in_place"] is True
+        assert result["result"] == "File modified successfully"
 
         # Read the file and verify
         modified_content = test_file.read_text()
@@ -83,6 +80,7 @@ username = "admin"
         assert "host" in modified_content  # Other keys should remain
 
     @pytest.mark.integration
+    @pytest.mark.skip(reason="Removed: dry-run mode no longer exists after in_place parameter removal")
     def test_toml_set_without_in_place(self, tmp_path: Path) -> None:
         """Test SET operation returns modified content when in_place=False."""
         test_file = tmp_path / "config.toml"
@@ -91,13 +89,10 @@ name = "test"
 """)
 
         # Modify without in_place
-        result = server.data.fn(
-            file_path=str(test_file), operation="set", key_path="app.version", value='"1.0.0"', in_place=False
-        )
+        result = server.data.fn(file_path=str(test_file), operation="set", key_path="app.version", value='"1.0.0"')
 
         # Should succeed
         assert result["success"] is True
-        assert result["modified_in_place"] is False
         assert "result" in result
         assert "version" in result["result"]
 

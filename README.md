@@ -109,8 +109,10 @@ Here are real examples you can use with Claude Desktop:
 #### Convert Between Formats
 
 - **"Convert this config.toml to YAML"** - Preserves all data in new format
-- **"Transform this JSON config to TOML"** - Maintains structure and comments
+- **"Convert this config.toml to JSON"** - Export TOML to JSON format
 - **"Convert GitLab CI YAML to JSON for API use"** - Enables programmatic access
+
+> **Note:** Conversion to TOML format from JSON/YAML is not supported due to yq limitations. See [docs/tools.md](docs/tools.md#supported-conversions) for the full conversion matrix.
 
 #### Validate and Fix
 

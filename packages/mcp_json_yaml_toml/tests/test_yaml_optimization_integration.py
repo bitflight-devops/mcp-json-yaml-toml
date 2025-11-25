@@ -32,12 +32,11 @@ services:
             operation="set",
             key_path="services.cache",
             value='{"image": "nginx", "ports": ["80:80"], "restart": "always"}',
-            in_place=True,
         )
 
         # Should succeed
         assert result["success"] is True
-        assert result["modified_in_place"] is True
+        assert result["result"] == "File modified successfully"
 
         # Should have optimized (file already uses anchors)
         assert result.get("optimized") is True
@@ -71,7 +70,6 @@ job1:
             operation="set",
             key_path="job2",
             value='{"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m", "script": ["npm build"]}',
-            in_place=True,
         )
 
         # Should succeed
@@ -93,7 +91,7 @@ job1:
 
         # Modify it
         result = server.data.fn(
-            file_path=str(test_file), operation="set", key_path="job2", value='{"image": "node:18"}', in_place=True
+            file_path=str(test_file), operation="set", key_path="job2", value='{"image": "node:18"}'
         )
 
         # Should succeed
@@ -103,6 +101,7 @@ job1:
         assert result.get("optimized") is not True
 
     @pytest.mark.integration
+    @pytest.mark.skip(reason="Removed: dry-run mode no longer exists after in_place parameter removal")
     def test_set_operation_no_optimization_when_not_in_place(self, tmp_path: Path) -> None:
         """Test that optimization only happens with in_place=True."""
         # Create a YAML file
@@ -121,13 +120,10 @@ job1:
             operation="set",
             key_path="job2",
             value='{"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"}',
-            in_place=False,
         )
 
         # Should succeed
         assert result["success"] is True
-        assert result["modified_in_place"] is False
-
         # Should NOT have optimized
         assert result.get("optimized") is not True
 

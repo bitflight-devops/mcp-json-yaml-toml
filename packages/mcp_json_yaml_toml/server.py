@@ -7,7 +7,7 @@ MCP_CONFIG_FORMATS environment variable.
 
 import base64
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, assert_never
 
 import orjson
 from fastmcp import FastMCP
@@ -843,14 +843,15 @@ def data(
 
     schema_info = schema_manager.get_schema_info_for_file(path)
 
-    if operation == "get":
-        return _dispatch_get_operation(path, data_type, return_type, key_path, output_format, cursor, schema_info)
-    elif operation == "set":
-        return _dispatch_set_operation(path, key_path, value, value_type, schema_info)
-    elif operation == "delete":
-        return _dispatch_delete_operation(path, key_path, schema_info)
-
-    raise ToolError(f"Unknown operation: {operation}")
+    match operation:
+        case "get":
+            return _dispatch_get_operation(path, data_type, return_type, key_path, output_format, cursor, schema_info)
+        case "set":
+            return _dispatch_set_operation(path, key_path, value, value_type, schema_info)
+        case "delete":
+            return _dispatch_delete_operation(path, key_path, schema_info)
+        case _:
+            assert_never(operation)
 
 
 def _handle_schema_validate(file_path: str | None, schema_path: str | None) -> dict[str, Any]:
@@ -1062,7 +1063,7 @@ def data_schema(
         case "list":
             return _handle_schema_list()
         case _:
-            raise ToolError(f"Unknown action: {action}")
+            assert_never(action)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -1100,6 +1101,15 @@ def data_convert(
 
     if input_format == output_fmt:
         raise ToolError(f"Input and output formats are the same: {input_format}")
+
+    # JSON/YAML to TOML conversion is not supported due to yq limitations
+    # yq's TOML encoder only supports scalar values, not complex nested structures
+    if output_fmt == "toml" and input_format in ("json", "yaml"):
+        raise ToolError(
+            f"Conversion from {input_format.upper()} to TOML is not supported. "
+            "The underlying yq tool cannot encode complex nested structures to TOML format. "
+            "Supported conversions: JSON↔YAML, TOML→JSON, TOML→YAML."
+        )
 
     try:
         # Convert
