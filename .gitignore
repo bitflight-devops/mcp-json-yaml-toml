@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 .claude/smells/
 binaries/
-
+/node_modules/
 # C extensions
 *.so
 
@@ -184,9 +184,9 @@ cython_debug/
 .abstra/
 
 # Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#  and can be added to the global gitignore or merged into this file. However, if you prefer,
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 
@@ -218,6 +218,9 @@ packages/mcp_json_yaml_toml/binaries/
 # Test artifacts
 test_fixtures/tmp/
 test_output/
+
+# Local binaries (e.g., act, other dev tools)
+bin/
 
 # Fixtures directory contains sensitive data (API keys, secrets)
 fixtures/

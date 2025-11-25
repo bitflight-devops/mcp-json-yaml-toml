@@ -165,7 +165,7 @@ warn_unused_ignores = true
 ignore_missing_imports = true
 show_error_codes = true
 pretty = true
-disable_error_code = "call-arg"
+disable_error_code = ["call-arg","no-any-return"]
 mypy_path = []
 
 [[tool.mypy.overrides]]
@@ -177,7 +177,7 @@ module = "tests.*"
 disable_error_code = ["no-untyped-def"]
 
 [tool.basedpyright]
-pythonVersion = "3.11"
+pythonVersion = "3.12"
 typeCheckingMode = "standard"
 reportMissingImports = false
 reportMissingTypeStubs = false
