@@ -413,15 +413,76 @@ def _optimize_yaml_if_needed(path: Path) -> bool:
     return False
 
 
+def _parse_set_value(  # noqa: C901
+    value: str | None, value_type: Literal["string", "number", "boolean", "null", "json"] | None
+) -> Any:
+    """Parse value for SET operation based on value_type.
+
+    Args:
+        value: Value to parse
+        value_type: How to interpret the value
+
+    Returns:
+        Parsed value ready for setting
+
+    Raises:
+        ToolError: If value is invalid for the specified type
+    """
+    match value_type:
+        case "null":
+            return None
+        case "string":
+            if value is None:
+                raise ToolError("value is required when value_type='string'")
+            return value
+        case "number":
+            if value is None:
+                raise ToolError("value is required when value_type='number'")
+            try:
+                parsed = orjson.loads(value)
+            except orjson.JSONDecodeError as e:
+                raise ToolError(f"Invalid number value: {e}") from e
+            else:
+                if not isinstance(parsed, (int, float)):
+                    raise ToolError(f"value_type='number' but value parses to {type(parsed).__name__}: {value}")
+                return parsed
+        case "boolean":
+            if value is None:
+                raise ToolError("value is required when value_type='boolean'")
+            try:
+                parsed = orjson.loads(value)
+            except orjson.JSONDecodeError as e:
+                raise ToolError(f"Invalid boolean value: {e}") from e
+            else:
+                if not isinstance(parsed, bool):
+                    raise ToolError(f"value_type='boolean' but value parses to {type(parsed).__name__}: {value}")
+                return parsed
+        case _:
+            # value_type is None or "json" - parse as JSON (current/default behavior)
+            if value is None:
+                raise ToolError("value is required for SET operation")
+            try:
+                return orjson.loads(value)
+            except orjson.JSONDecodeError as e:
+                raise ToolError(f"Invalid JSON value: {e}") from e
+
+
 def _handle_data_set(
-    path: Path, key_path: str, value: str, input_format: FormatType, in_place: bool, schema_info: dict[str, Any] | None
+    path: Path,
+    key_path: str,
+    value: str | None,
+    value_type: Literal["string", "number", "boolean", "null", "json"] | None,
+    input_format: FormatType,
+    in_place: bool,
+    schema_info: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Handle SET operation.
 
     Args:
         path: Path to configuration file
         key_path: Key path to set
-        value: JSON string value to set
+        value: Value to set (interpretation depends on value_type)
+        value_type: How to interpret the value parameter
         input_format: File format type
         in_place: Whether to modify file in place
         schema_info: Optional schema information
@@ -432,16 +493,13 @@ def _handle_data_set(
     Raises:
         ToolError: If operation fails
     """
-    try:
-        parsed_value = orjson.loads(value)
-    except orjson.JSONDecodeError as e:
-        raise ToolError(f"Invalid JSON value: {e}") from e
+    parsed_value = _parse_set_value(value, value_type)
 
     if input_format == "toml":
         return _set_toml_value_handler(path, key_path, parsed_value, in_place, schema_info)
 
     # YAML/JSON use yq
-    yq_value = orjson.dumps(parsed_value).decode() if isinstance(parsed_value, str) else value
+    yq_value = orjson.dumps(parsed_value).decode()
     expression = f".{key_path} = {yq_value}" if not key_path.startswith(".") else f"{key_path} = {yq_value}"
 
     try:
@@ -652,8 +710,8 @@ def _dispatch_set_operation(
     """
     if key_path is None:
         raise ToolError("key_path is required for operation='set'")
-    if value is None:
-        raise ToolError("value is required for operation='set'")
+    if value is None and value_type != "null":
+        raise ToolError("value is required for operation='set' (except when value_type='null')")
 
     input_format = _detect_file_format(path)
     if not is_format_enabled(input_format):
@@ -662,9 +720,7 @@ def _dispatch_set_operation(
             f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
         )
 
-    # Note: value_type is accepted but not yet implemented - reserved for future type coercion control
-    _ = value_type  # Explicitly mark as unused for now
-    return _handle_data_set(path, key_path, value, input_format, in_place, schema_info)
+    return _handle_data_set(path, key_path, value, value_type, input_format, in_place, schema_info)
 
 
 def _dispatch_delete_operation(
