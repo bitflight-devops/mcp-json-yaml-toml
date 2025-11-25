@@ -48,6 +48,7 @@ dev = [
     "basedpyright>=1.33.0",
     "pre-commit>=4.4.0",
     "tiktoken>=0.12.0",
+    "pytest-xdist>=3.8.0",
 ]
 
 [project.scripts]
@@ -196,6 +197,8 @@ addopts = [
 	"--cov=packages/mcp_json_yaml_toml",
 	"--cov-report=term-missing",
 	"-v",
+	"-n",
+	"auto",
 ]
 testpaths = ["packages/mcp_json_yaml_toml/tests"]
 python_files = ["test_*.py"]

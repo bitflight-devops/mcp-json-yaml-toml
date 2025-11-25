@@ -16,6 +16,7 @@ from mcp_json_yaml_toml.yq_wrapper import (
     YQError,
     YQExecutionError,
     YQResult,
+    _verify_checksum,
     execute_yq,
     get_yq_binary_path,
     parse_yq_error,
@@ -448,3 +449,60 @@ class TestYQError:
         assert error.stderr == "error output"
         assert error.returncode == 1
         assert str(error) == "test error"
+
+
+class TestVerifyChecksum:
+    """Tests for _verify_checksum function."""
+
+    def test_verify_checksum_returns_true_for_matching_hash(self, tmp_path: Path) -> None:
+        """Verify checksum returns True when hash matches."""
+        # Create a file with known content
+        test_file = tmp_path / "test_file.bin"
+        content = b"Hello, World!"
+        test_file.write_bytes(content)
+
+        # Pre-computed SHA256 of "Hello, World!"
+        expected_hash = "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+
+        result = _verify_checksum(test_file, expected_hash)
+
+        assert result is True
+
+    def test_verify_checksum_returns_false_for_wrong_hash(self, tmp_path: Path) -> None:
+        """Verify checksum returns False when hash does not match."""
+        test_file = tmp_path / "test_file.bin"
+        test_file.write_bytes(b"Hello, World!")
+
+        wrong_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+
+        result = _verify_checksum(test_file, wrong_hash)
+
+        assert result is False
+
+    def test_verify_checksum_handles_empty_file(self, tmp_path: Path) -> None:
+        """Verify checksum works with empty files."""
+        test_file = tmp_path / "empty_file.bin"
+        test_file.write_bytes(b"")
+
+        # SHA256 of empty string
+        empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+        result = _verify_checksum(test_file, empty_hash)
+
+        assert result is True
+
+    def test_verify_checksum_handles_binary_content(self, tmp_path: Path) -> None:
+        """Verify checksum works with binary content."""
+        test_file = tmp_path / "binary_file.bin"
+        # Binary content with null bytes and high bytes
+        content = bytes(range(256))
+        test_file.write_bytes(content)
+
+        # Compute expected hash
+        import hashlib
+
+        expected_hash = hashlib.sha256(content).hexdigest()
+
+        result = _verify_checksum(test_file, expected_hash)
+
+        assert result is True

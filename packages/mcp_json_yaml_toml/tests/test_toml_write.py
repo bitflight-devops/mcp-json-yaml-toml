@@ -78,24 +78,3 @@ username = "admin"
         modified_content = test_file.read_text()
         assert "username" not in modified_content
         assert "host" in modified_content  # Other keys should remain
-
-    @pytest.mark.integration
-    @pytest.mark.skip(reason="Removed: dry-run mode no longer exists after in_place parameter removal")
-    def test_toml_set_without_in_place(self, tmp_path: Path) -> None:
-        """Test SET operation returns modified content when in_place=False."""
-        test_file = tmp_path / "config.toml"
-        test_file.write_text("""[app]
-name = "test"
-""")
-
-        # Modify without in_place
-        result = server.data.fn(file_path=str(test_file), operation="set", key_path="app.version", value='"1.0.0"')
-
-        # Should succeed
-        assert result["success"] is True
-        assert "result" in result
-        assert "version" in result["result"]
-
-        # Original file should be unchanged
-        original_content = test_file.read_text()
-        assert "version" not in original_content

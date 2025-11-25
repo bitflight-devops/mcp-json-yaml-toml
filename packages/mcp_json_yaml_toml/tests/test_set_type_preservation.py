@@ -764,58 +764,6 @@ class TestRoundTripTypePreservation:
 
 
 # ==============================================================================
-# Dry-Run (in_place=False) Type Preservation Tests
-# ==============================================================================
-
-
-class TestDryRunTypePreservation:
-    """Test type preservation when using in_place=False (dry-run mode) via MCP protocol."""
-
-    @pytest.mark.protocol
-    @pytest.mark.integration
-    @pytest.mark.parametrize("file_format", ["json", "yaml", "toml"])
-    @pytest.mark.skip(reason="Removed: dry-run mode no longer exists after in_place parameter removal")
-    def test_dry_run_preserves_string_type(
-        self,
-        file_format: str,
-        json_config_with_types: Path,
-        yaml_config_with_types: Path,
-        toml_config_with_types: Path,
-        mcp_client: MCPClient,
-    ) -> None:
-        """Test that dry-run output preserves string types via MCP protocol.
-
-        Tests: Type preservation in dry-run output through MCP protocol
-        How: Set with in_place=False via protocol, verify output content
-        Why: Preview output must accurately represent final types
-        """
-        # Arrange - select appropriate fixture
-        config_map = {"json": json_config_with_types, "yaml": yaml_config_with_types, "toml": toml_config_with_types}
-        config_path = config_map[file_format]
-
-        # Act - set a numeric-looking string in dry-run mode via MCP protocol
-        result = set_value_via_protocol(mcp_client, config_path, "string_numeric", '"9.99"')
-
-        # Assert - result contains properly quoted string
-        assert result["success"] is True
-        # The result should show the string is quoted (not a bare number)
-        output_content = result["result"]
-        if file_format == "json":
-            # In JSON, should be "string_numeric": "9.99" (quoted)
-            assert '"9.99"' in output_content or "'9.99'" in output_content, (
-                f"String not properly quoted in {file_format} output: {output_content}"
-            )
-        elif file_format == "yaml":
-            # In YAML, could be string_numeric: "9.99" or string_numeric: '9.99'
-            assert '"9.99"' in output_content or "'9.99'" in output_content, (
-                f"String not properly quoted in {file_format} output: {output_content}"
-            )
-        elif file_format == "toml":
-            # In TOML, should be string_numeric = "9.99"
-            assert '"9.99"' in output_content, f"String not properly quoted in {file_format} output: {output_content}"
-
-
-# ==============================================================================
 # AI Agent Usage Pattern Tests - EXPOSE TYPE COERCION BUG
 # ==============================================================================
 

@@ -99,34 +99,3 @@ job1:
 
         # Should NOT have optimized (JSON doesn't support anchors)
         assert result.get("optimized") is not True
-
-    @pytest.mark.integration
-    @pytest.mark.skip(reason="Removed: dry-run mode no longer exists after in_place parameter removal")
-    def test_set_operation_no_optimization_when_not_in_place(self, tmp_path: Path) -> None:
-        """Test that optimization only happens with in_place=True."""
-        # Create a YAML file
-        test_file = tmp_path / "config.yml"
-        test_file.write_text("""job1:
-  image: node:18
-  cache:
-    paths:
-      - node_modules/
-  timeout: 30m
-""")
-
-        # Modify without in_place
-        result = server.data.fn(
-            file_path=str(test_file),
-            operation="set",
-            key_path="job2",
-            value='{"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"}',
-        )
-
-        # Should succeed
-        assert result["success"] is True
-        # Should NOT have optimized
-        assert result.get("optimized") is not True
-
-        # Original file should be unchanged
-        original_content = test_file.read_text()
-        assert "job2" not in original_content
