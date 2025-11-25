@@ -4,6 +4,7 @@ Since yq cannot write TOML (only read), we use tomlkit for TOML write operations
 tomlkit preserves comments and formatting, consistent with our ruamel.yaml approach for YAML.
 """
 
+from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Any
 
@@ -27,13 +28,18 @@ def set_toml_value(file_path: Path, key_path: str, value: Any) -> str:
 
     # Navigate to the key and set value
     keys = key_path.split(".")
-    current = data
+    # TOMLDocument and Table both implement MutableMapping
+    current: MutableMapping[str, Any] = data
 
-    # Navigate to parent
+    # Navigate to parent, creating intermediate tables as needed
     for key in keys[:-1]:
         if key not in current:
             current[key] = {}
-        current = current[key]
+        nested = current[key]
+        if not isinstance(nested, MutableMapping):
+            msg = f"Cannot navigate through non-table value at key '{key}'"
+            raise TypeError(msg)
+        current = nested
 
     # Set the final key
     current[keys[-1]] = value
@@ -58,13 +64,18 @@ def delete_toml_key(file_path: Path, key_path: str) -> str:
 
     # Navigate to the key and delete
     keys = key_path.split(".")
-    current = data
+    # TOMLDocument and Table both implement MutableMapping
+    current: MutableMapping[str, Any] = data
 
     # Navigate to parent
     for key in keys[:-1]:
         if key not in current:
             raise KeyError(f"Key path '{key_path}' not found")
-        current = current[key]
+        nested = current[key]
+        if not isinstance(nested, MutableMapping):
+            msg = f"Cannot navigate through non-table value at key '{key}'"
+            raise TypeError(msg)
+        current = nested
 
     # Delete the final key
     if keys[-1] not in current:

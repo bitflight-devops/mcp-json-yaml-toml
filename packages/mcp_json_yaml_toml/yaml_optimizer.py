@@ -7,12 +7,10 @@ and optimize them using anchors and aliases to maintain DRY principles.
 import hashlib
 import os
 from collections import defaultdict
-from pathlib import Path
 from typing import Any
 
 import orjson
 from ruamel.yaml import YAML
-
 
 # Configuration from environment variables
 YAML_ANCHOR_MIN_SIZE = int(os.getenv("YAML_ANCHOR_MIN_SIZE", "3"))
@@ -52,12 +50,9 @@ def _get_structure_size(value: Any) -> int:
     Returns:
         Number of keys (for dict) or items (for list), 0 for primitives
     """
-    if isinstance(value, dict):
+    if isinstance(value, (dict, list)):
         return len(value)
-    elif isinstance(value, list):
-        return len(value)
-    else:
-        return 0
+    return 0
 
 
 def _traverse_structure(data: Any, path: str = "") -> list[tuple[str, Any, str | None]]:
@@ -166,7 +161,7 @@ def assign_anchors(duplicates: dict[str, list[tuple[str, Any]]]) -> dict[str, st
     path_to_anchor: dict[str, str] = {}
     used_names: set[str] = set()
 
-    for struct_hash, occurrences in duplicates.items():
+    for _struct_hash, occurrences in duplicates.items():
         # Get anchor name from first occurrence's path
         first_path, _ = occurrences[0]
 
@@ -191,6 +186,75 @@ def assign_anchors(duplicates: dict[str, list[tuple[str, Any]]]) -> dict[str, st
     return path_to_anchor
 
 
+def _replace_duplicates_recursive(obj: Any, hash_to_shared: dict[str, Any], current_path: str = "") -> Any:
+    """Recursively replace duplicate structures with shared objects.
+
+    Args:
+        obj: The object to process
+        hash_to_shared: Map of structure hash to shared object
+        current_path: Current path in the structure (for debugging)
+
+    Returns:
+        The object with duplicates replaced by shared objects
+    """
+    # Compute hash for this object
+    obj_hash = _compute_structure_hash(obj)
+
+    # If this object is a duplicate, replace with shared object
+    if obj_hash and obj_hash in hash_to_shared:
+        return hash_to_shared[obj_hash]
+
+    # Otherwise, recurse into children
+    if isinstance(obj, dict):
+        result: dict[Any, Any] = {}
+        for key, value in obj.items():
+            child_path = f"{current_path}.{key}" if current_path else key
+            result[key] = _replace_duplicates_recursive(value, hash_to_shared, child_path)
+        return result
+    if isinstance(obj, list):
+        result_list: list[Any] = []
+        for i, item in enumerate(obj):
+            child_path = f"{current_path}[{i}]"
+            result_list.append(_replace_duplicates_recursive(item, hash_to_shared, child_path))
+        return result_list
+    return obj
+
+
+def _build_shared_objects(
+    duplicates: dict[str, list[tuple[str, Any]]], path_to_anchor: dict[str, str]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build shared objects for duplicate structures.
+
+    Args:
+        duplicates: Dict from find_duplicates()
+        path_to_anchor: Dict mapping path to anchor name
+
+    Returns:
+        Tuple of (hash_to_shared, shared_objects_map)
+    """
+    hash_to_shared: dict[str, Any] = {}
+    shared_objects_map: dict[str, Any] = {}
+
+    for struct_hash, occurrences in duplicates.items():
+        first_path, first_value = occurrences[0]
+        anchor_name = path_to_anchor.get(first_path)
+
+        if anchor_name:
+            # Create a shallow copy as the shared object
+            shared_obj: Any
+            if isinstance(first_value, dict):
+                shared_obj = dict(first_value)
+            elif isinstance(first_value, list):
+                shared_obj = list(first_value)
+            else:
+                shared_obj = first_value
+
+            hash_to_shared[struct_hash] = shared_obj
+            shared_objects_map[anchor_name] = shared_obj
+
+    return hash_to_shared, shared_objects_map
+
+
 def _create_shared_objects(data: Any, duplicates: dict[str, list[tuple[str, Any]]]) -> tuple[Any, dict[str, Any]]:
     """Create shared Python objects for duplicate structures.
 
@@ -205,57 +269,14 @@ def _create_shared_objects(data: Any, duplicates: dict[str, list[tuple[str, Any]
         Tuple of (modified_data, shared_objects_map)
         where shared_objects_map is {anchor_name: shared_object}
     """
-    # Create a map of hash -> shared object
-    hash_to_shared: dict[str, Any] = {}
-    shared_objects_map: dict[str, Any] = {}
-
     # Assign anchors
     path_to_anchor = assign_anchors(duplicates)
 
-    # Create shared objects for each duplicate group
-    for struct_hash, occurrences in duplicates.items():
-        first_path, first_value = occurrences[0]
-        anchor_name = path_to_anchor.get(first_path)
+    # Build shared objects for each duplicate group
+    hash_to_shared, shared_objects_map = _build_shared_objects(duplicates, path_to_anchor)
 
-        if anchor_name:
-            # Create a deep copy as the shared object
-            if isinstance(first_value, dict):
-                shared_obj = dict(first_value)
-            elif isinstance(first_value, list):
-                shared_obj = list(first_value)
-            else:
-                shared_obj = first_value
-
-            hash_to_shared[struct_hash] = shared_obj
-            shared_objects_map[anchor_name] = shared_obj
-
-    # Now traverse the data and replace duplicates with shared objects
-    def replace_duplicates(obj: Any, current_path: str = "") -> Any:
-        """Recursively replace duplicate structures with shared objects."""
-        # Compute hash for this object
-        obj_hash = _compute_structure_hash(obj)
-
-        # If this object is a duplicate, replace with shared object
-        if obj_hash and obj_hash in hash_to_shared:
-            return hash_to_shared[obj_hash]
-
-        # Otherwise, recurse into children
-        if isinstance(obj, dict):
-            result = {}
-            for key, value in obj.items():
-                child_path = f"{current_path}.{key}" if current_path else key
-                result[key] = replace_duplicates(value, child_path)
-            return result
-        elif isinstance(obj, list):
-            result = []
-            for i, item in enumerate(obj):
-                child_path = f"{current_path}[{i}]"
-                result.append(replace_duplicates(item, child_path))
-            return result
-        else:
-            return obj
-
-    modified_data = replace_duplicates(data)
+    # Traverse the data and replace duplicates with shared objects
+    modified_data = _replace_duplicates_recursive(data, hash_to_shared)
     return modified_data, shared_objects_map
 
 
@@ -279,7 +300,7 @@ def optimize_yaml(data: Any) -> str | None:
         return None
 
     # Create shared objects
-    modified_data, shared_objects = _create_shared_objects(data, duplicates)
+    modified_data, _shared_objects = _create_shared_objects(data, duplicates)
 
     # Use ruamel.yaml to dump with anchors
     yaml = YAML()
