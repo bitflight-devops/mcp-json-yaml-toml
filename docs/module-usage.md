@@ -28,7 +28,7 @@ This document describes each dependency and its specific usage within the MCP JS
 **Usage**:
 
 - Parsing JSON values in `data` tool's `set` operation
-- High-performance JSON handling for large configuration files
+- High-performance JSON handling for large JSON/YAML/TOML files
 - Used instead of stdlib `json` for performance-critical paths
 
 **Files**: `server.py` (line 447: `orjson.loads(value)`)

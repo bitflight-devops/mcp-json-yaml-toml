@@ -369,23 +369,15 @@ def _handle_data_get_value(
 
 
 def _set_toml_value_handler(
-    path: Path, key_path: str, parsed_value: Any, in_place: bool, schema_info: dict[str, Any] | None
+    path: Path, key_path: str, parsed_value: Any, schema_info: dict[str, Any] | None
 ) -> dict[str, Any]:
     """Handle TOML set operation."""
     from mcp_json_yaml_toml.toml_utils import set_toml_value
 
     try:
         modified_toml = set_toml_value(path, key_path, parsed_value)
-        if in_place:
-            path.write_text(modified_toml, encoding="utf-8")
-            response = {
-                "success": True,
-                "modified_in_place": True,
-                "result": "File modified successfully",
-                "file": str(path),
-            }
-        else:
-            response = {"success": True, "modified_in_place": False, "result": modified_toml, "file": str(path)}
+        path.write_text(modified_toml, encoding="utf-8")
+        response = {"success": True, "result": "File modified successfully", "file": str(path)}
         if schema_info:
             response["schema_info"] = schema_info
     except Exception as e:
@@ -473,7 +465,6 @@ def _handle_data_set(
     value: str | None,
     value_type: Literal["string", "number", "boolean", "null", "json"] | None,
     input_format: FormatType,
-    in_place: bool,
     schema_info: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Handle SET operation.
@@ -484,7 +475,6 @@ def _handle_data_set(
         value: Value to set (interpretation depends on value_type)
         value_type: How to interpret the value parameter
         input_format: File format type
-        in_place: Whether to modify file in place
         schema_info: Optional schema information
 
     Returns:
@@ -496,29 +486,22 @@ def _handle_data_set(
     parsed_value = _parse_set_value(value, value_type)
 
     if input_format == "toml":
-        return _set_toml_value_handler(path, key_path, parsed_value, in_place, schema_info)
+        return _set_toml_value_handler(path, key_path, parsed_value, schema_info)
 
     # YAML/JSON use yq
     yq_value = orjson.dumps(parsed_value).decode()
     expression = f".{key_path} = {yq_value}" if not key_path.startswith(".") else f"{key_path} = {yq_value}"
 
     try:
-        result = execute_yq(
-            expression, input_file=path, input_format=input_format, output_format=input_format, in_place=in_place
-        )
+        execute_yq(expression, input_file=path, input_format=input_format, output_format=input_format, in_place=True)
     except YQExecutionError as e:
         raise ToolError(f"Set operation failed: {e}") from e
     else:
         optimized = False
-        if in_place and input_format == "yaml":
+        if input_format == "yaml":
             optimized = _optimize_yaml_if_needed(path)
 
-        response = {
-            "success": True,
-            "modified_in_place": in_place,
-            "result": result.stdout if not in_place else "File modified successfully",
-            "file": str(path),
-        }
+        response = {"success": True, "result": "File modified successfully", "file": str(path)}
 
         if optimized:
             response["optimized"] = True
@@ -531,7 +514,7 @@ def _handle_data_set(
 
 
 def _handle_data_delete(
-    path: Path, key_path: str, input_format: FormatType, in_place: bool, schema_info: dict[str, Any] | None
+    path: Path, key_path: str, input_format: FormatType, schema_info: dict[str, Any] | None
 ) -> dict[str, Any]:
     """Handle DELETE operation.
 
@@ -539,7 +522,6 @@ def _handle_data_delete(
         path: Path to configuration file
         key_path: Key path to delete
         input_format: File format type
-        in_place: Whether to modify file in place
         schema_info: Optional schema information
 
     Returns:
@@ -554,17 +536,8 @@ def _handle_data_delete(
 
         try:
             modified_toml = delete_toml_key(path, key_path)
-
-            if in_place:
-                path.write_text(modified_toml, encoding="utf-8")
-                response = {
-                    "success": True,
-                    "modified_in_place": True,
-                    "result": "File modified successfully",
-                    "file": str(path),
-                }
-            else:
-                response = {"success": True, "modified_in_place": False, "result": modified_toml, "file": str(path)}
+            path.write_text(modified_toml, encoding="utf-8")
+            response = {"success": True, "result": "File modified successfully", "file": str(path)}
 
             if schema_info:
                 response["schema_info"] = schema_info
@@ -579,15 +552,8 @@ def _handle_data_delete(
     expression = f"del(.{key_path})" if not key_path.startswith(".") else f"del({key_path})"
 
     try:
-        result = execute_yq(
-            expression, input_file=path, input_format=input_format, output_format=input_format, in_place=in_place
-        )
-        response = {
-            "success": True,
-            "modified_in_place": in_place,
-            "result": result.stdout if not in_place else "File modified successfully",
-            "file": str(path),
-        }
+        execute_yq(expression, input_file=path, input_format=input_format, output_format=input_format, in_place=True)
+        response = {"success": True, "result": "File modified successfully", "file": str(path)}
         if schema_info:
             response["schema_info"] = schema_info
     except YQExecutionError as e:
@@ -689,7 +655,6 @@ def _dispatch_set_operation(
     key_path: str | None,
     value: str | None,
     value_type: Literal["string", "number", "boolean", "null", "json"] | None,
-    in_place: bool,
     schema_info: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Dispatch SET operation to handler.
@@ -699,7 +664,6 @@ def _dispatch_set_operation(
         key_path: Key path to set
         value: JSON string value
         value_type: How to interpret the value parameter
-        in_place: Whether to modify in place
         schema_info: Optional schema information
 
     Returns:
@@ -720,18 +684,15 @@ def _dispatch_set_operation(
             f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
         )
 
-    return _handle_data_set(path, key_path, value, value_type, input_format, in_place, schema_info)
+    return _handle_data_set(path, key_path, value, value_type, input_format, schema_info)
 
 
-def _dispatch_delete_operation(
-    path: Path, key_path: str | None, in_place: bool, schema_info: dict[str, Any] | None
-) -> dict[str, Any]:
+def _dispatch_delete_operation(path: Path, key_path: str | None, schema_info: dict[str, Any] | None) -> dict[str, Any]:
     """Dispatch DELETE operation to handler.
 
     Args:
         path: Path to configuration file
         key_path: Key path to delete
-        in_place: Whether to modify in place
         schema_info: Optional schema information
 
     Returns:
@@ -750,7 +711,7 @@ def _dispatch_delete_operation(
             f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
         )
 
-    return _handle_data_delete(path, key_path, input_format, in_place, schema_info)
+    return _handle_data_delete(path, key_path, input_format, schema_info)
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -860,21 +821,20 @@ def data(
         Literal["keys", "all"], Field(description="Return type for get: 'keys' (structure) or 'all' (full data)")
     ] = "all",
     output_format: Annotated[Literal["json", "yaml", "toml"] | None, Field(description="Output format")] = None,
-    in_place: Annotated[bool, Field(description="Modify file in place (for set/delete)")] = False,
     cursor: Annotated[str | None, Field(description="Pagination cursor")] = None,
 ) -> dict[str, Any]:
-    """Read, update, or delete configuration data.
+    """Get, set, or delete data in JSON, YAML, or TOML files.
 
-    Use when you need to read, update, or delete specific values or entire sections in a configuration file.
+    Use when you need to get, set, or delete specific values or entire sections in a structured data file.
 
     Output contract: Returns {"success": bool, "result": Any, "file": str, ...}.
-    Side effects: Modifies file on disk if operation is 'set' or 'delete' and in_place=True.
+    Side effects: Modifies file on disk if operation is 'set' or 'delete'.
     Failure modes: FileNotFoundError if file missing. ToolError if format disabled or invalid JSON.
 
     Operations:
     - get: Retrieve data, schema, or structure
-    - set: Update/create value at key_path
-    - delete: Remove key/element at key_path
+    - set: Update/create value at key_path (always writes to file)
+    - delete: Remove key/element at key_path (always writes to file)
     """
     path = Path(file_path).expanduser().resolve()
 
@@ -886,9 +846,9 @@ def data(
     if operation == "get":
         return _dispatch_get_operation(path, data_type, return_type, key_path, output_format, cursor, schema_info)
     elif operation == "set":
-        return _dispatch_set_operation(path, key_path, value, value_type, in_place, schema_info)
+        return _dispatch_set_operation(path, key_path, value, value_type, schema_info)
     elif operation == "delete":
-        return _dispatch_delete_operation(path, key_path, in_place, schema_info)
+        return _dispatch_delete_operation(path, key_path, schema_info)
 
     raise ToolError(f"Unknown operation: {operation}")
 

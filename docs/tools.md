@@ -2,15 +2,15 @@
 
 **Audience:** AI agents using the MCP server, and developers integrating the server into applications. This document provides API-level reference for all tools and parameters.
 
-For client setup instructions, see [docs/CLIENTS.md](CLIENTS.md). For configuration options, see the [README.md](../README.md).
+For client setup instructions, see [clients.md](clients.md). For configuration options, see the [README.md](../README.md).
 
 ## Overview
 
-The server provides 5 focused tools optimized for LLM interaction with configuration files:
+The server provides 5 focused tools optimized for LLM interaction with JSON, YAML, and TOML files:
 
 | Tool                            | Purpose                          | Key Features                            |
 | ------------------------------- | -------------------------------- | --------------------------------------- |
-| [`data`](#data)                 | CRUD operations on config files  | Get, set, delete values at any path     |
+| [`data`](#data)                 | Get, set, delete data            | Get, set, delete values at any path     |
 | [`data_query`](#data_query)     | Advanced data extraction         | Use yq expressions for complex queries  |
 | [`data_schema`](#data_schema)   | Schema validation and management | Validate syntax, manage schema catalogs |
 | [`data_convert`](#data_convert) | Format conversion                | Convert between JSON, YAML, TOML        |
@@ -20,21 +20,22 @@ The server provides 5 focused tools optimized for LLM interaction with configura
 
 ## `data`
 
-Read, update, or delete configuration data at specific paths.
+Get, set, or delete data at specific paths in JSON, YAML, or TOML files.
 
 ### Parameters
 
-| Parameter       | Type    | Required | Description                                        |
-| --------------- | ------- | -------- | -------------------------------------------------- |
-| `file_path`     | string  | Yes      | Path to configuration file                         |
-| `operation`     | enum    | Yes      | One of: `get`, `set`, `delete`                     |
-| `key_path`      | string  | No\*     | Dot-separated path (e.g., `project.name`)          |
-| `value`         | string  | No\*     | JSON-encoded value for `set` operation             |
-| `return_type`   | enum    | No       | For `get`: `keys` (structure) or `all` (full data) |
-| `type`          | enum    | No       | For `get`: `data` or `schema`                      |
-| `in_place`      | boolean | No       | Modify file directly (default: false)              |
-| `output_format` | enum    | No       | Output format: `json`, `yaml`, `toml`              |
-| `cursor`        | string  | No       | Pagination cursor for large results                |
+| Parameter       | Type    | Required | Description                                                                                                       |
+| --------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `file_path`     | string  | Yes      | Path to JSON, YAML, or TOML file                                                                                  |
+| `operation`     | enum    | Yes      | One of: `get`, `set`, `delete`                                                                                    |
+| `key_path`      | string  | No\*     | Dot-separated path (e.g., `project.name`)                                                                         |
+| `value`         | string  | No\*     | Value for `set` operation (interpretation depends on `value_type`)                                                |
+| `value_type`    | enum    | No       | For `set`: How to interpret `value` parameter: `string`, `number`, `boolean`, `null`, or `json` (default: `json`) |
+| `return_type`   | enum    | No       | For `get`: `keys` (structure) or `all` (full data)                                                                |
+| `data_type`     | enum    | No       | For `get`: `data` or `schema` (default: `data`)                                                                   |
+| `in_place`      | boolean | No       | Modify file directly (default: false)                                                                             |
+| `output_format` | enum    | No       | Output format: `json`, `yaml`, `toml`                                                                             |
+| `cursor`        | string  | No       | Pagination cursor for large results                                                                               |
 
 \*Required for certain operations
 
@@ -52,7 +53,7 @@ Read, update, or delete configuration data at specific paths.
 
 Returns: `"mcp-json-yaml-toml"`
 
-#### Set a value
+#### Set a value (with JSON parsing)
 
 ```json
 {
@@ -60,6 +61,57 @@ Returns: `"mcp-json-yaml-toml"`
   "operation": "set",
   "key_path": "database.host",
   "value": "\"localhost\"",
+  "in_place": true
+}
+```
+
+#### Set a string value (literal text, no JSON parsing)
+
+```json
+{
+  "file_path": "config.yaml",
+  "operation": "set",
+  "key_path": "description",
+  "value": "This is a literal string",
+  "value_type": "string",
+  "in_place": true
+}
+```
+
+#### Set a numeric value
+
+```json
+{
+  "file_path": "config.json",
+  "operation": "set",
+  "key_path": "timeout_seconds",
+  "value": "30",
+  "value_type": "number",
+  "in_place": true
+}
+```
+
+#### Set a boolean value
+
+```json
+{
+  "file_path": "settings.toml",
+  "operation": "set",
+  "key_path": "features.experimental",
+  "value": "true",
+  "value_type": "boolean",
+  "in_place": true
+}
+```
+
+#### Set to null
+
+```json
+{
+  "file_path": "config.yaml",
+  "operation": "set",
+  "key_path": "legacy_field",
+  "value_type": "null",
   "in_place": true
 }
 ```
@@ -95,7 +147,7 @@ Extract and transform data using yq expressions (jq-compatible syntax).
 
 | Parameter       | Type   | Required | Description                                     |
 | --------------- | ------ | -------- | ----------------------------------------------- |
-| `file_path`     | string | Yes      | Path to configuration file                      |
+| `file_path`     | string | Yes      | Path to JSON, YAML, or TOML file                |
 | `expression`    | string | Yes      | yq expression (e.g., `.items[]`, `.data.users`) |
 | `output_format` | enum   | No       | Output format: `json`, `yaml`, `toml`           |
 | `cursor`        | string | No       | Pagination cursor for large results             |
@@ -229,7 +281,7 @@ Show current schema configuration:
 
 ## `data_convert`
 
-Convert configuration files between formats.
+Convert JSON, YAML, or TOML files between formats.
 
 ### Parameters
 
@@ -273,14 +325,14 @@ Convert configuration files between formats.
 
 ## `data_merge`
 
-Deep merge two configuration files.
+Deep merge two JSON, YAML, or TOML files.
 
 ### Parameters
 
 | Parameter       | Type   | Required | Description                                      |
 | --------------- | ------ | -------- | ------------------------------------------------ |
-| `file_path1`    | string | Yes      | Base configuration file                          |
-| `file_path2`    | string | Yes      | Overlay configuration file                       |
+| `file_path1`    | string | Yes      | Base file (JSON, YAML, or TOML)                  |
+| `file_path2`    | string | Yes      | Overlay file (JSON, YAML, or TOML)               |
 | `output_format` | enum   | No       | Output format (defaults to format of first file) |
 | `output_file`   | string | No       | Output file path (returns content if omitted)    |
 

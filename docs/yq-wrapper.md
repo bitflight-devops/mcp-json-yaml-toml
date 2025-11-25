@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `yq_wrapper` module provides a Python interface to the bundled yq v4.48.2 binary for querying and manipulating YAML, JSON, TOML, and other configuration formats.
+The `yq_wrapper` module provides a Python interface to the yq binary for querying and manipulating YAML, JSON, TOML, and other configuration formats. It automatically detects and uses the latest yq version from GitHub releases, with fallback to bundled binaries.
 
 ## Features
 
@@ -14,7 +14,14 @@ The `yq_wrapper` module provides a Python interface to the bundled yq v4.48.2 bi
 
 ## Installation
 
-The yq binaries are bundled with the package. No external dependencies required beyond Python 3.11+.
+The yq wrapper includes intelligent binary management:
+
+- **Primary source**: Automatically downloads the latest yq release from GitHub
+- **Fallback**: Uses bundled binaries if download fails or is disabled
+- **Storage**: Downloaded binaries are cached at `~/.local/bin/` (with fallback to package directory)
+- **No external dependencies** required beyond Python 3.11+
+
+The wrapper will automatically handle binary discovery, downloading, and verification on first use.
 
 ## Quick Start
 
@@ -282,7 +289,7 @@ for line in result.stdout.strip().split('\n'):
 
 ## Supported Formats
 
-The wrapper supports all formats that yq v4.48.2 supports:
+The wrapper supports all formats that the current yq version supports:
 
 - **json**: JavaScript Object Notation
 - **yaml**: YAML Ain't Markup Language
@@ -303,22 +310,87 @@ The wrapper automatically detects your platform and uses the appropriate binary:
 | macOS    | arm64        | yq-darwin-arm64      |
 | Windows  | x86_64/amd64 | yq-windows-amd64.exe |
 
+## Binary Management
+
+### Automatic Download and Caching
+
+The wrapper automatically manages yq binaries with these features:
+
+**Binary Discovery Priority:**
+
+1. Check for latest release on GitHub API
+2. Download to `~/.local/bin/` (standard user binary location)
+3. Verify SHA256 checksums from GitHub releases
+4. Fall back to package-bundled binaries if download fails
+
+**Storage Locations (in order of preference):**
+
+- `~/.local/bin/yq-<platform>-<arch>` - User binary directory (preferred)
+- `<package>/binaries/yq-<platform>-<arch>` - Package directory (fallback)
+
+**First-Use Setup:**
+
+On first execution, the wrapper will:
+
+1. Detect your platform and architecture
+2. Query GitHub API for the latest yq release
+3. Download the binary if not already present
+4. Verify checksums for security
+5. Cache the binary for future use
+
+No manual setup required—everything happens automatically on first use.
+
+### Version Management
+
+To check which yq version is in use:
+
+```python
+from mcp_json_yaml_toml.yq_wrapper import get_yq_binary_path
+
+binary_path = get_yq_binary_path()
+print(f"yq binary: {binary_path}")
+# Output: /home/user/.local/bin/yq-linux-amd64
+```
+
+The actual version can be checked by running the binary with `--version`.
+
 ## Performance Notes
 
 - Subprocess overhead: ~10-50ms per execution
 - Binary size: ~10-12 MB per platform
 - Timeout: 30 seconds (configurable in code)
 - Memory: Minimal (subprocess-based)
+- Auto-download: One-time cost on first execution (~2-5 seconds depending on network)
 
 ## Troubleshooting
 
 ### Binary Not Found
 
-If you get `YQBinaryNotFoundError`, ensure:
+If you get `YQBinaryNotFoundError`:
 
-1. The binaries/ directory exists in your package
-2. The binary for your platform is present
-3. On Unix systems, the binary has execute permissions
+**Auto-download issues:**
+
+1. Check network connectivity (GitHub API must be reachable)
+2. Verify `~/.local/bin/` is writable (or package binaries/ directory)
+3. Check that your platform is supported (Linux amd64/arm64, macOS amd64/arm64, Windows amd64)
+
+**Manual fallback:**
+
+If auto-download fails, you can manually:
+
+1. Download yq from <https://github.com/mikefarah/yq/releases>
+2. Place it in `~/.local/bin/` with appropriate name (`yq-linux-amd64`, `yq-darwin-amd64`, etc.)
+3. Make it executable: `chmod +x ~/.local/bin/yq-*`
+
+**Check your setup:**
+
+```python
+from mcp_json_yaml_toml.yq_wrapper import validate_yq_binary
+
+is_valid, message = validate_yq_binary()
+print(f"Valid: {is_valid}")
+print(f"Message: {message}")
+```
 
 ### Execution Timeout
 

@@ -7,7 +7,7 @@
 
 **Smart JSON/YAML/TOML tools for MCP agents.**
 
-Safely query, modify, validate, and convert configuration files while preserving comments, formatting, and structure. Perfect for AI assistants managing infrastructure code, config files, and deployment manifests across multiple formats.
+Safely query, modify, validate, and convert JSON, YAML, and TOML files while preserving comments, formatting, and structure. Perfect for working with configuration files, API responses, manifests, and any structured data across multiple formats.
 
 ---
 
@@ -128,49 +128,15 @@ Here are real examples you can use with Claude Desktop:
 
 ## Available Tools
 
-The server provides 5 focused tools optimized for LLM interaction:
+The server provides 5 tools: `data`, `data_query`, `data_schema`, `data_convert`, and `data_merge`.
 
-| Tool           | Purpose                              | Key Operations                                     |
-| -------------- | ------------------------------------ | -------------------------------------------------- |
-| `data`         | Unified CRUD for configuration files | Get, set, delete values at any path                |
-| `data_query`   | Advanced data extraction             | Run yq expressions to extract/transform data       |
-| `data_schema`  | Schema validation and management     | Validate syntax, discover schemas, manage catalogs |
-| `data_convert` | Format conversion                    | Convert between JSON, YAML, TOML formats           |
-| `data_merge`   | Configuration merging                | Deep merge configs with environment overrides      |
-
-See [docs/TOOLS.md](docs/TOOLS.md) for detailed parameter reference and examples.
+See [docs/tools.md](docs/tools.md) for parameters, examples, and usage reference.
 
 ---
 
 ## Configuration
 
-### Environment Variables
-
-| Variable                   | Default                       | Purpose                                       |
-| -------------------------- | ----------------------------- | --------------------------------------------- |
-| `MCP_CONFIG_FORMATS`       | `json,yaml,toml`              | Comma-separated list of enabled formats       |
-| `MCP_SCHEMA_CACHE_DIRS`    | `~/.cache/mcp-json-yaml-toml` | Colon-separated paths to search for schemas   |
-| `YAML_ANCHOR_OPTIMIZATION` | `true`                        | Enable automatic YAML anchor/alias generation |
-
-### Example: Restrict to JSON and YAML
-
-```bash
-export MCP_CONFIG_FORMATS="json,yaml"
-mcp-json-yaml-toml
-```
-
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for exhaustive configuration reference.
-
----
-
-## Further Reading
-
-For more detailed information, see:
-
-- **[docs/TOOLS.md](docs/TOOLS.md)** - Complete reference for all tools, parameters, and examples
-- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - Exhaustive configuration options and environment variables
-- **[docs/CLIENTS.md](docs/CLIENTS.md)** - Setup guides for Cursor, VS Code, Windsurf, and other MCP clients
-- **[docs/ADVANCED.md](docs/ADVANCED.md)** - Advanced usage patterns and real-world scenarios
+See [docs/tools.md](docs/tools.md) for environment variables and configuration options.
 
 ---
 
@@ -234,10 +200,10 @@ mcp-json-yaml-toml/
 │   ├── config.py                 # Configuration management
 │   └── tests/                    # Test suite
 ├── docs/                         # Documentation
-│   ├── TOOLS.md                  # Tool reference
-│   ├── CONFIGURATION.md          # Configuration guide
-│   ├── CLIENTS.md                # Client setup guides
-│   └── ADVANCED.md               # Advanced usage
+│   ├── tools.md                  # Tool reference
+│   ├── clients.md                # Client setup guides
+│   ├── module-usage.md           # Module dependencies
+│   └── yq-wrapper.md             # yq wrapper usage
 ├── scripts/                      # Utility scripts
 ├── fixtures/                     # Test fixtures
 ├── pyproject.toml                # Project configuration
