@@ -2,6 +2,10 @@ name: Auto Tag, Build, and Publish
 
 on:
   workflow_call:
+    secrets:
+      GH_TOKEN:
+        description: "GitHub token for creating releases and tags"
+        required: true
 
 jobs:
   publish:
@@ -9,18 +13,22 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: Bump version and create tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GH_TOKEN }}
           default_bump: false
           create_annotated_tag: true
 
@@ -52,6 +60,7 @@ jobs:
         if: steps.tag_version.outputs.new_tag
         uses: ncipollo/release-action@v1
         with:
+          token: ${{ secrets.GH_TOKEN }}
           tag: ${{ steps.tag_version.outputs.new_tag }}
           name: Release ${{ steps.tag_version.outputs.new_tag }}
           body: ${{ steps.tag_version.outputs.changelog }}

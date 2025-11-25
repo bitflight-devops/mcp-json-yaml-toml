@@ -172,5 +172,9 @@ jobs:
     name: Publish
     needs: [format, lint, typecheck, test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+      id-token: write
     uses: ./.github/workflows/auto-publish.yml
-    secrets: inherit
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
