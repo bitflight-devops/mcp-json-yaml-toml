@@ -1,14 +1,14 @@
-"""Compute the version number and store it in the `__version__` variable.
-
-Based on <https://github.com/maresb/hatch-vcs-footgun-example>.
-"""
-
 # /// script
 # List dependencies for linting only
 # dependencies = [
 #   "hatchling>=1.14.0",
 # ]
 # ///
+"""Compute the version number and store it in the `__version__` variable.
+
+Based on <https://github.com/maresb/hatch-vcs-footgun-example>.
+"""
+
 import os
 
 
