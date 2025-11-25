@@ -2,7 +2,6 @@
 
 [![Test](https://github.com/bitflight-devops/mcp-json-yaml-toml/actions/workflows/test.yml/badge.svg)](https://github.com/bitflight-devops/mcp-json-yaml-toml/actions/workflows/test.yml)
 [![Publish](https://github.com/bitflight-devops/mcp-json-yaml-toml/actions/workflows/auto-publish.yml/badge.svg)](https://github.com/bitflight-devops/mcp-json-yaml-toml/actions/workflows/auto-publish.yml)
-[![codecov](https://codecov.io/gh/bitflight-devops/mcp-json-yaml-toml/branch/main/graph/badge.svg)](https://codecov.io/gh/bitflight-devops/mcp-json-yaml-toml)
 [![PyPI version](https://badge.fury.io/py/mcp-json-yaml-toml.svg)](https://badge.fury.io/py/mcp-json-yaml-toml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
@@ -52,13 +51,27 @@ Configuration management is error-prone when done manually:
 
 ### Installation
 
-```bash
-# Using uv (recommended)
-uv pip install mcp-json-yaml-toml
+MCP servers run as external processes and are not installed as libraries. They communicate via stdio with your MCP client.
 
-# Using pip
-pip install mcp-json-yaml-toml
+### Claude Code (CLI)
+
+```bash
+# Basic install
+claude mcp add --scope user mcp-json-yaml-toml -- uvx mcp-json-yaml-toml
+
+# With environment variables (e.g., to limit formats)
+claude mcp add --scope user mcp-json-yaml-toml -e MCP_CONFIG_FORMATS=json,yaml -- uvx mcp-json-yaml-toml
 ```
+
+### Updating
+
+When using `uvx`, clear the cache to get the latest version:
+
+```bash
+uv cache clean mcp-json-yaml-toml
+```
+
+The next time the MCP server runs, `uvx` will download the latest version.
 
 ### Claude Desktop Configuration
 
@@ -72,22 +85,44 @@ pip install mcp-json-yaml-toml
 {
   "mcpServers": {
     "json-yaml-toml": {
-      "command": "mcp-json-yaml-toml"
+      "command": "uvx",
+      "args": ["mcp-json-yaml-toml"]
     }
   }
 }
 ```
 
+This configuration uses `uvx` to automatically download and run the server in an isolated environment.
+
 3. Restart Claude Desktop to activate the server.
 
 ### Try It Now
 
-Ask Claude Desktop questions like:
+Here are real examples you can use with Claude Desktop:
 
-- **"Validate this Kubernetes manifest against the schema"** - Checks your k8s YAML for correctness
-- **"Convert this package.json to TOML format"** - Transforms between formats while preserving data
-- **"Find all deprecated config fields in this file"** - Uses schema metadata to detect issues
-- **"Merge this environment override with the base config"** - Intelligently combines configs for different deployments
+#### Query Configuration Files
+
+- **"What stages are defined in my GitLab CI?"** - Returns: `build`, `test`, `deploy`, etc.
+- **"Show me the project name from pyproject.toml"** - Extracts: `mcp-json-yaml-toml`
+- **"Get all dependencies from package.json"** - Lists npm packages with versions
+
+#### Convert Between Formats
+
+- **"Convert this config.toml to YAML"** - Preserves all data in new format
+- **"Transform this JSON config to TOML"** - Maintains structure and comments
+- **"Convert GitLab CI YAML to JSON for API use"** - Enables programmatic access
+
+#### Validate and Fix
+
+- **"Check if my YAML file is valid"** - Validates syntax before deployment
+- **"Validate against schema from SchemaStore"** - Ensures compliance with specs
+- **"Fix YAML indentation issues"** - Corrects formatting problems
+
+#### Advanced Operations
+
+- **"Extract all job names from .gitlab-ci.yml"** - Query: `.* | select(type == "object") | keys`
+- **"Merge base config with production overrides"** - Deep merges configurations
+- **"Show config structure without values"** - Returns keys only for overview
 
 ---
 

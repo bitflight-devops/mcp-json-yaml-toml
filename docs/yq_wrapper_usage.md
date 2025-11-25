@@ -47,12 +47,15 @@ print(result.data)
 Get the path to the platform-specific yq binary.
 
 **Returns:**
+
 - Path to the yq binary executable
 
 **Raises:**
+
 - `YQBinaryNotFoundError`: If the binary for this platform cannot be found
 
 **Example:**
+
 ```python
 from mcp_json_yaml_toml.yq_wrapper import get_yq_binary_path
 
@@ -65,6 +68,7 @@ print(f"Using yq at: {binary_path}")
 Execute yq command with the given expression and input.
 
 **Parameters:**
+
 - `expression` (str): yq expression to evaluate (e.g., '.name', '.items[]', '.users[] | select(.age > 25)')
 - `input_data` (str | None): Input data as string (mutually exclusive with input_file)
 - `input_file` (Path | str | None): Path to input file (mutually exclusive with input_data)
@@ -74,9 +78,11 @@ Execute yq command with the given expression and input.
 - `null_input` (bool): Don't read input, useful for creating new content
 
 **Returns:**
+
 - `YQResult`: Object with stdout, stderr, returncode, and parsed data
 
 **Raises:**
+
 - `YQBinaryNotFoundError`: If yq binary cannot be found
 - `YQExecutionError`: If yq execution fails
 - `ValueError`: If arguments are invalid
@@ -86,9 +92,11 @@ Execute yq command with the given expression and input.
 Validate that the yq binary exists and is executable.
 
 **Returns:**
+
 - Tuple of (is_valid, message) where message describes the result
 
 **Example:**
+
 ```python
 from mcp_json_yaml_toml.yq_wrapper import validate_yq_binary
 
@@ -106,6 +114,7 @@ else:
 Pydantic model representing the result of a yq execution.
 
 **Fields:**
+
 - `stdout` (str): Standard output from yq command
 - `stderr` (str): Standard error from yq command (default: "")
 - `returncode` (int): Exit code from yq process (default: 0)
@@ -126,6 +135,7 @@ Raised when the platform-specific yq binary cannot be found.
 Raised when yq execution fails.
 
 **Attributes:**
+
 - `stderr` (str): Raw stderr output from yq
 - `returncode` (int): Process exit code
 
@@ -286,12 +296,12 @@ The wrapper supports all formats that yq v4.48.2 supports:
 
 The wrapper automatically detects your platform and uses the appropriate binary:
 
-| Platform | Architecture | Binary Name |
-|----------|-------------|-------------|
-| Linux | x86_64/amd64 | yq-linux-amd64 |
-| macOS | x86_64/amd64 | yq-darwin-amd64 |
-| macOS | arm64 | yq-darwin-arm64 |
-| Windows | x86_64/amd64 | yq-windows-amd64.exe |
+| Platform | Architecture | Binary Name          |
+| -------- | ------------ | -------------------- |
+| Linux    | x86_64/amd64 | yq-linux-amd64       |
+| macOS    | x86_64/amd64 | yq-darwin-amd64      |
+| macOS    | arm64        | yq-darwin-arm64      |
+| Windows  | x86_64/amd64 | yq-windows-amd64.exe |
 
 ## Performance Notes
 
@@ -305,6 +315,7 @@ The wrapper automatically detects your platform and uses the appropriate binary:
 ### Binary Not Found
 
 If you get `YQBinaryNotFoundError`, ensure:
+
 1. The binaries/ directory exists in your package
 2. The binary for your platform is present
 3. On Unix systems, the binary has execute permissions
@@ -312,6 +323,7 @@ If you get `YQBinaryNotFoundError`, ensure:
 ### Execution Timeout
 
 If operations timeout (30s default), you may need to:
+
 1. Process data in smaller chunks
 2. Modify the timeout in the source code
 3. Use streaming for large files
@@ -319,6 +331,7 @@ If operations timeout (30s default), you may need to:
 ### Parse Errors
 
 If JSON parsing fails but yq succeeds:
+
 - Check the `stdout` field for raw output
 - The `data` field will be None
 - A warning will be added to `stderr`
