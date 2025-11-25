@@ -164,3 +164,12 @@ jobs:
                 body: body
               });
             }
+
+  publish:
+    name: Publish
+    needs: [format, lint, typecheck, test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: ./.github/workflows/auto-publish.yml
+    permissions:
+      contents: write
+      id-token: write

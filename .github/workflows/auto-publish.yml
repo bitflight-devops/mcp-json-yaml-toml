@@ -1,16 +1,10 @@
 name: Auto Tag, Build, and Publish
 
 on:
-  workflow_run:
-    workflows: ["Test"]
-    types:
-      - completed
-    branches:
-      - main
+  workflow_call:
 
 jobs:
   publish:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
