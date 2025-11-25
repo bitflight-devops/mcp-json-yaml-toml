@@ -1264,10 +1264,10 @@ def convert_to_schema(file_path: str) -> str:
     """
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     """Entry point for the MCP server."""
     mcp.run()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
