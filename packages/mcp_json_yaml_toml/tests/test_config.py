@@ -69,7 +69,9 @@ class TestParseEnabledFormats:
         assert ConfigFormat.YAML in result
         assert ConfigFormat.TOML in result
 
-    def test_parse_enabled_formats_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_parse_enabled_formats_from_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test parse_enabled_formats reads from environment variable.
 
         Tests: Environment variable parsing
@@ -88,7 +90,9 @@ class TestParseEnabledFormats:
         assert ConfigFormat.TOML in result
         assert ConfigFormat.YAML not in result
 
-    def test_parse_enabled_formats_single_format(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_parse_enabled_formats_single_format(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test parse_enabled_formats with single format.
 
         Tests: Single format configuration
@@ -105,7 +109,9 @@ class TestParseEnabledFormats:
         assert len(result) == 1
         assert result[0] == ConfigFormat.YAML
 
-    def test_parse_enabled_formats_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_parse_enabled_formats_case_insensitive(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test parse_enabled_formats is case-insensitive.
 
         Tests: Case-insensitive parsing
@@ -124,7 +130,9 @@ class TestParseEnabledFormats:
         assert ConfigFormat.YAML in result
         assert ConfigFormat.TOML in result
 
-    def test_parse_enabled_formats_whitespace_handling(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_parse_enabled_formats_whitespace_handling(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test parse_enabled_formats handles whitespace.
 
         Tests: Whitespace trimming
@@ -143,7 +151,9 @@ class TestParseEnabledFormats:
         assert ConfigFormat.YAML in result
         assert ConfigFormat.TOML in result
 
-    def test_parse_enabled_formats_invalid_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_parse_enabled_formats_invalid_falls_back(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test parse_enabled_formats falls back to defaults on invalid input.
 
         Tests: Invalid input handling
@@ -159,7 +169,9 @@ class TestParseEnabledFormats:
         # Assert - returns defaults
         assert result == list(DEFAULT_FORMATS)
 
-    def test_parse_enabled_formats_empty_string_returns_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_parse_enabled_formats_empty_string_returns_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test parse_enabled_formats returns defaults for empty string.
 
         Tests: Empty string handling
@@ -175,7 +187,9 @@ class TestParseEnabledFormats:
         # Assert - returns defaults
         assert result == list(DEFAULT_FORMATS)
 
-    def test_parse_enabled_formats_partial_valid(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_parse_enabled_formats_partial_valid(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test parse_enabled_formats with mix of valid and invalid formats.
 
         Tests: Partial validation
@@ -268,7 +282,9 @@ class TestIsFormatEnabled:
         assert is_format_enabled("json") is True
         assert is_format_enabled("YAML") is True
 
-    def test_is_format_enabled_respects_env_config(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_is_format_enabled_respects_env_config(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test is_format_enabled respects environment configuration.
 
         Tests: Environment-based filtering
@@ -412,7 +428,9 @@ class TestGetEnabledFormatsStr:
         # Assert - returns comma-separated default formats
         assert result == "json,yaml,toml"
 
-    def test_get_enabled_formats_str_custom(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_enabled_formats_str_custom(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test get_enabled_formats_str with custom configuration.
 
         Tests: Custom format string representation
@@ -428,7 +446,9 @@ class TestGetEnabledFormatsStr:
         # Assert - returns configured formats
         assert result == "yaml,xml"
 
-    def test_get_enabled_formats_str_single_format(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_enabled_formats_str_single_format(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test get_enabled_formats_str with single format.
 
         Tests: Single format string representation

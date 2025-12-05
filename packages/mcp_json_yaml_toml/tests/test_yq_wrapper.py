@@ -189,7 +189,9 @@ class TestYQResult:
         Why: Verify all fields can be set
         """
         # Arrange & Act - create complete result
-        result = YQResult(stdout="output", stderr="error", returncode=1, data={"key": "value"})
+        result = YQResult(
+            stdout="output", stderr="error", returncode=1, data={"key": "value"}
+        )
 
         # Assert - all fields set
         assert result.stdout == "output"
@@ -217,7 +219,9 @@ class TestExecuteYQ:
         mock_run = mocker.patch("subprocess.run", return_value=mock_result)
 
         # Act - execute yq with input data
-        result = execute_yq(".", input_data='{"name":"test"}', input_format="json", output_format="json")
+        result = execute_yq(
+            ".", input_data='{"name":"test"}', input_format="json", output_format="json"
+        )
 
         # Assert - subprocess called with correct args
         assert mock_run.called
@@ -234,7 +238,9 @@ class TestExecuteYQ:
         """
         # Arrange - invalid arguments
         # Act & Assert - raises ValueError
-        with pytest.raises(ValueError, match="Cannot specify both input_data and input_file"):
+        with pytest.raises(
+            ValueError, match="Cannot specify both input_data and input_file"
+        ):
             execute_yq(".", input_data="test", input_file=Path("test.json"))
 
     @pytest.mark.unit
@@ -260,7 +266,9 @@ class TestExecuteYQ:
         """
         # Arrange - invalid arguments
         # Act & Assert - raises ValueError
-        with pytest.raises(ValueError, match="null_input cannot be used with input_data"):
+        with pytest.raises(
+            ValueError, match="null_input cannot be used with input_data"
+        ):
             execute_yq(".", input_data="test", null_input=True)
 
     @pytest.mark.unit
@@ -344,14 +352,21 @@ class TestExecuteYQ:
         """
         # Arrange - sample config file
         # Act - execute yq to query name
-        result = execute_yq(".name", input_file=sample_json_config, input_format="json", output_format="json")
+        result = execute_yq(
+            ".name",
+            input_file=sample_json_config,
+            input_format="json",
+            output_format="json",
+        )
 
         # Assert - successful execution
         assert result.returncode == 0
         assert result.data == "test-app"
 
     @pytest.mark.integration
-    def test_execute_yq_with_yaml_to_json_conversion(self, sample_yaml_config: Path) -> None:
+    def test_execute_yq_with_yaml_to_json_conversion(
+        self, sample_yaml_config: Path
+    ) -> None:
         """Test execute_yq converts YAML to JSON.
 
         Tests: Format conversion
@@ -360,7 +375,12 @@ class TestExecuteYQ:
         """
         # Arrange - YAML config
         # Act - convert to JSON
-        result = execute_yq(".", input_file=sample_yaml_config, input_format="yaml", output_format="json")
+        result = execute_yq(
+            ".",
+            input_file=sample_yaml_config,
+            input_format="yaml",
+            output_format="json",
+        )
 
         # Assert - successful conversion
         assert result.returncode == 0
@@ -454,7 +474,9 @@ class TestYQError:
 class TestVerifyChecksum:
     """Tests for _verify_checksum function."""
 
-    def test_verify_checksum_returns_true_for_matching_hash(self, tmp_path: Path) -> None:
+    def test_verify_checksum_returns_true_for_matching_hash(
+        self, tmp_path: Path
+    ) -> None:
         """Verify checksum returns True when hash matches."""
         # Create a file with known content
         test_file = tmp_path / "test_file.bin"
@@ -462,7 +484,9 @@ class TestVerifyChecksum:
         test_file.write_bytes(content)
 
         # Pre-computed SHA256 of "Hello, World!"
-        expected_hash = "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+        expected_hash = (
+            "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+        )
 
         result = _verify_checksum(test_file, expected_hash)
 

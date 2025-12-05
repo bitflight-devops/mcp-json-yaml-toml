@@ -3,9 +3,11 @@
 Handles automatic schema discovery via Schema Store and local caching.
 """
 
+import datetime
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +30,7 @@ def _load_default_ide_patterns() -> list[str]:
             data: dict[str, Any] = orjson.loads(default_stores_path.read_bytes())
             result: list[str] = data.get("ide_patterns", [])
             return result
-    except Exception as e:
+    except (OSError, orjson.JSONDecodeError) as e:
         logging.debug(f"Failed to load default IDE patterns: {e}")
     return []
 
@@ -39,7 +41,7 @@ def _expand_ide_patterns() -> list[Path]:
     Returns:
         List of existing schema directories from known IDE locations.
     """
-    locations = []
+    locations: list[Path] = []
     patterns = _load_default_ide_patterns()
     home = Path.home()
 
@@ -53,13 +55,14 @@ def _expand_ide_patterns() -> list[Path]:
             parent = pattern_path.parent
             glob_pattern = pattern_path.name
             if parent.exists():
-                for matched_path in parent.glob(glob_pattern):
-                    if matched_path.is_dir():
-                        locations.append(matched_path)
-        else:
-            # Direct path
-            if pattern_path.exists() and pattern_path.is_dir():
-                locations.append(pattern_path)
+                locations.extend(
+                    matched_path
+                    for matched_path in parent.glob(glob_pattern)
+                    if matched_path.is_dir()
+                )
+        # Direct path
+        elif pattern_path.exists() and pattern_path.is_dir():
+            locations.append(pattern_path)
 
     return locations
 
@@ -77,7 +80,9 @@ def _get_ide_schema_locations() -> list[Path]:
     home = Path.home()
 
     # 1. Load from config file
-    config_path = home / ".cache" / "mcp-json-yaml-toml" / "schemas" / "schema_config.json"
+    config_path = (
+        home / ".cache" / "mcp-json-yaml-toml" / "schemas" / "schema_config.json"
+    )
     if config_path.exists():
         try:
             config = orjson.loads(config_path.read_bytes())
@@ -142,11 +147,18 @@ class SchemaManager:
                 return config
 
         # Return default empty config
-        return {"custom_cache_dirs": [], "custom_catalogs": {}, "discovered_dirs": [], "last_scan": None}
+        return {
+            "custom_cache_dirs": [],
+            "custom_catalogs": {},
+            "discovered_dirs": [],
+            "last_scan": None,
+        }
 
     def _save_config(self) -> None:
         """Save schema configuration to file."""
-        self.config_path.write_bytes(orjson.dumps(self.config, option=orjson.OPT_INDENT_2))
+        self.config_path.write_bytes(
+            orjson.dumps(self.config, option=orjson.OPT_INDENT_2)
+        )
 
     def get_schema_for_file(self, file_path: Path) -> dict[str, Any] | None:
         """Find and return the schema for a given file.
@@ -204,9 +216,8 @@ class SchemaManager:
                     "url": assoc.get("schema_url"),
                     "source": "file_association",
                 }
-            else:
-                # Legacy format: just URL string
-                return {"name": "unknown", "url": assoc, "source": "file_association"}
+            # Legacy format: just URL string
+            return {"name": "unknown", "url": assoc, "source": "file_association"}
 
         # 2. Check catalog
         catalog = self._get_catalog()
@@ -216,11 +227,17 @@ class SchemaManager:
         filename = file_path.name
         for schema_info in catalog.get("schemas", []):
             if "fileMatch" in schema_info and filename in schema_info["fileMatch"]:
-                return {"name": schema_info.get("name", "unknown"), "url": schema_info.get("url"), "source": "catalog"}
+                return {
+                    "name": schema_info.get("name", "unknown"),
+                    "url": schema_info.get("url"),
+                    "source": "catalog",
+                }
 
         return None
 
-    def add_file_association(self, file_path: Path, schema_url: str, schema_name: str | None = None) -> None:
+    def add_file_association(
+        self, file_path: Path, schema_url: str, schema_name: str | None = None
+    ) -> None:
         """Associate a file with a schema URL.
 
         Args:
@@ -232,7 +249,10 @@ class SchemaManager:
         if "file_associations" not in self.config:
             self.config["file_associations"] = {}
 
-        self.config["file_associations"][file_str] = {"schema_url": schema_url, "schema_name": schema_name or "unknown"}
+        self.config["file_associations"][file_str] = {
+            "schema_url": schema_url,
+            "schema_name": schema_name or "unknown",
+        }
         self._save_config()
 
     def remove_file_association(self, file_path: Path) -> bool:
@@ -253,7 +273,11 @@ class SchemaManager:
         return False
 
     def _get_catalog(self) -> dict[str, Any] | None:
-        """Get the Schema Store catalog, using cache if available."""
+        """Get the Schema Store catalog, using cache if available.
+
+        Returns:
+            Parsed catalog dict if available, None if fetch fails and no cache exists.
+        """
         if self._is_cache_valid(self.catalog_path):
             try:
                 cached: dict[str, Any] = orjson.loads(self.catalog_path.read_bytes())
@@ -268,7 +292,12 @@ class SchemaManager:
             response.raise_for_status()
             catalog = response.json()
             self.catalog_path.write_bytes(orjson.dumps(catalog))
-        except Exception:
+        except (
+            httpx.HTTPError,
+            httpx.TimeoutException,
+            OSError,
+            orjson.JSONDecodeError,
+        ):
             # If fetch fails and we have a stale cache, use it
             if self.catalog_path.exists():
                 try:
@@ -281,9 +310,16 @@ class SchemaManager:
         return catalog
 
     def _fetch_schema(self, url: str) -> dict[str, Any] | None:
-        """Fetch a schema from a URL, using cache if available."""
+        """Fetch a schema from a URL, using cache if available.
+
+        Args:
+            url: URL of the schema to fetch.
+
+        Returns:
+            Parsed schema dict if available, None if fetch fails and no cache exists.
+        """
         # Create a safe filename from URL
-        schema_filename = url.split("/")[-1]
+        schema_filename = url.rsplit("/", maxsplit=1)[-1]
         if not schema_filename.endswith(".json"):
             schema_filename += ".json"
 
@@ -310,7 +346,12 @@ class SchemaManager:
             response.raise_for_status()
             schema = response.json()
             cache_path.write_bytes(orjson.dumps(schema))
-        except Exception:
+        except (
+            httpx.HTTPError,
+            httpx.TimeoutException,
+            OSError,
+            orjson.JSONDecodeError,
+        ):
             # If fetch fails and we have a stale cache, use it
             if cache_path.exists():
                 try:
@@ -331,12 +372,14 @@ class SchemaManager:
         Returns:
             Parsed schema dict if found, None otherwise.
         """
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
         cache_dirs = _get_ide_schema_locations()
 
         def try_load_schema(cache_dir: Path) -> dict[str, Any] | None:
-            """Try to load schema from a specific directory."""
+            """Try to load schema from a specific directory.
+
+            Returns:
+                Parsed schema dict if found and valid, None otherwise.
+            """
             schema_path = cache_dir / schema_filename
             if schema_path.exists():
                 try:
@@ -349,7 +392,10 @@ class SchemaManager:
 
         # Check all directories concurrently
         with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = {executor.submit(try_load_schema, cache_dir): cache_dir for cache_dir in cache_dirs}
+            futures = {
+                executor.submit(try_load_schema, cache_dir): cache_dir
+                for cache_dir in cache_dirs
+            }
 
             for future in as_completed(futures):
                 result = future.result()
@@ -362,7 +408,14 @@ class SchemaManager:
         return None
 
     def _is_cache_valid(self, path: Path) -> bool:
-        """Check if a cached file is valid and not expired."""
+        """Check if a cached file is valid and not expired.
+
+        Args:
+            path: Path to the cached file.
+
+        Returns:
+            True if cache exists and is not expired, False otherwise.
+        """
         if not path.exists():
             return False
 
@@ -370,7 +423,9 @@ class SchemaManager:
         age = time.time() - mtime
         return age < CACHE_EXPIRY_SECONDS
 
-    def scan_for_schema_dirs(self, search_paths: list[Path], max_depth: int = 5) -> list[Path]:
+    def scan_for_schema_dirs(
+        self, search_paths: list[Path], max_depth: int = 5
+    ) -> list[Path]:
         """Recursively scan directories for schema caches.
 
         Args:
@@ -380,8 +435,6 @@ class SchemaManager:
         Returns:
             List of discovered schema directories.
         """
-        import datetime
-
         discovered = []
 
         for search_path in search_paths:
@@ -400,7 +453,7 @@ class SchemaManager:
                 is_schema_dir = False
 
                 # Heuristic 1: Directory is named "schemas" or "jsonSchemas"
-                if dir_path.name in ("schemas", "jsonSchemas"):
+                if dir_path.name in {"schemas", "jsonSchemas"}:
                     is_schema_dir = True
 
                 # Heuristic 2: Directory contains catalog.json

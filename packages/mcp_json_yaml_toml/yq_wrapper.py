@@ -26,13 +26,9 @@ from pydantic import BaseModel, Field
 class YQError(Exception):
     """Base exception for yq execution errors."""
 
-    pass
-
 
 class YQBinaryNotFoundError(YQError):
     """Raised when the platform-specific yq binary cannot be found."""
-
-    pass
 
 
 class YQExecutionError(YQError):
@@ -65,6 +61,10 @@ FormatType = Literal["json", "yaml", "toml", "xml", "csv", "tsv", "props"]
 # GitHub repository for yq
 GITHUB_REPO = "mikefarah/yq"
 GITHUB_API_BASE = "https://api.github.com"
+
+# Checksum file parsing constants
+CHECKSUM_MIN_FIELDS = 19  # Minimum fields in checksum line
+CHECKSUM_SHA256_INDEX = 18  # SHA-256 hash position (0-indexed)
 
 
 def _get_storage_location() -> Path:
@@ -115,7 +115,9 @@ def _get_latest_release_tag() -> str:  # pragma: no cover
             data = response.json()
             return str(data["tag_name"])
     except httpx.HTTPStatusError as e:
-        raise YQError(f"GitHub API request failed: HTTP {e.response.status_code}") from e
+        raise YQError(
+            f"GitHub API request failed: HTTP {e.response.status_code}"
+        ) from e
     except httpx.RequestError as e:
         raise YQError(f"Network error accessing GitHub API: {e}") from e
     except (KeyError, ValueError) as e:
@@ -166,17 +168,19 @@ def _get_checksums(version: str) -> dict[str, str]:  # pragma: no cover
             response.raise_for_status()
             content = response.text
     except httpx.HTTPStatusError as e:
-        raise YQError(f"Failed to download checksums: HTTP {e.response.status_code}") from e
+        raise YQError(
+            f"Failed to download checksums: HTTP {e.response.status_code}"
+        ) from e
     except httpx.RequestError as e:
         raise YQError(f"Network error downloading checksums: {e}") from e
 
-    # Parse checksums file - format is space-separated with SHA256 at field 19
+    # Parse checksums file - format is space-separated with SHA256 at specific index
     checksums: dict[str, str] = {}
     for line in content.strip().split("\n"):
         parts = line.split()
-        if len(parts) >= 19:
+        if len(parts) >= CHECKSUM_MIN_FIELDS:
             binary_name = parts[0]
-            sha256_hash = parts[18]  # SHA-256 is at field 18 (0-indexed)
+            sha256_hash = parts[CHECKSUM_SHA256_INDEX]
             checksums[binary_name] = sha256_hash
 
     return checksums
@@ -198,7 +202,9 @@ def _verify_checksum(file_path: Path, expected_hash: str) -> bool:
     return actual_hash == expected_hash
 
 
-def _download_yq_binary(binary_name: str, github_name: str, dest_path: Path, version: str) -> None:  # pragma: no cover
+def _download_yq_binary(
+    binary_name: str, github_name: str, dest_path: Path, version: str
+) -> None:  # pragma: no cover
     """Download and verify a single yq binary with file locking.
 
     Uses file locking to ensure only one process downloads the binary when
@@ -221,14 +227,17 @@ def _download_yq_binary(binary_name: str, github_name: str, dest_path: Path, ver
     lock_path = dest_path.with_suffix(".lock")
 
     # Open lock file (create if doesn't exist)
-    with open(lock_path, "w") as lock_file:
+    with Path(lock_path).open("w", encoding="utf-8") as lock_file:
         # Acquire exclusive lock - blocks until available
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
 
         try:
             # Re-check if another process completed the download while we waited
             if dest_path.exists():
-                print(f"Binary already downloaded by another process at {dest_path}", file=sys.stderr)
+                print(
+                    f"Binary already downloaded by another process at {dest_path}",
+                    file=sys.stderr,
+                )
                 return
 
             print(f"Downloading yq {version} for your platform...", file=sys.stderr)
@@ -261,7 +270,10 @@ def _download_yq_binary(binary_name: str, github_name: str, dest_path: Path, ver
                 # Atomic rename to final destination
                 temp_path.rename(dest_path)
 
-                print(f"Successfully downloaded and verified {binary_name}", file=sys.stderr)
+                print(
+                    f"Successfully downloaded and verified {binary_name}",
+                    file=sys.stderr,
+                )
 
             finally:
                 # Clean up temp file if it still exists (e.g., if verification failed)
@@ -294,9 +306,9 @@ def get_yq_binary_path() -> Path:
     machine = platform.machine().lower()
 
     # Normalize architecture names
-    if machine in ("x86_64", "amd64"):
+    if machine in {"x86_64", "amd64"}:
         arch = "amd64"
-    elif machine in ("arm64", "aarch64"):  # pragma: no cover
+    elif machine in {"arm64", "aarch64"}:  # pragma: no cover
         arch = "arm64"
     else:  # pragma: no cover
         raise YQBinaryNotFoundError(
@@ -329,8 +341,12 @@ def get_yq_binary_path() -> Path:
 
     # Binary not found - attempt auto-download
     # This code path is only reached when binary is missing (not during normal testing)
-    print(f"\nyq binary not found for {system}/{arch}", file=sys.stderr)  # pragma: no cover
-    print("Attempting to auto-download from GitHub releases...", file=sys.stderr)  # pragma: no cover
+    print(
+        f"\nyq binary not found for {system}/{arch}", file=sys.stderr
+    )  # pragma: no cover
+    print(
+        "Attempting to auto-download from GitHub releases...", file=sys.stderr
+    )  # pragma: no cover
 
     try:  # pragma: no cover
         # Get latest release version
@@ -341,10 +357,15 @@ def get_yq_binary_path() -> Path:
 
         # Verify it exists and return
         if storage_binary.exists():
-            print(f"Auto-download successful. Binary stored at: {storage_binary}\n", file=sys.stderr)
+            print(
+                f"Auto-download successful. Binary stored at: {storage_binary}\n",
+                file=sys.stderr,
+            )
             return storage_binary
 
-        raise YQBinaryNotFoundError("Binary download completed but file not found at expected location")
+        raise YQBinaryNotFoundError(
+            "Binary download completed but file not found at expected location"
+        )
 
     except YQError as e:  # pragma: no cover
         # Download failed - provide helpful error message
@@ -380,8 +401,7 @@ def parse_yq_error(stderr: str) -> str:
     main_error = error_lines[0]
 
     # Remove "Error: " prefix if present
-    if main_error.startswith("Error: "):
-        main_error = main_error[7:]
+    main_error = main_error.removeprefix("Error: ")
 
     # Add context from additional lines if helpful
     if len(error_lines) > 1:
@@ -392,7 +412,10 @@ def parse_yq_error(stderr: str) -> str:
 
 
 def _validate_execute_args(
-    input_data: str | None, input_file: Path | str | None, in_place: bool, null_input: bool
+    input_data: str | None,
+    input_file: Path | str | None,
+    in_place: bool,
+    null_input: bool,
 ) -> None:
     """Validate arguments for execute_yq.
 
@@ -463,7 +486,9 @@ def _build_yq_command(
     return cmd
 
 
-def _run_yq_subprocess(cmd: list[str], input_data: str | None) -> subprocess.CompletedProcess[bytes]:
+def _run_yq_subprocess(
+    cmd: list[str], input_data: str | None
+) -> subprocess.CompletedProcess[bytes]:
     """Run yq subprocess with error handling.
 
     Args:
@@ -485,12 +510,18 @@ def _run_yq_subprocess(cmd: list[str], input_data: str | None) -> subprocess.Com
             timeout=30,  # 30 second timeout
         )
     except subprocess.TimeoutExpired as e:
-        raise YQExecutionError("yq command timed out after 30 seconds", stderr=str(e), returncode=-1) from e
+        raise YQExecutionError(
+            "yq command timed out after 30 seconds", stderr=str(e), returncode=-1
+        ) from e
     except OSError as e:
-        raise YQExecutionError(f"Failed to execute yq binary: {e}", stderr=str(e), returncode=-1) from e
+        raise YQExecutionError(
+            f"Failed to execute yq binary: {e}", stderr=str(e), returncode=-1
+        ) from e
 
 
-def _parse_json_output(stdout: str, stderr: str, output_format: FormatType) -> tuple[Any, str]:
+def _parse_json_output(
+    stdout: str, stderr: str, output_format: FormatType
+) -> tuple[Any, str]:
     """Parse JSON output from yq.
 
     Args:
@@ -546,7 +577,15 @@ def execute_yq(
     binary_path = get_yq_binary_path()
 
     # Build command
-    cmd = _build_yq_command(binary_path, expression, input_file, input_format, output_format, in_place, null_input)
+    cmd = _build_yq_command(
+        binary_path,
+        expression,
+        input_file,
+        input_format,
+        output_format,
+        in_place,
+        null_input,
+    )
 
     # Execute command
     result = _run_yq_subprocess(cmd, input_data)
@@ -558,12 +597,18 @@ def execute_yq(
     # Check for errors
     if result.returncode != 0:
         error_msg = parse_yq_error(stderr)
-        raise YQExecutionError(f"yq command failed: {error_msg}", stderr=stderr, returncode=result.returncode)
+        raise YQExecutionError(
+            f"yq command failed: {error_msg}",
+            stderr=stderr,
+            returncode=result.returncode,
+        )
 
     # Parse JSON output if applicable
     parsed_data, stderr = _parse_json_output(stdout, stderr, output_format)
 
-    return YQResult(stdout=stdout, stderr=stderr, returncode=result.returncode, data=parsed_data)
+    return YQResult(
+        stdout=stdout, stderr=stderr, returncode=result.returncode, data=parsed_data
+    )
 
 
 def validate_yq_binary() -> tuple[bool, str]:
@@ -584,15 +629,20 @@ def validate_yq_binary() -> tuple[bool, str]:
             return False, f"Binary at {binary_path} is not executable"
 
         # Try to run version command
-        result = subprocess.run([str(binary_path), "--version"], capture_output=True, check=False, timeout=5)
+        result = subprocess.run(
+            [str(binary_path), "--version"], capture_output=True, check=False, timeout=5
+        )
 
         if result.returncode != 0:  # pragma: no cover
             return False, f"Binary failed to execute: {result.stderr.decode('utf-8')}"
-        else:
-            version = result.stdout.decode("utf-8").strip()
-            return True, f"yq binary found and working: {version}"
-
     except YQBinaryNotFoundError as e:  # pragma: no cover
         return False, str(e)
-    except Exception as e:  # pragma: no cover
-        return False, f"Unexpected error validating yq binary: {e}"
+    except (
+        OSError,
+        subprocess.SubprocessError,
+        subprocess.TimeoutExpired,
+    ) as e:  # pragma: no cover
+        return False, f"Error validating yq binary: {e}"
+    else:
+        version = result.stdout.decode("utf-8").strip()
+        return True, f"yq binary found and working: {version}"

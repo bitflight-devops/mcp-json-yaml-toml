@@ -30,7 +30,9 @@ def extract_text_response(result: CallToolResult) -> dict[str, Any]:
         AssertionError: If content is not TextContent
     """
     content = result.content[0]
-    assert isinstance(content, TextContent), f"Expected TextContent, got {type(content)}"
+    assert isinstance(content, TextContent), (
+        f"Expected TextContent, got {type(content)}"
+    )
     parsed: dict[str, Any] = json.loads(content.text)
     return parsed
 
@@ -56,7 +58,8 @@ async def test_data_query_json(client: Client[Any], tmp_path: Path) -> None:
 
     # Execute
     result = await client.call_tool(
-        "data_query", arguments={"file_path": str(test_file), "expression": ".users[0].name"}
+        "data_query",
+        arguments={"file_path": str(test_file), "expression": ".users[0].name"},
     )
 
     # Parse response
@@ -78,7 +81,12 @@ async def test_data_set_json(client: Client[Any], tmp_path: Path) -> None:
     # Execute
     result = await client.call_tool(
         "data",
-        arguments={"file_path": str(test_file), "operation": "set", "key_path": "settings.theme", "value": '"dark"'},
+        arguments={
+            "file_path": str(test_file),
+            "operation": "set",
+            "key_path": "settings.theme",
+            "value": '"dark"',
+        },
     )
 
     # Verify response
@@ -101,7 +109,12 @@ async def test_data_delete_json(client: Client[Any], tmp_path: Path) -> None:
 
     # Execute
     result = await client.call_tool(
-        "data", arguments={"file_path": str(test_file), "operation": "delete", "key_path": "temp"}
+        "data",
+        arguments={
+            "file_path": str(test_file),
+            "operation": "delete",
+            "key_path": "temp",
+        },
     )
 
     # Verify
@@ -118,7 +131,10 @@ async def test_data_delete_json(client: Client[Any], tmp_path: Path) -> None:
 async def test_error_handling_missing_file(client: Client[Any]) -> None:
     """Test error handling for missing file."""
     with pytest.raises(Exception) as excinfo:
-        await client.call_tool("data_query", arguments={"file_path": "/nonexistent/file.json", "expression": "."})
+        await client.call_tool(
+            "data_query",
+            arguments={"file_path": "/nonexistent/file.json", "expression": "."},
+        )
 
     # FastMCP client might raise the tool error directly or wrap it
     # We check if the error message contains "File not found"

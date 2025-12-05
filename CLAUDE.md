@@ -75,26 +75,31 @@ uv run mcp-json-yaml-toml
 The codebase follows a single-package structure under `packages/mcp_json_yaml_toml/`:
 
 1. **server.py** - Main MCP server implementation
+
    - Registers tools dynamically based on enabled formats
    - Implements pagination for large results (10KB pages)
    - Provides 5 main tools: `data`, `data_query`, `data_schema`, `data_convert`, `data_merge`
 
 2. **yq_wrapper.py** - Cross-platform yq binary wrapper
+
    - Auto-downloads missing binaries from GitHub releases
    - Handles platform/architecture detection (Linux/macOS/Windows, amd64/arm64)
    - Provides error handling and format conversions
 
 3. **schemas.py** - JSON Schema management
+
    - Integrates with SchemaStore.org for automatic schema discovery
    - Caches schemas locally (~/.cache/mcp-json-yaml-toml/schemas)
    - Checks IDE caches first to minimize network requests
 
 4. **yaml_optimizer.py** - YAML anchor/alias optimization
+
    - Automatically generates anchors for duplicate structures
    - Context-aware (only activates if file already uses anchors)
    - Uses ruamel.yaml for precise YAML manipulation
 
 5. **toml_utils.py** - TOML file operations
+
    - Uses tomlkit to preserve comments and formatting
    - Handles TOML read/write operations (yq can't write TOML)
 

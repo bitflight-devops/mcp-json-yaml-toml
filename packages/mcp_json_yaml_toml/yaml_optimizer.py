@@ -15,7 +15,9 @@ from ruamel.yaml import YAML
 # Configuration from environment variables
 YAML_ANCHOR_MIN_SIZE = int(os.getenv("YAML_ANCHOR_MIN_SIZE", "3"))
 YAML_ANCHOR_MIN_DUPLICATES = int(os.getenv("YAML_ANCHOR_MIN_DUPLICATES", "2"))
-YAML_ANCHOR_OPTIMIZATION = os.getenv("YAML_ANCHOR_OPTIMIZATION", "true").lower() == "true"
+YAML_ANCHOR_OPTIMIZATION = (
+    os.getenv("YAML_ANCHOR_OPTIMIZATION", "true").lower() == "true"
+)
 
 
 def _compute_structure_hash(value: Any) -> str | None:
@@ -161,7 +163,7 @@ def assign_anchors(duplicates: dict[str, list[tuple[str, Any]]]) -> dict[str, st
     path_to_anchor: dict[str, str] = {}
     used_names: set[str] = set()
 
-    for _struct_hash, occurrences in duplicates.items():
+    for occurrences in duplicates.values():
         # Get anchor name from first occurrence's path
         first_path, _ = occurrences[0]
 
@@ -186,7 +188,9 @@ def assign_anchors(duplicates: dict[str, list[tuple[str, Any]]]) -> dict[str, st
     return path_to_anchor
 
 
-def _replace_duplicates_recursive(obj: Any, hash_to_shared: dict[str, Any], current_path: str = "") -> Any:
+def _replace_duplicates_recursive(
+    obj: Any, hash_to_shared: dict[str, Any], current_path: str = ""
+) -> Any:
     """Recursively replace duplicate structures with shared objects.
 
     Args:
@@ -209,13 +213,17 @@ def _replace_duplicates_recursive(obj: Any, hash_to_shared: dict[str, Any], curr
         result: dict[Any, Any] = {}
         for key, value in obj.items():
             child_path = f"{current_path}.{key}" if current_path else key
-            result[key] = _replace_duplicates_recursive(value, hash_to_shared, child_path)
+            result[key] = _replace_duplicates_recursive(
+                value, hash_to_shared, child_path
+            )
         return result
     if isinstance(obj, list):
         result_list: list[Any] = []
         for i, item in enumerate(obj):
             child_path = f"{current_path}[{i}]"
-            result_list.append(_replace_duplicates_recursive(item, hash_to_shared, child_path))
+            result_list.append(
+                _replace_duplicates_recursive(item, hash_to_shared, child_path)
+            )
         return result_list
     return obj
 
@@ -255,7 +263,9 @@ def _build_shared_objects(
     return hash_to_shared, shared_objects_map
 
 
-def _create_shared_objects(data: Any, duplicates: dict[str, list[tuple[str, Any]]]) -> tuple[Any, dict[str, Any]]:
+def _create_shared_objects(
+    data: Any, duplicates: dict[str, list[tuple[str, Any]]]
+) -> tuple[Any, dict[str, Any]]:
     """Create shared Python objects for duplicate structures.
 
     This is the key to making ruamel.yaml generate anchors: we need to use
@@ -273,7 +283,9 @@ def _create_shared_objects(data: Any, duplicates: dict[str, list[tuple[str, Any]
     path_to_anchor = assign_anchors(duplicates)
 
     # Build shared objects for each duplicate group
-    hash_to_shared, shared_objects_map = _build_shared_objects(duplicates, path_to_anchor)
+    hash_to_shared, shared_objects_map = _build_shared_objects(
+        duplicates, path_to_anchor
+    )
 
     # Traverse the data and replace duplicates with shared objects
     modified_data = _replace_duplicates_recursive(data, hash_to_shared)
@@ -312,9 +324,7 @@ def optimize_yaml(data: Any) -> str | None:
 
     stream = StringIO()
     yaml.dump(modified_data, stream)
-    result = stream.getvalue()
-
-    return result
+    return stream.getvalue()
 
 
 def optimize_yaml_file(data: Any) -> str | None:
@@ -345,9 +355,11 @@ def get_optimization_stats(data: Any) -> dict[str, Any]:
     duplicates = find_duplicates(data)
     path_to_anchor = assign_anchors(duplicates)
 
-    stats = {
+    return {
         "duplicates_found": len(duplicates),
-        "total_occurrences": sum(len(occurrences) for occurrences in duplicates.values()),
+        "total_occurrences": sum(
+            len(occurrences) for occurrences in duplicates.values()
+        ),
         "anchor_names": list(path_to_anchor.values()),
         "duplicate_groups": [
             {
@@ -359,5 +371,3 @@ def get_optimization_stats(data: Any) -> dict[str, Any]:
             for occurrences in duplicates.values()
         ],
     }
-
-    return stats

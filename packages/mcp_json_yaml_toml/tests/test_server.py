@@ -118,7 +118,9 @@ class TestDataQuery:
         with pytest.raises(ToolError, match="Query failed"):
             data_query_fn(str(sample_json_config), ".bad[")
 
-    def test_data_query_disabled_format(self, sample_json_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_data_query_disabled_format(
+        self, sample_json_config: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test data_query raises error for disabled format.
 
         Tests: Format filtering enforcement
@@ -164,7 +166,9 @@ class TestData:
         """
         # Arrange - config with nested structure
         # Act - get nested key
-        result = data_fn(str(sample_json_config), operation="get", key_path="database.port")
+        result = data_fn(
+            str(sample_json_config), operation="get", key_path="database.port"
+        )
 
         # Assert - returns nested value
         assert result["success"] is True
@@ -180,7 +184,9 @@ class TestData:
         """
         # Arrange - config with array
         # Act - get array element
-        result = data_fn(str(sample_json_config), operation="get", key_path="servers[1]")
+        result = data_fn(
+            str(sample_json_config), operation="get", key_path="servers[1]"
+        )
 
         # Assert - returns element
         assert result["success"] is True
@@ -196,7 +202,12 @@ class TestData:
         """
         # Arrange - sample config
         # Act - get structure
-        result = data_fn(str(sample_json_config), operation="get", return_type="keys", key_path="database")
+        result = data_fn(
+            str(sample_json_config),
+            operation="get",
+            return_type="keys",
+            key_path="database",
+        )
 
         # Assert - returns structure summary
         assert result["success"] is True
@@ -204,7 +215,9 @@ class TestData:
         assert "port" in result["result"]
 
     @pytest.mark.integration
-    def test_data_get_schema(self, sample_json_config: Path, sample_json_schema: Path, tmp_path: Path) -> None:
+    def test_data_get_schema(
+        self, sample_json_config: Path, sample_json_schema: Path, tmp_path: Path
+    ) -> None:
         """Test data get retrieves schema.
 
         Tests: Schema retrieval
@@ -214,8 +227,8 @@ class TestData:
         # Arrange - config with schema
         config_path = tmp_path / "app.json"
         schema_path = tmp_path / "app.schema.json"
-        config_path.write_text(sample_json_config.read_text())
-        schema_path.write_text(sample_json_schema.read_text())
+        config_path.write_text(sample_json_config.read_text(encoding="utf-8"))
+        schema_path.write_text(sample_json_schema.read_text(encoding="utf-8"))
 
         # Act - get schema
         result = data_fn(str(config_path), operation="get", data_type="schema")
@@ -227,7 +240,9 @@ class TestData:
     # --- SET Operations ---
 
     @pytest.mark.integration
-    def test_data_set_simple_value(self, sample_json_config: Path, tmp_path: Path) -> None:
+    def test_data_set_simple_value(
+        self, sample_json_config: Path, tmp_path: Path
+    ) -> None:
         """Test data set modifies value.
 
         Tests: Set operation
@@ -236,10 +251,12 @@ class TestData:
         """
         # Arrange - create temp copy
         temp_config = tmp_path / "test_config.json"
-        temp_config.write_text(sample_json_config.read_text())
+        temp_config.write_text(sample_json_config.read_text(encoding="utf-8"))
 
         # Act - set value
-        result = data_fn(str(temp_config), operation="set", key_path="name", value='"new-name"')
+        result = data_fn(
+            str(temp_config), operation="set", key_path="name", value='"new-name"'
+        )
 
         # Assert - file modified
         assert result["success"] is True
@@ -250,7 +267,9 @@ class TestData:
         assert modified_data["name"] == "new-name"
 
     @pytest.mark.integration
-    def test_data_set_nested_value(self, sample_json_config: Path, tmp_path: Path) -> None:
+    def test_data_set_nested_value(
+        self, sample_json_config: Path, tmp_path: Path
+    ) -> None:
         """Test data set modifies nested value.
 
         Tests: Nested value modification
@@ -259,10 +278,12 @@ class TestData:
         """
         # Arrange - create temp copy
         temp_config = tmp_path / "test_config.json"
-        temp_config.write_text(sample_json_config.read_text())
+        temp_config.write_text(sample_json_config.read_text(encoding="utf-8"))
 
         # Act - set nested value
-        result = data_fn(str(temp_config), operation="set", key_path="database.port", value="3306")
+        result = data_fn(
+            str(temp_config), operation="set", key_path="database.port", value="3306"
+        )
 
         # Assert - file modified
         assert result["success"] is True
@@ -282,10 +303,12 @@ class TestData:
         """
         # Arrange - create temp copy
         temp_config = tmp_path / "temp_config.json"
-        temp_config.write_text(sample_json_config.read_text())
+        temp_config.write_text(sample_json_config.read_text(encoding="utf-8"))
 
         # Act - set value in place
-        result = data_fn(str(temp_config), operation="set", key_path="name", value='"modified"')
+        result = data_fn(
+            str(temp_config), operation="set", key_path="name", value='"modified"'
+        )
 
         # Assert - file modified
         assert result["success"] is True
@@ -296,7 +319,9 @@ class TestData:
     # --- DELETE Operations ---
 
     @pytest.mark.integration
-    def test_data_delete_simple_key(self, sample_json_config: Path, tmp_path: Path) -> None:
+    def test_data_delete_simple_key(
+        self, sample_json_config: Path, tmp_path: Path
+    ) -> None:
         """Test data delete removes simple key.
 
         Tests: Simple key deletion
@@ -305,7 +330,7 @@ class TestData:
         """
         # Arrange - create temp copy
         temp_config = tmp_path / "test_config.json"
-        temp_config.write_text(sample_json_config.read_text())
+        temp_config.write_text(sample_json_config.read_text(encoding="utf-8"))
 
         # Act - delete key
         result = data_fn(str(temp_config), operation="delete", key_path="version")
@@ -320,7 +345,9 @@ class TestData:
         assert "name" in modified_data  # Other keys preserved
 
     @pytest.mark.integration
-    def test_data_delete_in_place(self, sample_json_config: Path, tmp_path: Path) -> None:
+    def test_data_delete_in_place(
+        self, sample_json_config: Path, tmp_path: Path
+    ) -> None:
         """Test data delete modifies file in place.
 
         Tests: In-place deletion
@@ -329,7 +356,7 @@ class TestData:
         """
         # Arrange - create temp copy
         temp_config = tmp_path / "temp_config.json"
-        temp_config.write_text(sample_json_config.read_text())
+        temp_config.write_text(sample_json_config.read_text(encoding="utf-8"))
 
         # Act - delete in place
         result = data_fn(str(temp_config), operation="delete", key_path="version")
@@ -362,7 +389,9 @@ class TestDataSchema:
         assert "Syntax is valid" in result["syntax_message"]
 
     @pytest.mark.integration
-    def test_data_schema_validate_invalid_syntax(self, invalid_json_config: Path) -> None:
+    def test_data_schema_validate_invalid_syntax(
+        self, invalid_json_config: Path
+    ) -> None:
         """Test data_schema validate fails for invalid syntax.
 
         Tests: Invalid syntax detection
@@ -379,7 +408,9 @@ class TestDataSchema:
         assert "Syntax error" in result["syntax_message"]
 
     @pytest.mark.integration
-    def test_data_schema_validate_with_schema_success(self, sample_json_config: Path, sample_json_schema: Path) -> None:
+    def test_data_schema_validate_with_schema_success(
+        self, sample_json_config: Path, sample_json_schema: Path
+    ) -> None:
         """Test data_schema validate with matching schema.
 
         Tests: Schema validation success
@@ -389,7 +420,9 @@ class TestDataSchema:
         # Arrange - valid config and matching schema
         # Act - validate with schema
         result = data_schema_fn(
-            action="validate", file_path=str(sample_json_config), schema_path=str(sample_json_schema)
+            action="validate",
+            file_path=str(sample_json_config),
+            schema_path=str(sample_json_schema),
         )
 
         # Assert - passes schema validation
@@ -444,7 +477,9 @@ class TestDataSchema:
         """
         # Arrange
         # Act - add catalog
-        result = data_schema_fn(action="add_catalog", name="test", uri="http://example.com/catalog.json")
+        result = data_schema_fn(
+            action="add_catalog", name="test", uri="http://example.com/catalog.json"
+        )
 
         # Assert - added
         assert result["success"] is True
@@ -509,7 +544,9 @@ class TestDataConvert:
         assert converted_data["name"] == "test-app"
 
     @pytest.mark.integration
-    def test_data_convert_json_to_toml_not_supported(self, sample_json_config: Path) -> None:
+    def test_data_convert_json_to_toml_not_supported(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data_convert rejects JSON to TOML conversion.
 
         Tests: JSON to TOML conversion rejection
@@ -526,7 +563,9 @@ class TestDataConvert:
         assert "TOML" in error_message
 
     @pytest.mark.integration
-    def test_data_convert_with_output_file(self, sample_json_config: Path, tmp_path: Path) -> None:
+    def test_data_convert_with_output_file(
+        self, sample_json_config: Path, tmp_path: Path
+    ) -> None:
         """Test data_convert writes to output file.
 
         Tests: File output for conversion
@@ -537,7 +576,9 @@ class TestDataConvert:
         output_file = tmp_path / "output.yaml"
 
         # Act - convert with output file
-        result = data_convert_fn(str(sample_json_config), "yaml", output_file=str(output_file))
+        result = data_convert_fn(
+            str(sample_json_config), "yaml", output_file=str(output_file)
+        )
 
         # Assert - file written
         assert result["success"] is True
@@ -577,7 +618,9 @@ class TestDataMerge:
     """Test data_merge tool."""
 
     @pytest.mark.integration
-    def test_data_merge_two_json_files(self, sample_json_config: Path, tmp_path: Path) -> None:
+    def test_data_merge_two_json_files(
+        self, sample_json_config: Path, tmp_path: Path
+    ) -> None:
         """Test data_merge merges two JSON files.
 
         Tests: Basic merge operation
@@ -624,7 +667,9 @@ class TestDataMerge:
         assert merged_data["database"]["user"] == "admin"  # Added
 
     @pytest.mark.integration
-    def test_data_merge_different_formats(self, sample_json_config: Path, sample_yaml_config: Path) -> None:
+    def test_data_merge_different_formats(
+        self, sample_json_config: Path, sample_yaml_config: Path
+    ) -> None:
         """Test data_merge merges different formats.
 
         Tests: Cross-format merging
@@ -633,7 +678,9 @@ class TestDataMerge:
         """
         # Arrange - JSON and YAML configs
         # Act - merge different formats
-        result = data_merge_fn(str(sample_json_config), str(sample_yaml_config), output_format="json")
+        result = data_merge_fn(
+            str(sample_json_config), str(sample_yaml_config), output_format="json"
+        )
 
         # Assert - merged successfully
         assert result["success"] is True
@@ -694,7 +741,7 @@ class TestPrompts:
         """
         from typing import cast
 
-        prompt = cast(str, server.explain_config.fn("config.json"))
+        prompt = cast("str", server.explain_config.fn("config.json"))
         assert "analyze and explain" in prompt
         assert "config.json" in prompt
 
@@ -705,7 +752,7 @@ class TestPrompts:
         """
         from typing import cast
 
-        prompt = cast(str, server.suggest_improvements.fn("config.yaml"))
+        prompt = cast("str", server.suggest_improvements.fn("config.yaml"))
         assert "suggest improvements" in prompt
         assert "config.yaml" in prompt
 
@@ -716,6 +763,6 @@ class TestPrompts:
         """
         from typing import cast
 
-        prompt = cast(str, server.convert_to_schema.fn("data.toml"))
+        prompt = cast("str", server.convert_to_schema.fn("data.toml"))
         assert "generate a JSON schema" in prompt
         assert "data.toml" in prompt

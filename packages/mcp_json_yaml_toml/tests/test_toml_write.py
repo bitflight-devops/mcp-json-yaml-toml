@@ -22,7 +22,10 @@ port = 5432
 
         # Add a new key
         result = server.data.fn(
-            file_path=str(test_file), operation="set", key_path="database.username", value='"admin"'
+            file_path=str(test_file),
+            operation="set",
+            key_path="database.username",
+            value='"admin"',
         )
 
         # Should succeed
@@ -68,7 +71,9 @@ username = "admin"
 """)
 
         # Delete a key
-        result = server.data.fn(file_path=str(test_file), operation="delete", key_path="database.username")
+        result = server.data.fn(
+            file_path=str(test_file), operation="delete", key_path="database.username"
+        )
 
         # Should succeed
         assert result["success"] is True

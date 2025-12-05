@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Self
 
 
 @dataclass
@@ -97,12 +97,21 @@ class MCPClient:
         Raises:
             RuntimeError: If process not started or communication fails
         """
-        if self.process is None or self.process.stdin is None or self.process.stdout is None:
+        if (
+            self.process is None
+            or self.process.stdin is None
+            or self.process.stdout is None
+        ):
             error_msg = "MCP client not started. Call start() first."
             raise RuntimeError(error_msg)
 
         self._request_id += 1
-        request = {"jsonrpc": "2.0", "method": method, "params": params, "id": self._request_id}
+        request = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": self._request_id,
+        }
 
         # Send request
         request_json = json.dumps(request)
@@ -118,7 +127,9 @@ class MCPClient:
         result: dict[str, Any] = json.loads(response_line)
         return result
 
-    def _send_notification(self, method: str, params: dict[str, Any] | None = None) -> None:
+    def _send_notification(
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> None:
         """Send a JSON-RPC notification (no response expected).
 
         Args:
@@ -157,7 +168,9 @@ class MCPClient:
             error_msg = "MCP client not initialized. Call start() first."
             raise RuntimeError(error_msg)
 
-        response = self._send_request("tools/call", {"name": tool_name, "arguments": arguments})
+        response = self._send_request(
+            "tools/call", {"name": tool_name, "arguments": arguments}
+        )
 
         if "error" in response:
             error = response["error"]
@@ -196,12 +209,17 @@ class MCPClient:
             self.process = None
         self._initialized = False
 
-    def __enter__(self) -> MCPClient:
+    def __enter__(self) -> Self:
         """Context manager entry - starts the client."""
         self.start()
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
         """Context manager exit - stops the client."""
         self.stop()
 

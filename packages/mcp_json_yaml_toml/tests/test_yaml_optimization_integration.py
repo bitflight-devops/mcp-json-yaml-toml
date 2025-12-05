@@ -52,7 +52,7 @@ services:
         # Create a YAML file that already has anchors
         test_file = tmp_path / ".gitlab-ci.yml"
         test_file.write_text("""default: &default
-  image: node:18
+  image: node:22
   cache:
     paths:
       - node_modules/
@@ -69,7 +69,7 @@ job1:
             file_path=str(test_file),
             operation="set",
             key_path="job2",
-            value='{"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m", "script": ["npm build"]}',
+            value='{"image": "node:22", "cache": {"paths": ["node_modules/"]}, "timeout": "30m", "script": ["npm build"]}',
         )
 
         # Should succeed
@@ -87,11 +87,14 @@ job1:
         """Test that JSON files are not optimized."""
         # Create a JSON file
         test_file = tmp_path / "config.json"
-        test_file.write_text('{"job1": {"image": "node:18"}}')
+        test_file.write_text('{"job1": {"image": "node:22"}}')
 
         # Modify it
         result = server.data.fn(
-            file_path=str(test_file), operation="set", key_path="job2", value='{"image": "node:18"}'
+            file_path=str(test_file),
+            operation="set",
+            key_path="job2",
+            value='{"image": "node:22"}',
         )
 
         # Should succeed

@@ -11,13 +11,13 @@ for reading and editing JSON configuration files, including:
 """
 
 import json
-import os
 import subprocess
 import time
 from pathlib import Path
 from typing import Any
 
 import tiktoken
+
 from mcp_json_yaml_toml.yq_wrapper import execute_yq
 
 # Setup
@@ -33,13 +33,16 @@ def setup_test_file() -> dict[str, Any]:
                 "id": i,
                 "name": f"User {i}",
                 "email": f"user{i}@example.com",
-                "preferences": {"theme": "dark" if i % 2 == 0 else "light", "notifications": True},
+                "preferences": {
+                    "theme": "dark" if i % 2 == 0 else "light",
+                    "notifications": True,
+                },
             }
             for i in range(NUM_ITEMS)
         ],
         "settings": {"version": "1.0.0", "maintenance": False},
     }
-    with open(TEST_FILE, "w") as f:
+    with Path(TEST_FILE).open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     return data
 
@@ -53,7 +56,7 @@ def count_tokens(text: str) -> int:
 def benchmark_raw_read() -> tuple[int, float]:
     """Benchmark reading an entire file and counting its tokens."""
     start = time.time()
-    with open(TEST_FILE) as f:
+    with Path(TEST_FILE).open(encoding="utf-8") as f:
         content = f.read()
     duration = time.time() - start
     tokens = count_tokens(content)
@@ -66,7 +69,7 @@ def benchmark_smart_raw_read() -> tuple[int, float]:
 
     # 1. Grep to find line number
     grep_cmd = ["grep", "-n", "version", str(TEST_FILE)]
-    grep_result = subprocess.run(grep_cmd, capture_output=True, text=True)
+    grep_result = subprocess.run(grep_cmd, check=False, capture_output=True, text=True)
 
     if not grep_result.stdout:
         return 0, time.time() - start
@@ -82,7 +85,7 @@ def benchmark_smart_raw_read() -> tuple[int, float]:
     start_line = max(1, line_num - 5)
     end_line = line_num + 5
 
-    with open(TEST_FILE) as f:
+    with Path(TEST_FILE).open(encoding="utf-8") as f:
         lines = f.readlines()
         # Adjust for 0-indexing
         context_lines = lines[start_line - 1 : end_line]
@@ -92,7 +95,9 @@ def benchmark_smart_raw_read() -> tuple[int, float]:
 
     # Tokens:
     # 1. User asking to grep (approx) + Grep output
-    grep_tokens = count_tokens(f'grep -n "version" {TEST_FILE}') + count_tokens(grep_result.stdout)
+    grep_tokens = count_tokens(f'grep -n "version" {TEST_FILE}') + count_tokens(
+        grep_result.stdout
+    )
     # 2. User asking to read file range + File content
     read_tokens = count_tokens(
         f'read_file(path="{TEST_FILE}", start_line={start_line}, end_line={end_line})'
@@ -106,13 +111,13 @@ def benchmark_raw_edit() -> tuple[int, float]:
     tokens_read, _ = benchmark_raw_read()
 
     # Simulate modification
-    with open(TEST_FILE) as f:
+    with Path(TEST_FILE).open(encoding="utf-8") as f:
         data = json.load(f)
     data["settings"]["maintenance"] = True
 
     start = time.time()
     new_content = json.dumps(data, indent=2)
-    with open(TEST_FILE, "w") as f:
+    with Path(TEST_FILE).open("w", encoding="utf-8") as f:
         f.write(new_content)
     duration = time.time() - start
 
@@ -129,7 +134,12 @@ def benchmark_smart_raw_edit_sed() -> tuple[int, float]:
 
     # Simulate agent constructing a sed command
     # sed -i 's/"maintenance": false/"maintenance": true/' file
-    sed_cmd = ["sed", "-i", 's/"maintenance": false/"maintenance": true/', str(TEST_FILE)]
+    sed_cmd = [
+        "sed",
+        "-i",
+        's/"maintenance": false/"maintenance": true/',
+        str(TEST_FILE),
+    ]
 
     subprocess.run(sed_cmd, check=True)
     duration = time.time() - start
@@ -147,7 +157,12 @@ def benchmark_mcp_read_specific() -> tuple[int, float]:
     """Benchmark reading a specific value using MCP data_query tool."""
     start = time.time()
     # Simulate data_query tool logic
-    result = execute_yq(".settings.version", input_file=TEST_FILE, input_format="json", output_format="json")
+    result = execute_yq(
+        ".settings.version",
+        input_file=TEST_FILE,
+        input_format="json",
+        output_format="json",
+    )
     duration = time.time() - start
 
     # Input tokens: Tool call arguments (approx)
@@ -156,7 +171,12 @@ def benchmark_mcp_read_specific() -> tuple[int, float]:
 
     # Output tokens: Result
     # The tool wraps the result in a dict structure
-    output_data = {"success": True, "result": result.data, "format": "json", "file": str(TEST_FILE)}
+    output_data = {
+        "success": True,
+        "result": result.data,
+        "format": "json",
+        "file": str(TEST_FILE),
+    }
     output_str = json.dumps(output_data)
     output_tokens = count_tokens(output_str)
 
@@ -169,14 +189,16 @@ def benchmark_mcp_edit_specific() -> tuple[int, float]:
     # Simulate data tool logic for set operation
     # Note: yq expression for setting boolean is just assignment
     execute_yq(
-        ".settings.maintenance = true", input_file=TEST_FILE, input_format="json", output_format="json", in_place=True
+        ".settings.maintenance = true",
+        input_file=TEST_FILE,
+        input_format="json",
+        output_format="json",
+        in_place=True,
     )
     duration = time.time() - start
 
     # Input tokens
-    input_str = (
-        f'data(file_path="{TEST_FILE}", operation="set", key_path="settings.maintenance", value="true", in_place=True)'
-    )
+    input_str = f'data(file_path="{TEST_FILE}", operation="set", key_path="settings.maintenance", value="true", in_place=True)'
     input_tokens = count_tokens(input_str)
 
     # Output tokens
@@ -197,18 +219,24 @@ def main() -> None:
     print("Setting up test file...")
     setup_test_file()
 
-    print(f"File size: {os.path.getsize(TEST_FILE)} bytes")
+    print(f"File size: {Path(TEST_FILE).stat().st_size} bytes")
     print("-" * 80)
-    print(f"{'Operation':<35} | {'Tokens':<10} | {'Ratio (vs Raw)':<15} | {'Risk/Notes'}")
+    print(
+        f"{'Operation':<35} | {'Tokens':<10} | {'Ratio (vs Raw)':<15} | {'Risk/Notes'}"
+    )
     print("-" * 80)
 
     # Raw Read
     raw_read_tokens, _ = benchmark_raw_read()
-    print(f"{'Raw Read (Full File)':<35} | {raw_read_tokens:<10} | {'1.0x':<15} | {'Baseline'}")
+    print(
+        f"{'Raw Read (Full File)':<35} | {raw_read_tokens:<10} | {'1.0x':<15} | {'Baseline'}"
+    )
 
     # Smart Raw Read
     smart_read_tokens, _ = benchmark_smart_raw_read()
-    ratio_smart_read = raw_read_tokens / smart_read_tokens if smart_read_tokens > 0 else 0
+    ratio_smart_read = (
+        raw_read_tokens / smart_read_tokens if smart_read_tokens > 0 else 0
+    )
     print(
         f"{'Smart Raw Read (Grep + Context)':<35} | {smart_read_tokens:<10} | {f'{ratio_smart_read:.1f}x cheaper':<15} | {'Multi-step'}"
     )
@@ -224,11 +252,15 @@ def main() -> None:
 
     # Raw Edit
     raw_edit_tokens, _ = benchmark_raw_edit()
-    print(f"{'Raw Edit (Full Rewrite)':<35} | {raw_edit_tokens:<10} | {'1.0x':<15} | {'High Token Cost'}")
+    print(
+        f"{'Raw Edit (Full Rewrite)':<35} | {raw_edit_tokens:<10} | {'1.0x':<15} | {'High Token Cost'}"
+    )
 
     # Smart Raw Edit (Sed)
     smart_edit_tokens, _ = benchmark_smart_raw_edit_sed()
-    ratio_smart_edit = raw_edit_tokens / smart_edit_tokens if smart_edit_tokens > 0 else 0
+    ratio_smart_edit = (
+        raw_edit_tokens / smart_edit_tokens if smart_edit_tokens > 0 else 0
+    )
     print(
         f"{'Smart Raw Edit (Sed)':<35} | {smart_edit_tokens:<10} | {f'{ratio_smart_edit:.1f}x cheaper':<15} | {'High Risk (Regex)'}"
     )
@@ -243,8 +275,8 @@ def main() -> None:
     print("-" * 80)
 
     # Cleanup
-    if os.path.exists(TEST_FILE):
-        os.remove(TEST_FILE)
+    if Path(TEST_FILE).exists():
+        Path(TEST_FILE).unlink()
 
 
 if __name__ == "__main__":

@@ -8,14 +8,17 @@ for better maintainability.
 from __future__ import annotations
 
 import json
-from collections.abc import Generator
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from pytest_mock import MockerFixture
 
 from mcp_json_yaml_toml.tests.mcp_protocol_client import MCPClient
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from pytest_mock import MockerFixture
 
 # ==============================================================================
 # Test Configuration
@@ -46,7 +49,11 @@ def sample_json_config(tmp_path: Path) -> Path:
     config_data = {
         "name": "test-app",
         "version": "1.0.0",
-        "database": {"host": "localhost", "port": 5432, "credentials": {"username": "admin", "password": "secret"}},
+        "database": {
+            "host": "localhost",
+            "port": 5432,
+            "credentials": {"username": "admin", "password": "secret"},
+        },
         "features": {"enabled": True, "beta": False},
         "servers": ["server1.example.com", "server2.example.com"],
     }
@@ -248,7 +255,9 @@ def invalid_yaml_config(tmp_path: Path) -> Path:
         Path to created invalid YAML file
     """
     config_path = tmp_path / "invalid.yaml"
-    config_path.write_text("name: test\n  bad_indent: value\nmore: [unclosed", encoding="utf-8")
+    config_path.write_text(
+        "name: test\n  bad_indent: value\nmore: [unclosed", encoding="utf-8"
+    )
     return config_path
 
 
@@ -359,10 +368,18 @@ def pytest_configure(config: Any) -> None:
     Args:
         config: Pytest config object
     """
-    config.addinivalue_line("markers", "unit: marks unit tests with mocked dependencies")
-    config.addinivalue_line("markers", "integration: marks integration tests with real yq binary")
-    config.addinivalue_line("markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')")
-    config.addinivalue_line("markers", "protocol: marks tests that use actual MCP JSON-RPC protocol")
+    config.addinivalue_line(
+        "markers", "unit: marks unit tests with mocked dependencies"
+    )
+    config.addinivalue_line(
+        "markers", "integration: marks integration tests with real yq binary"
+    )
+    config.addinivalue_line(
+        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+    )
+    config.addinivalue_line(
+        "markers", "protocol: marks tests that use actual MCP JSON-RPC protocol"
+    )
 
 
 # ==============================================================================
@@ -370,7 +387,7 @@ def pytest_configure(config: Any) -> None:
 # ==============================================================================
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def mcp_client() -> Generator[MCPClient, None, None]:
     """Provide an MCP client connected via JSON-RPC protocol.
 

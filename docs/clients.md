@@ -286,6 +286,7 @@ All clients support passing environment variables to customize behavior:
    ```
 
 2. **Verify Configuration Path**:
+
    - Ensure config file is in correct location
    - Check JSON syntax is valid
 

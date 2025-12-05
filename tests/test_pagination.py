@@ -2,15 +2,17 @@
 
 import base64
 import json
+from pathlib import Path
 
 import pytest
+
 from mcp_json_yaml_toml.server import _decode_cursor, _encode_cursor, _paginate_result
 
 
 class TestCursorEncoding:
     """Test cursor encoding and decoding."""
 
-    def test_cursor_roundtrip(self):
+    def test_cursor_roundtrip(self) -> None:
         """Test that cursor encoding/decoding is reversible."""
         test_offsets = [0, 100, 1000, 10000, 50000, 100000]
 
@@ -19,7 +21,7 @@ class TestCursorEncoding:
             decoded = _decode_cursor(cursor)
             assert decoded == offset, f"Roundtrip failed for offset {offset}"
 
-    def test_cursor_opaque(self):
+    def test_cursor_opaque(self) -> None:
         """Test that cursors are opaque (base64 encoded)."""
         cursor = _encode_cursor(12345)
 
@@ -33,7 +35,7 @@ class TestCursorEncoding:
         decoded = _decode_cursor(cursor)
         assert decoded == 12345
 
-    def test_invalid_cursor_rejected(self):
+    def test_invalid_cursor_rejected(self) -> None:
         """Test that invalid cursors raise ToolError."""
         from fastmcp.exceptions import ToolError
 
@@ -58,7 +60,9 @@ class TestCursorEncoding:
             _decode_cursor(bad_cursor)
 
         # Non-integer offset
-        bad_cursor = base64.b64encode(json.dumps({"offset": "string"}).encode()).decode()
+        bad_cursor = base64.b64encode(
+            json.dumps({"offset": "string"}).encode()
+        ).decode()
         with pytest.raises(ToolError):
             _decode_cursor(bad_cursor)
 
@@ -66,7 +70,7 @@ class TestCursorEncoding:
 class TestPaginationHelper:
     """Test the _paginate_result helper function."""
 
-    def test_small_data_no_pagination(self):
+    def test_small_data_no_pagination(self) -> None:
         """Test that data under 10k chars is not paginated."""
         small_data = "x" * 5000
 
@@ -76,7 +80,7 @@ class TestPaginationHelper:
         assert "nextCursor" not in result
         assert "advisory" not in result
 
-    def test_exact_boundary_no_pagination(self):
+    def test_exact_boundary_no_pagination(self) -> None:
         """Test that exactly 10k chars is not paginated."""
         exact_data = "y" * 10000
 
@@ -86,7 +90,7 @@ class TestPaginationHelper:
         assert "nextCursor" not in result
         assert "advisory" not in result
 
-    def test_over_boundary_paginates(self):
+    def test_over_boundary_paginates(self) -> None:
         """Test that data over 10k chars is paginated."""
         large_data = "z" * 10001
 
@@ -97,7 +101,7 @@ class TestPaginationHelper:
         # Only 2 pages, no advisory
         assert "advisory" not in result
 
-    def test_two_page_result(self):
+    def test_two_page_result(self) -> None:
         """Test navigation through a 2-page result."""
         data = "a" * 15000
 
@@ -113,7 +117,7 @@ class TestPaginationHelper:
         assert "nextCursor" not in page2
         assert page2["data"] != page1["data"]
 
-    def test_multi_page_advisory(self):
+    def test_multi_page_advisory(self) -> None:
         """Test that multi-page results (>2 pages) include advisory."""
         large_data = "b" * 25000  # 3 pages
 
@@ -125,7 +129,7 @@ class TestPaginationHelper:
         assert "keys" in result["advisory"]  # Suggests querying for keys
         assert "length" in result["advisory"]  # Suggests querying for counts
 
-    def test_many_pages_correct_count(self):
+    def test_many_pages_correct_count(self) -> None:
         """Test that advisory shows correct page count for many pages."""
         huge_data = "c" * 100000  # 10 pages
 
@@ -134,7 +138,7 @@ class TestPaginationHelper:
         assert "advisory" in result
         assert "10 pages" in result["advisory"]
 
-    def test_navigate_all_pages(self):
+    def test_navigate_all_pages(self) -> None:
         """Test navigating through all pages of a large result."""
         data = "d" * 35000  # 4 pages
 
@@ -158,7 +162,7 @@ class TestPaginationHelper:
         reconstructed = "".join(pages)
         assert reconstructed == data
 
-    def test_cursor_beyond_data_raises(self):
+    def test_cursor_beyond_data_raises(self) -> None:
         """Test that cursor offset beyond data size raises error."""
         from fastmcp.exceptions import ToolError
 
@@ -172,7 +176,7 @@ class TestPaginationHelper:
 class TestPaginationIntegration:
     """Integration tests with real file queries."""
 
-    def test_large_json_file_pagination(self, tmp_path):
+    def test_large_json_file_pagination(self, tmp_path: Path) -> None:
         """Test pagination with a large JSON configuration file."""
         # Create large test file
         test_data = {
@@ -204,7 +208,7 @@ class TestPaginationIntegration:
         assert len(page2["data"]) == 10000
         assert page2["data"] != page1["data"]
 
-    def test_small_json_no_pagination(self, tmp_path):
+    def test_small_json_no_pagination(self, tmp_path: Path) -> None:
         """Test that small JSON files don't get paginated."""
         small_data = {"name": "test", "value": 123, "items": [1, 2, 3]}
 
@@ -218,7 +222,7 @@ class TestPaginationIntegration:
         assert "nextCursor" not in result
         assert "advisory" not in result
 
-    def test_yaml_formatting_preserved(self):
+    def test_yaml_formatting_preserved(self) -> None:
         """Test that YAML formatted strings paginate correctly."""
         yaml_content = "items:\n"
         for i in range(500):
@@ -236,7 +240,7 @@ class TestPaginationIntegration:
 class TestBackwardCompatibility:
     """Test that pagination doesn't break existing behavior."""
 
-    def test_cursor_optional(self):
+    def test_cursor_optional(self) -> None:
         """Test that cursor parameter is optional (None by default)."""
         data = "x" * 5000
 
@@ -244,7 +248,7 @@ class TestBackwardCompatibility:
         result = _paginate_result(data, None)
         assert "data" in result
 
-    def test_small_results_unchanged(self):
+    def test_small_results_unchanged(self) -> None:
         """Test that small results are returned unchanged."""
         small_data = '{"test": "value"}'
 
@@ -261,21 +265,21 @@ class TestBackwardCompatibility:
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    def test_empty_string(self):
+    def test_empty_string(self) -> None:
         """Test pagination with empty string."""
         result = _paginate_result("", None)
 
         assert result["data"] == ""
         assert "nextCursor" not in result
 
-    def test_single_char(self):
+    def test_single_char(self) -> None:
         """Test pagination with single character."""
         result = _paginate_result("x", None)
 
         assert result["data"] == "x"
         assert "nextCursor" not in result
 
-    def test_cursor_at_exact_boundary(self):
+    def test_cursor_at_exact_boundary(self) -> None:
         """Test cursor at exactly 10k chars."""
         data = "a" * 20000
 
@@ -287,7 +291,7 @@ class TestEdgeCases:
         assert len(page2["data"]) == 10000
         assert "nextCursor" not in page2
 
-    def test_unicode_characters(self):
+    def test_unicode_characters(self) -> None:
         """Test pagination with unicode characters."""
         # Mix of ASCII and unicode
         data = "Hello 世界 " * 1000  # Should exceed 10k chars

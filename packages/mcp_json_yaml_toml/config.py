@@ -20,7 +20,11 @@ class ConfigFormat(StrEnum):
 
 
 # Default enabled formats
-DEFAULT_FORMATS: list[ConfigFormat] = [ConfigFormat.JSON, ConfigFormat.YAML, ConfigFormat.TOML]
+DEFAULT_FORMATS: list[ConfigFormat] = [
+    ConfigFormat.JSON,
+    ConfigFormat.YAML,
+    ConfigFormat.TOML,
+]
 
 
 def parse_enabled_formats() -> list[ConfigFormat]:
@@ -51,12 +55,11 @@ def parse_enabled_formats() -> list[ConfigFormat]:
     format_names = [name.strip().lower() for name in env_value.split(",")]
 
     # Validate and convert to ConfigFormat
-    enabled_formats: list[ConfigFormat] = []
     valid_format_names = {fmt.value for fmt in ConfigFormat}
 
-    for name in format_names:
-        if name in valid_format_names:
-            enabled_formats.append(ConfigFormat(name))
+    enabled_formats: list[ConfigFormat] = [
+        ConfigFormat(name) for name in format_names if name in valid_format_names
+    ]
 
     # Fall back to defaults if no valid formats found
     if not enabled_formats:
@@ -120,7 +123,9 @@ def validate_format(format_name: str) -> ConfigFormat:
         return ConfigFormat(normalized_name)
     except ValueError as e:
         valid_formats = ", ".join(fmt.value for fmt in ConfigFormat)
-        raise ValueError(f"Invalid format '{format_name}'. Valid formats: {valid_formats}") from e
+        raise ValueError(
+            f"Invalid format '{format_name}'. Valid formats: {valid_formats}"
+        ) from e
 
 
 def get_enabled_formats_str() -> str:

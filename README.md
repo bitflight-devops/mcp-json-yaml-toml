@@ -76,6 +76,7 @@ The next time the MCP server runs, `uvx` will download the latest version.
 ### Claude Desktop Configuration
 
 1. Open your Claude Desktop configuration file:
+
    - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 

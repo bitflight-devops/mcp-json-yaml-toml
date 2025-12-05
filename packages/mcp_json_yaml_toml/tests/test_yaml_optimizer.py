@@ -1,6 +1,11 @@
 """Tests for YAML optimizer module."""
 
-from mcp_json_yaml_toml.yaml_optimizer import assign_anchors, find_duplicates, get_optimization_stats, optimize_yaml
+from mcp_json_yaml_toml.yaml_optimizer import (
+    assign_anchors,
+    find_duplicates,
+    get_optimization_stats,
+    optimize_yaml,
+)
 
 
 class TestFindDuplicates:
@@ -9,8 +14,16 @@ class TestFindDuplicates:
     def test_find_duplicates_simple_dict(self) -> None:
         """Test finding duplicate dict structures."""
         data = {
-            "job1": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"},
-            "job2": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"},
+            "job1": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "timeout": "30m",
+            },
+            "job2": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "timeout": "30m",
+            },
             "job3": {"image": "python:3.11"},
         }
 
@@ -56,7 +69,7 @@ class TestFindDuplicates:
     def test_find_duplicates_single_occurrence(self) -> None:
         """Test that single occurrences are not flagged."""
         data = {
-            "job1": {"image": "node:18", "cache": {"paths": ["node_modules/"]}},
+            "job1": {"image": "node:22", "cache": {"paths": ["node_modules/"]}},
             "job2": {"image": "python:3.11", "cache": {"paths": ["dist/"]}},
         }
 
@@ -68,8 +81,16 @@ class TestFindDuplicates:
     def test_find_duplicates_list_structures(self) -> None:
         """Test finding duplicate list structures."""
         data = {
-            "workflow1": {"steps": ["checkout", "npm install", "npm test"], "timeout": "10m", "retry": 3},
-            "workflow2": {"steps": ["checkout", "npm install", "npm test"], "timeout": "10m", "retry": 3},
+            "workflow1": {
+                "steps": ["checkout", "npm install", "npm test"],
+                "timeout": "10m",
+                "retry": 3,
+            },
+            "workflow2": {
+                "steps": ["checkout", "npm install", "npm test"],
+                "timeout": "10m",
+                "retry": 3,
+            },
         }
 
         duplicates = find_duplicates(data)
@@ -83,7 +104,9 @@ class TestAssignAnchors:
 
     def test_assign_anchors_simple(self) -> None:
         """Test basic anchor assignment."""
-        duplicates = {"hash1": [("job1", {"image": "node:18"}), ("job2", {"image": "node:18"})]}
+        duplicates = {
+            "hash1": [("job1", {"image": "node:22"}), ("job2", {"image": "node:22"})]
+        }
 
         anchors = assign_anchors(duplicates)
 
@@ -93,7 +116,12 @@ class TestAssignAnchors:
 
     def test_assign_anchors_sanitization(self) -> None:
         """Test anchor name sanitization."""
-        duplicates = {"hash1": [("jobs.build-prod", {"image": "node:18"}), ("jobs.build-dev", {"image": "node:18"})]}
+        duplicates = {
+            "hash1": [
+                ("jobs.build-prod", {"image": "node:22"}),
+                ("jobs.build-dev", {"image": "node:22"}),
+            ]
+        }
 
         anchors = assign_anchors(duplicates)
 
@@ -122,9 +150,21 @@ class TestOptimizeYaml:
     def test_optimize_yaml_creates_anchors(self) -> None:
         """Test that optimization creates anchors and aliases."""
         data = {
-            "default_config": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"},
-            "job1": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"},
-            "job2": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"},
+            "default_config": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "timeout": "30m",
+            },
+            "job1": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "timeout": "30m",
+            },
+            "job2": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "timeout": "30m",
+            },
         }
 
         result = optimize_yaml(data)
@@ -139,7 +179,7 @@ class TestOptimizeYaml:
     def test_optimize_yaml_no_duplicates(self) -> None:
         """Test that optimization returns None when no duplicates found."""
         data = {
-            "job1": {"image": "node:18", "script": ["npm test"]},
+            "job1": {"image": "node:22", "script": ["npm test"]},
             "job2": {"image": "python:3.11", "script": ["pytest"]},
         }
 
@@ -151,9 +191,21 @@ class TestOptimizeYaml:
     def test_optimize_yaml_preserves_data(self) -> None:
         """Test that optimization preserves all data."""
         data = {
-            "config": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "env": {"NODE_ENV": "production"}},
-            "job1": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "env": {"NODE_ENV": "production"}},
-            "job2": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "env": {"NODE_ENV": "production"}},
+            "config": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "env": {"NODE_ENV": "production"},
+            },
+            "job1": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "env": {"NODE_ENV": "production"},
+            },
+            "job2": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "env": {"NODE_ENV": "production"},
+            },
         }
 
         result = optimize_yaml(data)
@@ -180,8 +232,16 @@ class TestGetOptimizationStats:
     def test_get_optimization_stats(self) -> None:
         """Test getting optimization statistics."""
         data = {
-            "job1": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"},
-            "job2": {"image": "node:18", "cache": {"paths": ["node_modules/"]}, "timeout": "30m"},
+            "job1": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "timeout": "30m",
+            },
+            "job2": {
+                "image": "node:22",
+                "cache": {"paths": ["node_modules/"]},
+                "timeout": "30m",
+            },
             "job3": {"image": "python:3.11"},
         }
 
