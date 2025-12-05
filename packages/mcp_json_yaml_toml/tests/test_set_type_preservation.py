@@ -445,7 +445,7 @@ class TestNumericTypePreservation:
         config_path = config_map[file_format]
 
         # Act - set a float value via MCP protocol
-        set_value_via_protocol(mcp_client, config_path, "float_value", "2.718")
+        set_value_via_protocol(mcp_client, config_path, "float_value", str(math.e))
 
         # Assert - verify actual file content
         actual_value = read_file_and_parse_value(config_path, "float_value")
