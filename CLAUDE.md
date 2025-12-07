@@ -189,15 +189,22 @@ uv run pytest --cov=packages/mcp_json_yaml_toml --cov-report=xml
 
 ### Test Organization
 
-Tests are located in `packages/mcp_json_yaml_toml/tests/`:
+Tests are located in `packages/mcp_json_yaml_toml/tests/`. Key test files include:
 
 - `test_server.py` - Main server and tool tests
 - `test_lmql_constraints.py` - LMQL constraint validation tests
 - `test_yq_wrapper.py` - yq binary wrapper tests
 - `test_config.py` - Configuration management tests
+- `test_schemas.py` - Schema discovery and validation tests
 - `test_yaml_optimizer.py` - YAML anchor optimization tests
+- `test_yaml_optimization_integration.py` - YAML optimization integration tests
+- `test_set_type_preservation.py` - Type preservation during set operations
+- `test_fastmcp_integration.py` - FastMCP framework integration tests
+- `test_no_anchor_files.py` - Tests for files without YAML anchors
 - `test_toml_*.py` - TOML-specific functionality tests
 - `conftest.py` - Shared pytest fixtures
+
+This list is representative; see the `tests/` directory for all test files.
 
 ---
 
