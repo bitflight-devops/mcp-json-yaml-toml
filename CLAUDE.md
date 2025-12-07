@@ -343,6 +343,9 @@ The codebase follows a single-package structure under `packages/mcp_json_yaml_to
 
    - Uses LMQL's Regex class for pattern matching with partial validation
    - Provides `RegexConstraint` and `EnumConstraint` base classes
+   - `ConstraintRegistry` for named constraint lookup and registration
+   - Built-in constraints: `YQ_PATH`, `YQ_EXPRESSION`, `CONFIG_FORMAT`, `KEY_PATH`, `INT`, `JSON_VALUE`, `FILE_PATH`
+   - Dynamic helpers: `create_enum_constraint()`, `create_pattern_constraint()`
    - Exposes constraints via MCP resources (`lmql://constraints`)
 
 3. **yq_wrapper.py** - Cross-platform yq binary wrapper
