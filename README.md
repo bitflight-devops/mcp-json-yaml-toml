@@ -71,8 +71,6 @@ MCP servers run as external processes and communicate via stdio with your MCP cl
 
 #### Claude Code (CLI)
 
-The Claude Code CLI tool provides a streamlined installation:
-
 ```bash
 claude mcp add --scope user mcp-json-yaml-toml -- uvx mcp-json-yaml-toml
 ```
@@ -152,9 +150,6 @@ cd mcp-json-yaml-toml
 
 # Install dependencies (including dev dependencies)
 uv sync
-
-# Install pre-commit hooks
-pre-commit install
 ```
 
 ### Running Tests
