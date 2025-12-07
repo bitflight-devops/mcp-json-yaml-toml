@@ -1,4 +1,4 @@
-# Pre-commit configuration for python_picotool repository
+# Pre-commit configuration for mcp-json-yaml-toml repository
 
 repos:
   - repo: https://github.com/mxr/sync-pre-commit-deps

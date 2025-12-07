@@ -13,6 +13,7 @@ import pytest
 from fastmcp.exceptions import ToolError
 
 from mcp_json_yaml_toml import server
+from mcp_json_yaml_toml.lmql_constraints import ConstraintRegistry
 
 # Extract underlying functions from FastMCP FunctionTool wrappers
 data_query_fn = server.data_query.fn
@@ -766,3 +767,213 @@ class TestPrompts:
         prompt = cast("str", server.convert_to_schema.fn("data.toml"))
         assert "generate a JSON schema" in prompt
         assert "data.toml" in prompt
+
+
+# Extract underlying functions for LMQL constraint tools
+constraint_validate_fn = server.constraint_validate.fn
+constraint_list_fn = server.constraint_list.fn
+
+
+class TestConstraintTools:
+    """Test LMQL constraint validation tools."""
+
+    def test_constraint_validate_valid_yq_path(self) -> None:
+        """
+        Verify that the YQ_PATH constraint accepts a valid yq-style path.
+
+        Asserts that validating the string ".name" with the "YQ_PATH" constraint yields a result marked valid, includes the constraint name and the original value, and does not contain an error entry.
+        """
+        result = constraint_validate_fn("YQ_PATH", ".name")
+
+        assert result["valid"] is True
+        assert result["constraint"] == "YQ_PATH"
+        assert result["value"] == ".name"
+        assert "error" not in result
+
+    def test_constraint_validate_invalid_yq_path(self) -> None:
+        """Test constraint_validate with invalid YQ_PATH.
+
+        Tests: Invalid constraint validation
+        How: Validate 'users' (missing dot) against YQ_PATH
+        Why: Verify invalid inputs are rejected with suggestions
+        """
+        result = constraint_validate_fn("YQ_PATH", "users")
+
+        assert result["valid"] is False
+        assert result["constraint"] == "YQ_PATH"
+        assert "error" in result
+        assert ".users" in result.get("suggestions", [])
+
+    def test_constraint_validate_partial_input(self) -> None:
+        """Test constraint_validate with partial input.
+
+        Tests: Partial input detection
+        How: Validate just '.' which is incomplete YQ_PATH
+        Why: Verify partial inputs are identified for streaming
+        """
+        result = constraint_validate_fn("YQ_PATH", ".")
+
+        assert result["valid"] is False
+        assert result["is_partial"] is True
+        assert "remaining_pattern" in result
+
+    def test_constraint_validate_config_format(self) -> None:
+        """
+        Verify CONFIG_FORMAT enum constraint accepts allowed formats and rejects invalid ones.
+
+        Asserts that "json" and "yaml" validate successfully and that "csv" is reported as invalid.
+        """
+        result = constraint_validate_fn("CONFIG_FORMAT", "json")
+        assert result["valid"] is True
+
+        result = constraint_validate_fn("CONFIG_FORMAT", "yaml")
+        assert result["valid"] is True
+
+        result = constraint_validate_fn("CONFIG_FORMAT", "csv")
+        assert result["valid"] is False
+
+    def test_constraint_validate_int(self) -> None:
+        """Test constraint_validate with INT constraint.
+
+        Tests: Integer constraint validation
+        How: Validate various integer strings
+        Why: Verify numeric validation works
+        """
+        result = constraint_validate_fn("INT", "42")
+        assert result["valid"] is True
+
+        result = constraint_validate_fn("INT", "-123")
+        assert result["valid"] is True
+
+        result = constraint_validate_fn("INT", "3.14")
+        assert result["valid"] is False
+
+    def test_constraint_validate_json_value(self) -> None:
+        """Test constraint_validate with JSON_VALUE constraint.
+
+        Tests: JSON value constraint validation
+        How: Validate various JSON values
+        Why: Verify JSON parsing validation works
+        """
+        result = constraint_validate_fn("JSON_VALUE", '"hello"')
+        assert result["valid"] is True
+
+        result = constraint_validate_fn("JSON_VALUE", '{"key": "value"}')
+        assert result["valid"] is True
+
+        result = constraint_validate_fn("JSON_VALUE", '{"incomplete":')
+        assert result["valid"] is False
+        assert result["is_partial"] is True
+
+    def test_constraint_validate_unknown_constraint(self) -> None:
+        """Test constraint_validate with unknown constraint.
+
+        Tests: Unknown constraint handling
+        How: Use non-existent constraint name
+        Why: Verify proper error for unknown constraints
+        """
+        result = constraint_validate_fn("UNKNOWN_CONSTRAINT", "value")
+
+        assert result["valid"] is False
+        assert "Unknown constraint" in result["error"]
+
+    def test_constraint_list_returns_all_constraints(self) -> None:
+        """Test constraint_list returns all registered constraints.
+
+        Tests: Constraint listing
+        How: Call constraint_list and check contents
+        Why: Verify all constraints are discoverable
+        """
+        result = constraint_list_fn()
+
+        assert "constraints" in result
+        assert "usage" in result
+
+        constraint_names = [c["name"] for c in result["constraints"]]
+        assert "YQ_PATH" in constraint_names
+        assert "YQ_EXPRESSION" in constraint_names
+        assert "CONFIG_FORMAT" in constraint_names
+        assert "INT" in constraint_names
+        assert "KEY_PATH" in constraint_names
+        assert "JSON_VALUE" in constraint_names
+        assert "FILE_PATH" in constraint_names
+
+    def test_constraint_list_includes_descriptions(self) -> None:
+        """Test constraint_list includes constraint descriptions.
+
+        Tests: Constraint metadata
+        How: Check that constraints have descriptions
+        Why: Verify constraints are self-documenting
+        """
+        result = constraint_list_fn()
+
+        for constraint in result["constraints"]:
+            assert "name" in constraint
+            assert "description" in constraint
+
+
+class TestConstraintResources:
+    """Test LMQL constraint MCP resources.
+
+    Note: These tests verify the underlying ConstraintRegistry functions
+    that power the MCP resources. The actual MCP resource decorators
+    wrap these functions for client access.
+    """
+
+    def test_list_all_constraints_resource(self) -> None:
+        """
+        Verify that the constraint registry exposes all expected constraint definitions.
+
+        Asserts that the registry contains definitions for YQ_PATH, CONFIG_FORMAT, INT, KEY_PATH, JSON_VALUE, and FILE_PATH.
+        """
+        definitions = ConstraintRegistry.get_all_definitions()
+
+        assert "YQ_PATH" in definitions
+        assert "CONFIG_FORMAT" in definitions
+        assert "INT" in definitions
+        assert "KEY_PATH" in definitions
+        assert "JSON_VALUE" in definitions
+        assert "FILE_PATH" in definitions
+
+    def test_get_constraint_definition_resource(self) -> None:
+        """
+        Verify that the YQ_PATH constraint resource exposes a complete definition.
+
+        Asserts the returned definition has name "YQ_PATH" and includes the keys "description", "pattern", and "examples".
+        """
+        from mcp_json_yaml_toml.lmql_constraints import YQPathConstraint
+
+        result = YQPathConstraint.get_definition()
+
+        assert result["name"] == "YQ_PATH"
+        assert "description" in result
+        assert "pattern" in result
+        assert "examples" in result
+
+    def test_get_constraint_definition_config_format(self) -> None:
+        """
+        Verify that the CONFIG_FORMAT constraint definition exposes the expected allowed formats.
+
+        Asserts the definition name equals "CONFIG_FORMAT" and that the `allowed_values` list includes "json", "yaml", and "toml".
+        """
+        from mcp_json_yaml_toml.lmql_constraints import ConfigFormatConstraint
+
+        result = ConfigFormatConstraint.get_definition()
+
+        assert result["name"] == "CONFIG_FORMAT"
+        assert "allowed_values" in result
+        allowed = result["allowed_values"]
+        assert isinstance(allowed, list)
+        assert "json" in allowed
+        assert "yaml" in allowed
+        assert "toml" in allowed
+
+    def test_get_constraint_definition_unknown(self) -> None:
+        """Test unknown constraint returns None.
+
+        Tests: Unknown constraint handling in resource
+        How: Request non-existent constraint via registry
+        Why: Verify proper handling for unknown constraints
+        """
+        result = ConstraintRegistry.get("NONEXISTENT")
+        assert result is None

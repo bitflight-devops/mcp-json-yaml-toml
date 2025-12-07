@@ -33,6 +33,7 @@ AI coding tools often destroy structured data files:
 - **Schema validation**: Enforce correctness using SchemaStore.org or custom schemas
 - **Safe modifications**: Validate before writing; preserve comments and formatting
 - **Multi-format support**: JSON, YAML, and TOML through a unified interface
+- **Constraint validation**: LMQL-powered input validation with partial match support for guided generation
 - **Local operation**: No cloud dependency, no indexing, no external services
 - **Cross-platform**: Works on Linux, macOS, and Windows with bundled yq binaries
 
@@ -40,13 +41,15 @@ AI coding tools often destroy structured data files:
 
 ### What It Provides
 
-The server provides 5 MCP tools for structured data manipulation:
+The server provides 7 MCP tools for structured data manipulation:
 
 - **`data`**: Get, set, or delete values at specific paths in configuration files
 - **`data_query`**: Run advanced yq expressions for complex queries and transformations
 - **`data_schema`**: Validate files against JSON schemas and manage schema catalogs
 - **`data_convert`**: Convert between JSON, YAML, and TOML formats
 - **`data_merge`**: Deep merge two configuration files with environment overrides
+- **`constraint_validate`**: Validate inputs against LMQL constraints with partial match support
+- **`constraint_list`**: List available constraints for guided generation
 
 See [docs/tools.md](docs/tools.md) for detailed API reference and examples.
 
@@ -124,7 +127,7 @@ These natural language prompts are translated by your AI assistant into the appr
 
 ## Available Tools
 
-The server provides 5 tools: `data`, `data_query`, `data_schema`, `data_convert`, and `data_merge`.
+The server provides 7 tools: `data`, `data_query`, `data_schema`, `data_convert`, `data_merge`, `constraint_validate`, and `constraint_list`.
 
 See [docs/tools.md](docs/tools.md) for parameters, examples, and usage reference.
 
@@ -190,6 +193,7 @@ mcp-json-yaml-toml/
 │   ├── schemas.py                # JSON Schema management
 │   ├── yaml_optimizer.py         # YAML anchor/alias optimization
 │   ├── toml_utils.py             # TOML file operations
+│   ├── lmql_constraints.py       # LMQL constraint validation
 │   ├── config.py                 # Configuration management
 │   └── tests/                    # Test suite
 ├── docs/                         # Documentation
@@ -226,3 +230,4 @@ Contributions are welcome! Please ensure all tests pass and code quality checks 
 
 - Built with [FastMCP](https://github.com/jlowin/fastmcp)
 - Uses [yq](https://github.com/mikefarah/yq) for configuration file processing
+- Uses [LMQL](https://github.com/eth-sri/lmql) regex derivatives for constraint validation

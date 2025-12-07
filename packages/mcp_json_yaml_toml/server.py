@@ -19,6 +19,11 @@ from mcp_json_yaml_toml.config import (
     parse_enabled_formats,
     validate_format,
 )
+from mcp_json_yaml_toml.lmql_constraints import (
+    ConstraintRegistry,
+    get_constraint_hint,
+    validate_tool_input,
+)
 from mcp_json_yaml_toml.schemas import SchemaManager
 from mcp_json_yaml_toml.yq_wrapper import (
     FormatType,
@@ -1369,13 +1374,24 @@ def data_merge(
         ),
     ] = None,
 ) -> dict[str, Any]:
-    """Merge two configuration files.
+    """Merge two configuration files into a single deep-merged configuration.
 
-    Use when you need to combine two configuration files into a single result (deep merge).
+    Performs a deep merge where values from the second (overlay) file override or extend
+    those in the first (base) file. If output_file is provided the merged result is written
+    to that path; otherwise the merged content is returned in the response.
 
-    Output contract: Returns {"success": bool, "result": str, ...} or writes to file.
-    Side effects: Writes to output_file if provided.
-    Failure modes: FileNotFoundError if files missing. ToolError if formats disabled or merge fails.
+    Parameters:
+        file_path1 (str): Path to the base configuration file.
+        file_path2 (str): Path to the overlay configuration file whose values override the base.
+        output_format (str | None): Desired output format: "json", "yaml", or "toml". Defaults to the format of the first file.
+        output_file (str | None): Optional path to write the merged output. When omitted, merged content is returned.
+
+    Returns:
+        dict: A payload describing the merge. On success includes "success": True, "file1", "file2",
+        "output_format", and either "result" (merged content) or "output_file" (written path).
+
+    Raises:
+        ToolError: If an input file is missing, its format is not enabled, the output format is invalid, or the merge fails.
     """
     path1 = Path(file_path1).expanduser().resolve()
     path2 = Path(file_path2).expanduser().resolve()
@@ -1451,9 +1467,125 @@ def data_merge(
         raise ToolError(f"Merge failed: {e}") from e
 
 
+# =============================================================================
+# LMQL Constraint Resources and Tools
+# =============================================================================
+
+
+@mcp.resource("lmql://constraints")
+def list_all_constraints() -> dict[str, Any]:
+    """Provide metadata and definitions for all registered LMQL constraints.
+
+    Returns:
+        A dictionary with:
+        - "constraints": a mapping of all constraint definitions keyed by name.
+        - "description": a short human-readable description of the constraint collection.
+        - "usage": a brief usage note for applying these constraints in constrained generation.
+    """
+    return {
+        "constraints": ConstraintRegistry.get_all_definitions(),
+        "description": "LMQL-style constraints for validating tool inputs",
+        "usage": "Use these constraints with LMQL or similar tools for constrained generation",
+    }
+
+
+@mcp.resource("lmql://constraints/{name}")
+def get_constraint_definition(name: str) -> dict[str, Any]:
+    """Retrieve the definition of a named LMQL constraint.
+
+    Raises:
+        ToolError: If the constraint name is not registered; the error message lists available constraints.
+
+    Returns:
+        dict: Constraint definition containing fields such as pattern, examples, and LMQL syntax.
+    """
+    constraint = ConstraintRegistry.get(name)
+    if not constraint:
+        available = ConstraintRegistry.list_constraints()
+        raise ToolError(
+            f"Unknown constraint: '{name}'. Available: {', '.join(available)}"
+        )
+    return constraint.get_definition()
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+def constraint_validate(
+    constraint_name: Annotated[
+        str,
+        Field(
+            description="Name of the constraint to validate against (e.g., 'YQ_PATH', 'CONFIG_FORMAT', 'INT')"
+        ),
+    ],
+    value: Annotated[str, Field(description="Value to validate")],
+) -> dict[str, Any]:
+    """Validate a value against an LMQL-style constraint.
+
+    Use this tool to check if a value satisfies a constraint before using it
+    in other operations. Supports partial validation - can tell if an incomplete
+    input could still become valid.
+
+    Output contract: Returns {"valid": bool, "error": str?, "is_partial": bool?, ...}.
+    Side effects: None (read-only validation).
+    Failure modes: ToolError if constraint name unknown.
+
+    Available constraints:
+    - YQ_PATH: Valid yq path (e.g., '.users[0].name')
+    - YQ_EXPRESSION: Valid yq expression with pipes (e.g., '.items | length')
+    - CONFIG_FORMAT: Valid format ('json', 'yaml', 'toml', 'xml')
+    - KEY_PATH: Dot-separated key path (e.g., 'config.database.host')
+    - INT: Valid integer
+    - JSON_VALUE: Valid JSON syntax
+    - FILE_PATH: Valid file path syntax
+    """
+    result = validate_tool_input(constraint_name, value)
+    response = result.to_dict()
+    response["constraint"] = constraint_name
+    response["value"] = value
+
+    # Add hint for invalid values
+    if not result.valid:
+        hint = get_constraint_hint(constraint_name, value)
+        if hint:
+            response["hint"] = hint
+
+    return response
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+def constraint_list() -> dict[str, Any]:
+    """Return a list of all registered LMQL constraints with their metadata.
+
+    Returns:
+        result (dict): A dictionary with keys:
+            - "constraints": a list of constraint objects; each object includes a "name" key and the constraint's definition fields (e.g., "description", any other metadata).
+            - "usage": a string describing how to validate a value against a constraint (e.g., call `constraint_validate(constraint_name, value)`).
+    """
+    definitions = ConstraintRegistry.get_all_definitions()
+    return {
+        "constraints": [{"name": name, **defn} for name, defn in definitions.items()],
+        "usage": (
+            "Use constraint_validate(constraint_name, value) to validate inputs. "
+            "Access constraint definitions via lmql://constraints/{name} resource."
+        ),
+    }
+
+
 @mcp.prompt()
 def explain_config(file_path: str) -> str:
-    """Generate a prompt to explain a configuration file."""
+    """Produce a natural-language prompt that requests an analysis of a configuration file.
+
+    The generated prompt asks an assistant to:
+    1. Identify the file format (JSON, YAML, TOML).
+    2. Summarize the file's key sections and their purpose.
+    3. Highlight critical settings and potential misconfigurations.
+    4. Check adherence to an available schema, if one exists.
+
+    Parameters:
+        file_path (str): Path to the configuration file to be analyzed.
+
+    Returns:
+        prompt (str): A formatted prompt string referring to the provided file path.
+    """
     return f"""Please analyze and explain the configuration file at '{file_path}'.
 
     1. Identify the file format (JSON, YAML, TOML).
