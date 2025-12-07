@@ -21,6 +21,256 @@ When working in this repository, activate these skills for comprehensive develop
 
 This is an MCP (Model Context Protocol) server that provides AI agents with tools to query and modify JSON, YAML, and TOML files using the `yq` command-line tool. The server is built with FastMCP and provides a unified interface for working with structured data in these formats (including configuration files, manifests, API responses, and other structured data).
 
+---
+
+## Code Quality Gates (MUST PASS)
+
+**All code must pass these quality gates before it can be merged.** Run these checks before committing:
+
+### Quick Validation Command
+
+```bash
+# Run all essential checks
+uv run ruff format && uv run ruff check --fix && uv run mypy packages/ && uv run pytest --no-cov -q
+```
+
+### Pre-commit Hooks (prek)
+
+This project uses `prek` (a Rust-based pre-commit alternative). Install and run hooks:
+
+```bash
+# Install hooks (first time only)
+uv run prek install
+
+# Run all hooks on staged files
+uv run prek
+
+# Run all hooks on all files
+uv run prek --all-files
+
+# Run specific hooks
+uv run prek ruff ruff-format mypy
+```
+
+### CI Pipeline Gates
+
+The GitHub Actions CI runs these checks on every PR. **All must pass:**
+
+| Gate | Command | Description |
+|------|---------|-------------|
+| Format | `uv run ruff format --check` | Code formatting verification |
+| Lint | `uv run ruff check` | Python linting (500+ rules) |
+| Type Check | `uv run mypy packages/ --show-error-codes` | Static type analysis |
+| Tests | `uv run pytest --cov=packages/mcp_json_yaml_toml` | Test suite with coverage |
+
+---
+
+## Formatters
+
+Run these formatters before committing:
+
+### Python (ruff format)
+
+```bash
+# Format all Python files
+uv run ruff format
+
+# Check formatting without changes
+uv run ruff format --check
+```
+
+### YAML/JSON/Markdown (prettier)
+
+```bash
+# Format YAML, JSON, and Markdown files
+uv run prek prettier
+```
+
+### Shell Scripts (shfmt)
+
+```bash
+# Format shell scripts (4-space indent, case indent)
+uv run prek shell-fmt-go
+```
+
+---
+
+## Linters
+
+### Python - ruff
+
+```bash
+# Lint and auto-fix
+uv run ruff check --fix
+
+# Lint without fixing
+uv run ruff check
+
+# Show specific rule info
+uv run ruff rule <RULE_CODE>
+```
+
+Key rule categories enabled:
+- **D** - pydocstyle (docstrings)
+- **ANN** - type annotations
+- **B** - bugbear (common bugs)
+- **S** - bandit (security)
+- **PT** - pytest style
+
+### Python - mypy (Type Checking)
+
+```bash
+# Type check all packages
+uv run mypy packages/
+
+# Show error codes for fixing
+uv run mypy packages/ --show-error-codes
+```
+
+### Python - basedpyright (Alternative Type Checker)
+
+```bash
+# Run via prek
+uv run prek basedpyright
+```
+
+### Shell Scripts - shellcheck
+
+```bash
+# Lint shell scripts
+uv run prek shellcheck
+```
+
+### Markdown - markdownlint-cli2
+
+```bash
+# Lint Markdown files
+uv run prek markdownlint-cli2
+```
+
+---
+
+## Testing Requirements
+
+### Running Tests
+
+```bash
+# Run all tests with coverage
+uv run pytest
+
+# Run with verbose output
+uv run pytest -v
+
+# Run specific test file
+uv run pytest packages/mcp_json_yaml_toml/tests/test_server.py
+
+# Run specific test class or function
+uv run pytest packages/mcp_json_yaml_toml/tests/test_server.py::TestDataQuery -v
+
+# Run tests matching a pattern
+uv run pytest -k "constraint" -v
+
+# Skip slow/integration tests
+uv run pytest -m "not slow and not integration"
+
+# Run without coverage (faster)
+uv run pytest --no-cov
+```
+
+### Coverage Requirements
+
+```bash
+# Run with coverage report
+uv run pytest --cov=packages/mcp_json_yaml_toml --cov-report=term-missing
+
+# Generate XML report (for CI)
+uv run pytest --cov=packages/mcp_json_yaml_toml --cov-report=xml
+```
+
+### Test Organization
+
+Tests are located in `packages/mcp_json_yaml_toml/tests/`:
+
+- `test_server.py` - Main server and tool tests
+- `test_lmql_constraints.py` - LMQL constraint validation tests
+- `test_yq_wrapper.py` - yq binary wrapper tests
+- `test_config.py` - Configuration management tests
+- `test_yaml_optimizer.py` - YAML anchor optimization tests
+- `test_toml_*.py` - TOML-specific functionality tests
+- `conftest.py` - Shared pytest fixtures
+
+---
+
+## Commit Message Convention
+
+This project uses **Conventional Commits** with required scope. The pre-commit hook enforces this format:
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+```
+
+### Allowed Types
+
+| Type | Description |
+|------|-------------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `docs` | Documentation only |
+| `style` | Formatting, no code change |
+| `refactor` | Code restructuring |
+| `perf` | Performance improvement |
+| `test` | Adding/updating tests |
+| `chore` | Maintenance tasks |
+| `ci` | CI/CD changes |
+| `build` | Build system changes |
+
+### Examples
+
+```bash
+feat(server): add constraint_validate tool for LMQL validation
+fix(yq): handle timeout in binary download
+docs(tools): document constraint validation API
+refactor(lmql): extract RegexConstraint base class
+test(constraints): add tests for partial match detection
+```
+
+---
+
+## Design Principles
+
+### DRY (Don't Repeat Yourself)
+
+- Extract common patterns into base classes (see `RegexConstraint`, `EnumConstraint`)
+- Use template method pattern for customizable behavior
+- Create factory functions for dynamic class generation
+
+### SRP (Single Responsibility Principle)
+
+- Each module has one clear purpose
+- Each class handles one concern
+- Functions should do one thing well
+
+### OO Design Patterns Used
+
+- **Template Method**: `RegexConstraint.validate()` with hooks for subclasses
+- **Registry Pattern**: `ConstraintRegistry` for named constraint lookup
+- **Factory Pattern**: `create_enum_constraint()`, `create_pattern_constraint()`
+- **Decorator Pattern**: FastMCP's `@mcp.tool()` and `@mcp.resource()`
+
+### Code Consistency
+
+Follow existing patterns in the codebase:
+- Use `ClassVar` for class-level type hints
+- Use `@classmethod` for methods that don't need instance state
+- Use dataclasses for simple data containers
+- Use Pydantic models for validation and serialization
+
+---
+
 ## Common Development Commands
 
 ### Running Tests
@@ -68,6 +318,8 @@ uv build
 uv run mcp-json-yaml-toml
 ```
 
+---
+
 ## Architecture & Key Components
 
 ### Core Module Structure
@@ -78,32 +330,38 @@ The codebase follows a single-package structure under `packages/mcp_json_yaml_to
 
    - Registers tools dynamically based on enabled formats
    - Implements pagination for large results (10KB pages)
-   - Provides 5 main tools: `data`, `data_query`, `data_schema`, `data_convert`, `data_merge`
+   - Provides 7 main tools: `data`, `data_query`, `data_schema`, `data_convert`, `data_merge`, `constraint_validate`, `constraint_list`
 
-2. **yq_wrapper.py** - Cross-platform yq binary wrapper
+2. **lmql_constraints.py** - LMQL-based constraint validation
+
+   - Uses LMQL's Regex class for pattern matching with partial validation
+   - Provides `RegexConstraint` and `EnumConstraint` base classes
+   - Exposes constraints via MCP resources (`lmql://constraints`)
+
+3. **yq_wrapper.py** - Cross-platform yq binary wrapper
 
    - Auto-downloads missing binaries from GitHub releases
    - Handles platform/architecture detection (Linux/macOS/Windows, amd64/arm64)
    - Provides error handling and format conversions
 
-3. **schemas.py** - JSON Schema management
+4. **schemas.py** - JSON Schema management
 
    - Integrates with SchemaStore.org for automatic schema discovery
    - Caches schemas locally (~/.cache/mcp-json-yaml-toml/schemas)
    - Checks IDE caches first to minimize network requests
 
-4. **yaml_optimizer.py** - YAML anchor/alias optimization
+5. **yaml_optimizer.py** - YAML anchor/alias optimization
 
    - Automatically generates anchors for duplicate structures
    - Context-aware (only activates if file already uses anchors)
    - Uses ruamel.yaml for precise YAML manipulation
 
-5. **toml_utils.py** - TOML file operations
+6. **toml_utils.py** - TOML file operations
 
    - Uses tomlkit to preserve comments and formatting
    - Handles TOML read/write operations (yq can't write TOML)
 
-6. **config.py** - Configuration management
+7. **config.py** - Configuration management
    - Manages enabled formats via MCP_CONFIG_FORMATS environment variable
    - Validates format support dynamically
 
@@ -119,28 +377,9 @@ The codebase follows a single-package structure under `packages/mcp_json_yaml_to
 
 5. **Schema Discovery**: Multi-layered approach checking IDE caches → local cache → remote SchemaStore.org, minimizing network requests.
 
-## Testing Strategy
+6. **Constraint Validation**: Uses LMQL's regex derivatives for partial match detection, enabling guided generation in LLM clients.
 
-### Test Organization
-
-Tests are located in `packages/mcp_json_yaml_toml/tests/`:
-
-- `test_server.py` - Main server functionality tests
-- `test_yq_wrapper.py` - yq binary wrapper tests
-- `test_config.py` - Configuration management tests
-- `test_yaml_optimizer.py` - YAML anchor optimization tests
-- `test_toml_*.py` - TOML-specific functionality tests
-- `conftest.py` - Shared pytest fixtures
-
-### Running Single Tests
-
-```bash
-# Run a specific test function
-uv run pytest packages/mcp_json_yaml_toml/tests/test_server.py::test_data_query_json -v
-
-# Run tests matching a pattern
-uv run pytest -k "pagination" -v
-```
+---
 
 ## Environment Variables
 
@@ -160,6 +399,8 @@ uv run pytest -k "pagination" -v
 - **YAML_ANCHOR_MIN_SIZE**: Minimum structure size for anchoring (default: 3)
 - **YAML_ANCHOR_MIN_DUPLICATES**: Minimum duplicates to trigger anchoring (default: 2)
 
+---
+
 ## Dependency Management
 
 The project uses minimal, focused dependencies:
@@ -169,6 +410,9 @@ The project uses minimal, focused dependencies:
 - **ruamel.yaml**: YAML with anchor/alias support (only YAML library used)
 - **tomlkit**: TOML with comment preservation (yq can't write TOML)
 - **httpx**: Async HTTP for schema fetching
+- **lmql**: Constraint validation with partial match support
+
+---
 
 ## Common Patterns
 
@@ -180,6 +424,25 @@ Tools are registered via FastMCP decorators in server.py. Follow the existing pa
 @mcp.tool(description="Tool description")
 def tool_name(param: Annotated[str, Field(description="...")]) -> dict:
     # Implementation
+```
+
+### Adding a New Constraint
+
+Create a new constraint by extending the appropriate base class:
+
+```python
+@ConstraintRegistry.register("MY_CONSTRAINT")
+class MyConstraint(RegexConstraint):
+    """Validates my custom pattern."""
+
+    description = "Description for LLM clients"
+    PATTERN = r"my-pattern-here"
+
+    @classmethod
+    def get_definition(cls) -> dict[str, Any]:
+        base = super().get_definition()
+        base["examples"] = ["example1", "example2"]
+        return base
 ```
 
 ### Error Handling
@@ -199,6 +462,8 @@ Use the config module utilities:
 from mcp_json_yaml_toml.config import validate_format, is_format_enabled
 validate_format("yaml")  # Raises if format disabled
 ```
+
+---
 
 ## Debug Tips
 
@@ -226,21 +491,36 @@ validate_format("yaml")  # Raises if format disabled
    uv run pytest --cov=packages/mcp_json_yaml_toml/server --cov-report=term-missing
    ```
 
+5. **Run single prek hook**:
+
+   ```bash
+   uv run prek ruff --all-files
+   ```
+
+---
+
 ## Project Structure
 
 ```text
 mcp-json-yaml-toml/
 ├── packages/mcp_json_yaml_toml/  # Main package
 │   ├── server.py                 # MCP server implementation
-│   ├── yq_wrapper.py            # yq binary wrapper
-│   ├── schemas.py               # Schema management
-│   ├── yaml_optimizer.py        # YAML anchor optimization
-│   ├── toml_utils.py           # TOML operations
-│   ├── config.py               # Configuration management
-│   └── tests/                  # Test suite
-├── scripts/                     # Utility scripts
-│   └── benchmark_token_usage.py # Performance benchmarking
-├── fixtures/                    # Test fixtures
-├── pyproject.toml              # Project configuration
-└── README.md                   # User documentation
+│   ├── lmql_constraints.py       # LMQL constraint validation
+│   ├── yq_wrapper.py             # yq binary wrapper
+│   ├── schemas.py                # Schema management
+│   ├── yaml_optimizer.py         # YAML anchor optimization
+│   ├── toml_utils.py             # TOML operations
+│   ├── config.py                 # Configuration management
+│   └── tests/                    # Test suite
+├── docs/                         # Documentation
+│   ├── tools.md                  # Tool reference (7 tools)
+│   ├── clients.md                # Client setup guides
+│   ├── module-usage.md           # Module dependencies
+│   └── yq-wrapper.md             # yq wrapper usage
+├── scripts/                      # Utility scripts
+│   └── benchmark_token_usage.py  # Performance benchmarking
+├── fixtures/                     # Test fixtures
+├── .pre-commit-config.yaml       # Pre-commit/prek configuration
+├── pyproject.toml                # Project configuration
+└── README.md                     # User documentation
 ```
