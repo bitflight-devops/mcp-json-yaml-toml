@@ -34,7 +34,7 @@ AI coding tools often destroy structured data files:
 - **Local operation**: No cloud dependency, no indexing, no external services
 - **Cross-platform**: Works on Linux, macOS, and Windows with bundled yq binaries
 
-**Compatible with any MCP client**: Claude Code CLI, Cursor, Windsurf, Codex, and more.
+**Compatible with any MCP client**: Claude Code CLI, Cursor, Windsurf, VS Code with MCP extensions, and more.
 
 ### Key Features
 
@@ -85,7 +85,6 @@ The next time the MCP server runs, `uvx` will download the latest version.
 
    - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-   - **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
 2. Add the server to your `mcpServers` section:
 
