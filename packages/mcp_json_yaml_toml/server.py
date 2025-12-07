@@ -19,6 +19,11 @@ from mcp_json_yaml_toml.config import (
     parse_enabled_formats,
     validate_format,
 )
+from mcp_json_yaml_toml.lmql_constraints import (
+    ConstraintRegistry,
+    get_constraint_hint,
+    validate_tool_input,
+)
 from mcp_json_yaml_toml.schemas import SchemaManager
 from mcp_json_yaml_toml.yq_wrapper import (
     FormatType,
@@ -1449,6 +1454,106 @@ def data_merge(
 
     except YQExecutionError as e:
         raise ToolError(f"Merge failed: {e}") from e
+
+
+# =============================================================================
+# LMQL Constraint Resources and Tools
+# =============================================================================
+
+
+@mcp.resource("lmql://constraints")
+def list_all_constraints() -> dict[str, Any]:
+    """List all available LMQL constraints.
+
+    Returns definitions for all registered constraints that can be used
+    for client-side constrained generation.
+    """
+    return {
+        "constraints": ConstraintRegistry.get_all_definitions(),
+        "description": "LMQL-style constraints for validating tool inputs",
+        "usage": "Use these constraints with LMQL or similar tools for constrained generation",
+    }
+
+
+@mcp.resource("lmql://constraints/{name}")
+def get_constraint_definition(name: str) -> dict[str, Any]:
+    """Get definition for a specific constraint.
+
+    Args:
+        name: Constraint name (e.g., 'YQ_PATH', 'CONFIG_FORMAT')
+
+    Returns:
+        Constraint definition including pattern, examples, and LMQL syntax
+    """
+    constraint = ConstraintRegistry.get(name)
+    if not constraint:
+        available = ConstraintRegistry.list_constraints()
+        raise ToolError(
+            f"Unknown constraint: '{name}'. Available: {', '.join(available)}"
+        )
+    return constraint.get_definition()
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+def constraint_validate(
+    constraint_name: Annotated[
+        str,
+        Field(
+            description="Name of the constraint to validate against (e.g., 'YQ_PATH', 'CONFIG_FORMAT', 'INT')"
+        ),
+    ],
+    value: Annotated[str, Field(description="Value to validate")],
+) -> dict[str, Any]:
+    """Validate a value against an LMQL-style constraint.
+
+    Use this tool to check if a value satisfies a constraint before using it
+    in other operations. Supports partial validation - can tell if an incomplete
+    input could still become valid.
+
+    Output contract: Returns {"valid": bool, "error": str?, "is_partial": bool?, ...}.
+    Side effects: None (read-only validation).
+    Failure modes: ToolError if constraint name unknown.
+
+    Available constraints:
+    - YQ_PATH: Valid yq path (e.g., '.users[0].name')
+    - YQ_EXPRESSION: Valid yq expression with pipes (e.g., '.items | length')
+    - CONFIG_FORMAT: Valid format ('json', 'yaml', 'toml', 'xml')
+    - KEY_PATH: Dot-separated key path (e.g., 'config.database.host')
+    - INT: Valid integer
+    - JSON_VALUE: Valid JSON syntax
+    - FILE_PATH: Valid file path syntax
+    """
+    result = validate_tool_input(constraint_name, value)
+    response = result.to_dict()
+    response["constraint"] = constraint_name
+    response["value"] = value
+
+    # Add hint for invalid values
+    if not result.valid:
+        hint = get_constraint_hint(constraint_name, value)
+        if hint:
+            response["hint"] = hint
+
+    return response
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+def constraint_list() -> dict[str, Any]:
+    """List all available LMQL constraints with their descriptions.
+
+    Use this to discover what constraints are available for validation.
+
+    Output contract: Returns {"constraints": [{"name": str, "description": str, ...}]}.
+    Side effects: None (read-only).
+    """
+    definitions = ConstraintRegistry.get_all_definitions()
+    return {
+        "constraints": [{"name": name, **defn} for name, defn in definitions.items()],
+        "usage": (
+            "Use constraint_validate(constraint_name, value) to validate inputs. "
+            "Access constraint definitions via lmql://constraints/{name} resource."
+        ),
+    }
 
 
 @mcp.prompt()
