@@ -5,40 +5,58 @@
 [![PyPI version](https://badge.fury.io/py/mcp-json-yaml-toml.svg)](https://badge.fury.io/py/mcp-json-yaml-toml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
-**Smart JSON/YAML/TOML tools for MCP agents.**
+<img src="https://github.com/user-attachments/assets/bc1d4078-a72a-4def-8c5b-a1c653e98816" alt="JYT Logo" width="200">
 
-Safely query, modify, validate, and convert JSON, YAML, and TOML files while preserving comments, formatting, and structure. Perfect for working with configuration files, API responses, manifests, and any structured data across multiple formats.
+**A token-efficient, schema-aware MCP server for safely reading and modifying JSON, YAML, and TOML files.**
+
+Stop AI coding tools from breaking your data files. No more grep guesswork, hallucinated fields, or invalid configs. This MCP server gives AI assistants a strict, round-trip safe interface for working with structured data.
 
 ---
 
-## What You Get
+## The Problem
 
-This MCP server gives AI agents intelligent tools for configuration management:
+AI coding tools often destroy structured data files:
 
-- **Multi-format support**: Seamlessly work with JSON, YAML, and TOML files using a unified interface
-- **Powerful querying**: Use yq's jq-compatible expressions to extract and analyze nested data
-- **Safe modifications**: Validate changes before writing; preserve comments and formatting
-- **Format conversion**: Automatically convert between JSON, YAML, and TOML with zero data loss
-- **Config merging**: Intelligently merge base configs with environment-specific overrides
-- **Schema validation**: Leverage SchemaStore.org catalogs or custom schemas for validation
-- **YAML optimization**: Automatically generate anchors/aliases for duplicate structures to maintain DRY
+- They grep through huge configs and guess at keys
+- They hallucinate fields that never existed
+- They use sed and regex that leave files in invalid states
+- They break YAML indentation and TOML syntax
+- They can't validate changes before writing
+
+**The result**: Broken deployments, corrupted configs, and manual cleanup work.
+
+## The Solution
+
+**mcp-json-yaml-toml** provides AI assistants with proper tools for structured data:
+
+- **Token-efficient queries**: Extract exactly what you need without loading entire files
+- **Schema validation**: Enforce correctness using SchemaStore.org or custom schemas
+- **Safe modifications**: Validate before writing; preserve comments and formatting
+- **Multi-format support**: JSON, YAML, and TOML through a unified interface
+- **Local operation**: No cloud dependency, no indexing, no external services
 - **Cross-platform**: Works on Linux, macOS, and Windows with bundled yq binaries
 
-## Why It Matters
+**Compatible with any MCP client**: Claude Code CLI, Cursor, Windsurf, VS Code with MCP extensions, and more.
 
-Configuration management is error-prone when done manually:
+### What It Provides
 
-- Editing YAML indentation mistakes break deployments
-- Format conversions introduce subtle bugs
-- Duplicate config sections violate DRY principles
-- Manual schema validation catches problems only in production
+The server provides 5 MCP tools for structured data manipulation:
 
-**With mcp-json-yaml-toml**, your AI assistant can:
+- **`data`**: Get, set, or delete values at specific paths in configuration files
+- **`data_query`**: Run advanced yq expressions for complex queries and transformations
+- **`data_schema`**: Validate files against JSON schemas and manage schema catalogs
+- **`data_convert`**: Convert between JSON, YAML, and TOML formats
+- **`data_merge`**: Deep merge two configuration files with environment overrides
 
-- Safely validate and modify configs before pushing to infrastructure
-- Convert legacy configs to modern formats without losing data
-- Detect and fix common configuration problems
-- Ensure consistency across deployment environments
+See [docs/tools.md](docs/tools.md) for detailed API reference and examples.
+
+### Key Features
+
+- **Powerful querying**: Use yq's jq-compatible expressions to extract nested data
+- **Format conversion**: Convert between JSON, YAML, and TOML (with limitations)
+- **Config merging**: Intelligently merge base configs with environment-specific overrides
+- **YAML optimization**: Auto-generate anchors/aliases for duplicate structures (DRY principle)
+- **Comment preservation**: Modifications maintain existing comments and formatting
 
 ---
 
@@ -47,40 +65,21 @@ Configuration management is error-prone when done manually:
 ### Prerequisites
 
 - Python 3.11 or higher
-- An MCP client (Claude Desktop, Cursor, VS Code, etc.)
+- An MCP-compatible client (see [docs/clients.md](docs/clients.md) for supported clients)
 
 ### Installation
 
-MCP servers run as external processes and are not installed as libraries. They communicate via stdio with your MCP client.
+MCP servers run as external processes and communicate via stdio with your MCP client. This server uses `uvx` for automatic dependency management.
 
-### Claude Code (CLI)
+#### Claude Code (CLI)
 
 ```bash
-# Basic install
 claude mcp add --scope user mcp-json-yaml-toml -- uvx mcp-json-yaml-toml
-
-# With environment variables (e.g., to limit formats)
-claude mcp add --scope user mcp-json-yaml-toml -e MCP_CONFIG_FORMATS=json,yaml -- uvx mcp-json-yaml-toml
 ```
 
-### Updating
+#### Other MCP Clients
 
-When using `uvx`, clear the cache to get the latest version:
-
-```bash
-uv cache clean mcp-json-yaml-toml
-```
-
-The next time the MCP server runs, `uvx` will download the latest version.
-
-### Claude Desktop Configuration
-
-1. Open your Claude Desktop configuration file:
-
-   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-2. Add the server to your `mcpServers` section:
+Most MCP clients use a JSON configuration format. Add this to your client's MCP configuration file:
 
 ```json
 {
@@ -93,39 +92,33 @@ The next time the MCP server runs, `uvx` will download the latest version.
 }
 ```
 
-This configuration uses `uvx` to automatically download and run the server in an isolated environment.
+See [docs/clients.md](docs/clients.md) for detailed setup instructions for specific clients including Cursor, VS Code with Continue, Windsurf, Zed Editor, and other MCP-compatible tools.
 
-3. Restart Claude Desktop to activate the server.
+### Example Usage
 
-### Try It Now
+Once configured, you can ask your AI assistant to perform operations like:
 
-Here are real examples you can use with Claude Desktop:
+**Reading configuration values:**
+- "What stages are defined in my GitLab CI file?"
+- "Show me the project name from pyproject.toml"
+- "Get all dependencies from package.json"
 
-#### Query Configuration Files
+**Converting between formats:**
+- "Convert config.yaml to JSON format"
+- "Export this TOML file as YAML"
 
-- **"What stages are defined in my GitLab CI?"** - Returns: `build`, `test`, `deploy`, etc.
-- **"Show me the project name from pyproject.toml"** - Extracts: `mcp-json-yaml-toml`
-- **"Get all dependencies from package.json"** - Lists npm packages with versions
+> **Note:** Conversion TO TOML is not supported. See [docs/tools.md](docs/tools.md#supported-conversions) for details.
 
-#### Convert Between Formats
+**Validation:**
+- "Validate this YAML file syntax"
+- "Check if config.json matches its schema from SchemaStore"
 
-- **"Convert this config.toml to YAML"** - Preserves all data in new format
-- **"Convert this config.toml to JSON"** - Export TOML to JSON format
-- **"Convert GitLab CI YAML to JSON for API use"** - Enables programmatic access
+**Advanced queries:**
+- "Extract all job names from .gitlab-ci.yml"
+- "Merge base.yaml with production.yaml"
+- "Show the structure of config.json without values"
 
-> **Note:** Conversion to TOML format from JSON/YAML is not supported due to yq limitations. See [docs/tools.md](docs/tools.md#supported-conversions) for the full conversion matrix.
-
-#### Validate and Fix
-
-- **"Check if my YAML file is valid"** - Validates syntax before deployment
-- **"Validate against schema from SchemaStore"** - Ensures compliance with specs
-- **"Fix YAML indentation issues"** - Corrects formatting problems
-
-#### Advanced Operations
-
-- **"Extract all job names from .gitlab-ci.yml"** - Query: `.* | select(type == "object") | keys`
-- **"Merge base config with production overrides"** - Deep merges configurations
-- **"Show config structure without values"** - Returns keys only for overview
+These natural language prompts are translated by your AI assistant into the appropriate MCP tool calls.
 
 ---
 
@@ -152,11 +145,8 @@ See [docs/tools.md](docs/tools.md) for environment variables and configuration o
 git clone https://github.com/bitflight-devops/mcp-json-yaml-toml.git
 cd mcp-json-yaml-toml
 
-# Install with development dependencies
-uv pip install -e ".[dev]"
-
-# Install pre-commit hooks
-pre-commit install
+# Install dependencies (including dev dependencies)
+uv sync
 ```
 
 ### Running Tests
