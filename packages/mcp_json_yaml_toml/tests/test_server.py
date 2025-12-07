@@ -778,11 +778,10 @@ class TestConstraintTools:
     """Test LMQL constraint validation tools."""
 
     def test_constraint_validate_valid_yq_path(self) -> None:
-        """Test constraint_validate with valid YQ_PATH.
-
-        Tests: Valid constraint validation
-        How: Validate '.name' against YQ_PATH constraint
-        Why: Verify valid inputs are accepted
+        """
+        Verify that the YQ_PATH constraint accepts a valid yq-style path.
+        
+        Asserts that validating the string ".name" with the "YQ_PATH" constraint yields a result marked valid, includes the constraint name and the original value, and does not contain an error entry.
         """
         result = constraint_validate_fn("YQ_PATH", ".name")
 
@@ -819,11 +818,10 @@ class TestConstraintTools:
         assert "remaining_pattern" in result
 
     def test_constraint_validate_config_format(self) -> None:
-        """Test constraint_validate with CONFIG_FORMAT.
-
-        Tests: Enum constraint validation
-        How: Validate 'json' against CONFIG_FORMAT
-        Why: Verify enum constraints work
+        """
+        Verify CONFIG_FORMAT enum constraint accepts allowed formats and rejects invalid ones.
+        
+        Asserts that "json" and "yaml" validate successfully and that "csv" is reported as invalid.
         """
         result = constraint_validate_fn("CONFIG_FORMAT", "json")
         assert result["valid"] is True
@@ -923,11 +921,10 @@ class TestConstraintResources:
     """
 
     def test_list_all_constraints_resource(self) -> None:
-        """Test lmql://constraints resource functionality.
-
-        Tests: All constraints resource
-        How: Call ConstraintRegistry.get_all_definitions
-        Why: Verify resource returns constraint definitions
+        """
+        Verify that the constraint registry exposes all expected constraint definitions.
+        
+        Asserts that the registry contains definitions for YQ_PATH, CONFIG_FORMAT, INT, KEY_PATH, JSON_VALUE, and FILE_PATH.
         """
         definitions = ConstraintRegistry.get_all_definitions()
 
@@ -939,11 +936,10 @@ class TestConstraintResources:
         assert "FILE_PATH" in definitions
 
     def test_get_constraint_definition_resource(self) -> None:
-        """Test lmql://constraints/{name} resource functionality.
-
-        Tests: Single constraint resource
-        How: Get YQ_PATH constraint definition via registry
-        Why: Verify individual constraint lookup works
+        """
+        Verify that the YQ_PATH constraint resource exposes a complete definition.
+        
+        Asserts the returned definition has name "YQ_PATH" and includes the keys "description", "pattern", and "examples".
         """
         from mcp_json_yaml_toml.lmql_constraints import YQPathConstraint
 
@@ -955,11 +951,10 @@ class TestConstraintResources:
         assert "examples" in result
 
     def test_get_constraint_definition_config_format(self) -> None:
-        """Test CONFIG_FORMAT constraint definition.
-
-        Tests: Enum constraint definition
-        How: Get CONFIG_FORMAT definition via registry
-        Why: Verify enum constraints expose allowed values
+        """
+        Verify that the CONFIG_FORMAT constraint definition exposes the expected allowed formats.
+        
+        Asserts the definition name equals "CONFIG_FORMAT" and that the `allowed_values` list includes "json", "yaml", and "toml".
         """
         from mcp_json_yaml_toml.lmql_constraints import ConfigFormatConstraint
 
