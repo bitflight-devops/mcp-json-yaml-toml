@@ -32,3 +32,36 @@ jobs:
 
       - name: Publish to PyPI
         run: uv publish
+
+      - name: Set up Node.js for mcpb CLI
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install mcpb CLI
+        run: npm install -g @anthropic-ai/mcpb
+
+      - name: Build and validate MCPB bundle
+        run: |
+          # Extract version from git tag (e.g., "v1.2.3" -> "1.2.3")
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "Building MCPB bundle version: $VERSION"
+
+          # Update version in manifest.json
+          sed -i "s/\"version\": \"0.0.0\"/\"version\": \"$VERSION\"/" manifest.json
+
+          # Use mcpb pack to validate manifest and create bundle
+          # This validates against the official MCPB spec
+          mcpb pack . "mcp-json-yaml-toml-${VERSION}.mcpb"
+
+          echo "Created and validated mcp-json-yaml-toml-${VERSION}.mcpb"
+          ls -la *.mcpb
+
+          # Verify bundle contents
+          echo "Bundle contents:"
+          unzip -l "mcp-json-yaml-toml-${VERSION}.mcpb"
+
+      - name: Upload MCPB to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mcp-json-yaml-toml-*.mcpb
