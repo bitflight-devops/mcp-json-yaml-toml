@@ -5,40 +5,44 @@
 [![PyPI version](https://badge.fury.io/py/mcp-json-yaml-toml.svg)](https://badge.fury.io/py/mcp-json-yaml-toml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
-**Smart JSON/YAML/TOML tools for MCP agents.**
+**A token-efficient, schema-aware MCP server for safely reading and modifying JSON, YAML, and TOML files.**
 
-Safely query, modify, validate, and convert JSON, YAML, and TOML files while preserving comments, formatting, and structure. Perfect for working with configuration files, API responses, manifests, and any structured data across multiple formats.
+Stop AI coding tools from breaking your data files. No more grep guesswork, hallucinated fields, or invalid configs. This MCP server gives AI assistants a strict, round-trip safe interface for working with structured data.
 
 ---
 
-## What You Get
+## The Problem
 
-This MCP server gives AI agents intelligent tools for configuration management:
+AI coding tools often destroy structured data files:
 
-- **Multi-format support**: Seamlessly work with JSON, YAML, and TOML files using a unified interface
-- **Powerful querying**: Use yq's jq-compatible expressions to extract and analyze nested data
-- **Safe modifications**: Validate changes before writing; preserve comments and formatting
-- **Format conversion**: Automatically convert between JSON, YAML, and TOML with zero data loss
-- **Config merging**: Intelligently merge base configs with environment-specific overrides
-- **Schema validation**: Leverage SchemaStore.org catalogs or custom schemas for validation
-- **YAML optimization**: Automatically generate anchors/aliases for duplicate structures to maintain DRY
+- They grep through huge configs and guess at keys
+- They hallucinate fields that never existed
+- They use sed and regex that leave files in invalid states
+- They break YAML indentation and TOML syntax
+- They can't validate changes before writing
+
+**The result**: Broken deployments, corrupted configs, and manual cleanup work.
+
+## The Solution
+
+**mcp-json-yaml-toml** provides AI assistants with proper tools for structured data:
+
+- **Token-efficient queries**: Extract exactly what you need without loading entire files
+- **Schema validation**: Enforce correctness using SchemaStore.org or custom schemas
+- **Safe modifications**: Validate before writing; preserve comments and formatting
+- **Multi-format support**: JSON, YAML, and TOML through a unified interface
+- **Local operation**: No cloud dependency, no indexing, no external services
 - **Cross-platform**: Works on Linux, macOS, and Windows with bundled yq binaries
 
-## Why It Matters
+**Compatible with any MCP client**: Claude Code CLI, Cursor, Windsurf, Codex, and more.
 
-Configuration management is error-prone when done manually:
+### Key Features
 
-- Editing YAML indentation mistakes break deployments
-- Format conversions introduce subtle bugs
-- Duplicate config sections violate DRY principles
-- Manual schema validation catches problems only in production
-
-**With mcp-json-yaml-toml**, your AI assistant can:
-
-- Safely validate and modify configs before pushing to infrastructure
-- Convert legacy configs to modern formats without losing data
-- Detect and fix common configuration problems
-- Ensure consistency across deployment environments
+- **Powerful querying**: Use yq's jq-compatible expressions to extract nested data
+- **Format conversion**: Convert between JSON, YAML, and TOML (with limitations)
+- **Config merging**: Intelligently merge base configs with environment-specific overrides
+- **YAML optimization**: Auto-generate anchors/aliases for duplicate structures (DRY principle)
+- **Comment preservation**: Modifications maintain existing comments and formatting
 
 ---
 
@@ -47,13 +51,15 @@ Configuration management is error-prone when done manually:
 ### Prerequisites
 
 - Python 3.11 or higher
-- An MCP client (Claude Desktop, Cursor, VS Code, etc.)
+- An MCP-compatible client (Claude Code CLI, Cursor, Windsurf, etc.)
 
 ### Installation
 
-MCP servers run as external processes and are not installed as libraries. They communicate via stdio with your MCP client.
+MCP servers run as external processes and communicate via stdio with your MCP client.
 
-### Claude Code (CLI)
+### Claude Code (CLI Tool)
+
+The Claude Code CLI tool provides the easiest installation experience:
 
 ```bash
 # Basic install
@@ -63,9 +69,7 @@ claude mcp add --scope user mcp-json-yaml-toml -- uvx mcp-json-yaml-toml
 claude mcp add --scope user mcp-json-yaml-toml -e MCP_CONFIG_FORMATS=json,yaml -- uvx mcp-json-yaml-toml
 ```
 
-### Updating
-
-When using `uvx`, clear the cache to get the latest version:
+**Updating**: When using `uvx`, clear the cache to get the latest version:
 
 ```bash
 uv cache clean mcp-json-yaml-toml
@@ -73,12 +77,15 @@ uv cache clean mcp-json-yaml-toml
 
 The next time the MCP server runs, `uvx` will download the latest version.
 
-### Claude Desktop Configuration
+### Claude Desktop (GUI Application)
+
+> **Note**: Claude Desktop is a separate GUI application from Claude Code CLI. If you're using the Claude Code CLI tool, use the installation method above instead.
 
 1. Open your Claude Desktop configuration file:
 
    - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+   - **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
 2. Add the server to your `mcpServers` section:
 
@@ -93,13 +100,15 @@ The next time the MCP server runs, `uvx` will download the latest version.
 }
 ```
 
-This configuration uses `uvx` to automatically download and run the server in an isolated environment.
-
 3. Restart Claude Desktop to activate the server.
+
+### Other MCP Clients
+
+For Cursor, Windsurf, VS Code with MCP extensions, and other clients, see [docs/clients.md](docs/clients.md) for detailed setup instructions.
 
 ### Try It Now
 
-Here are real examples you can use with Claude Desktop:
+Here are real examples you can use with any MCP client:
 
 #### Query Configuration Files
 
