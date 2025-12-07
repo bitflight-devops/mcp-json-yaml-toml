@@ -94,6 +94,121 @@ class Constraint(ABC):
         }
 
 
+class RegexConstraint(Constraint):
+    """Base class for regex-pattern-based constraints.
+
+    Subclasses only need to define PATTERN and optionally override
+    empty_error, invalid_error, and get_suggestions.
+    """
+
+    PATTERN: ClassVar[str] = ""
+
+    @classmethod
+    def empty_error(cls) -> str:
+        """Error message for empty input."""
+        return "Empty input"
+
+    @classmethod
+    def invalid_error(cls, value: str) -> str:
+        """Error message for invalid (non-partial) input."""
+        return f"Invalid input. Must match pattern: {cls.PATTERN}"
+
+    @classmethod
+    def get_suggestions(cls, value: str) -> list[str]:
+        """Get suggestions for invalid input."""
+        return []
+
+    @classmethod
+    def validate(cls, value: str) -> ValidationResult:
+        """Validate using LMQL Regex with partial match support."""
+        if not value:
+            return ValidationResult(
+                valid=False,
+                is_partial=True,
+                error=cls.empty_error(),
+                remaining_pattern=cls.PATTERN,
+            )
+
+        regex = Regex(cls.PATTERN)
+
+        # Full match - valid
+        if regex.fullmatch(value):
+            return ValidationResult(valid=True)
+
+        # Partial match - could become valid
+        if regex.is_prefix(value):
+            derivative = regex.d(value)
+            remaining = derivative.pattern if derivative else None
+            return ValidationResult(
+                valid=False,
+                is_partial=True,
+                error=f"Incomplete input. Continue with: {remaining or '...'}",
+                remaining_pattern=remaining,
+            )
+
+        # Invalid - provide suggestions if available
+        suggestions = cls.get_suggestions(value)
+        return ValidationResult(
+            valid=False, error=cls.invalid_error(value), suggestions=suggestions
+        )
+
+    @classmethod
+    def get_definition(cls) -> dict[str, Any]:
+        """Export constraint definition with pattern."""
+        base = super().get_definition()
+        base["pattern"] = cls.PATTERN
+        return base
+
+
+class EnumConstraint(Constraint):
+    """Base class for enum/choice-based constraints.
+
+    Subclasses only need to define ALLOWED as a frozenset of valid values.
+    """
+
+    ALLOWED: ClassVar[frozenset[str]] = frozenset()
+
+    @classmethod
+    def validate(cls, value: str) -> ValidationResult:
+        """Validate against allowed values with partial match support."""
+        if not value:
+            return ValidationResult(
+                valid=False,
+                is_partial=True,
+                error="Empty value",
+                suggestions=sorted(cls.ALLOWED),
+            )
+
+        value_lower = value.lower()
+
+        if value_lower in cls.ALLOWED:
+            return ValidationResult(valid=True)
+
+        # Check for partial matches (prefix)
+        partial_matches = [f for f in cls.ALLOWED if f.startswith(value_lower)]
+        if partial_matches:
+            return ValidationResult(
+                valid=False,
+                is_partial=True,
+                error=f"Incomplete. Could be: {', '.join(partial_matches)}",
+                suggestions=partial_matches,
+            )
+
+        return ValidationResult(
+            valid=False,
+            error=f"Invalid. Must be one of: {', '.join(sorted(cls.ALLOWED))}",
+            suggestions=sorted(cls.ALLOWED),
+        )
+
+    @classmethod
+    def get_definition(cls) -> dict[str, Any]:
+        """Export constraint definition with allowed values."""
+        base = super().get_definition()
+        base["allowed_values"] = sorted(cls.ALLOWED)
+        base["lmql_syntax"] = f"VAR in {sorted(cls.ALLOWED)}"
+        return base
+
+
 class ConstraintRegistry:
     """Registry for named constraints.
 
@@ -174,7 +289,7 @@ class ConstraintRegistry:
 
 
 @ConstraintRegistry.register("YQ_PATH")
-class YQPathConstraint(Constraint):
+class YQPathConstraint(RegexConstraint):
     """Validates yq path expressions.
 
     Valid patterns:
@@ -185,63 +300,33 @@ class YQPathConstraint(Constraint):
     """
 
     description = "Valid yq path expression starting with dot"
-
-    # Pattern for valid yq path components
-    # Allows: .key, .key.subkey, .key[0], .key[*], .key[0].subkey
     PATTERN = r"\.[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*|\[\d+\]|\[\*\])*"
 
     @classmethod
-    def validate(cls, value: str) -> ValidationResult:
-        """Validate a yq path expression."""
-        if not value:
-            return ValidationResult(
-                valid=False,
-                is_partial=True,
-                error="Empty path. yq paths must start with '.'",
-                remaining_pattern=cls.PATTERN,
-            )
+    def empty_error(cls) -> str:
+        return "Empty path. yq paths must start with '.'"
 
-        regex = Regex(cls.PATTERN)
-
-        # Check full match
-        if regex.fullmatch(value):
-            return ValidationResult(valid=True)
-
-        # Check if partial input could become valid
-        if regex.is_prefix(value):
-            derivative = regex.d(value)
-            remaining = derivative.pattern if derivative else None
-            return ValidationResult(
-                valid=False,
-                is_partial=True,
-                error=f"Incomplete yq path. Continue with: {remaining or '...'}",
-                remaining_pattern=remaining,
-            )
-
-        # Invalid - provide helpful error
+    @classmethod
+    def invalid_error(cls, value: str) -> str:
         if not value.startswith("."):
-            return ValidationResult(
-                valid=False,
-                error="yq paths must start with '.'",
-                suggestions=[f".{value}"] if value else ["."],
-            )
+            return "yq paths must start with '.'"
+        return f"Invalid yq path syntax. Must match pattern: {cls.PATTERN}"
 
-        return ValidationResult(
-            valid=False,
-            error=f"Invalid yq path syntax. Must match pattern: {cls.PATTERN}",
-        )
+    @classmethod
+    def get_suggestions(cls, value: str) -> list[str]:
+        if not value.startswith("."):
+            return [f".{value}"] if value else ["."]
+        return []
 
     @classmethod
     def get_definition(cls) -> dict[str, Any]:
-        """Export constraint definition."""
         base = super().get_definition()
-        base["pattern"] = cls.PATTERN
         base["examples"] = [".name", ".users[0]", ".config.database.host"]
         return base
 
 
 @ConstraintRegistry.register("YQ_EXPRESSION")
-class YQExpressionConstraint(Constraint):
+class YQExpressionConstraint(RegexConstraint):
     """Validates yq expressions including pipes and functions.
 
     Supports full yq expression syntax including:
@@ -252,104 +337,37 @@ class YQExpressionConstraint(Constraint):
     """
 
     description = "Valid yq expression with optional pipes and functions"
-
-    # More permissive pattern for full expressions
-    # Allows pipes, functions, select, map, etc.
     PATTERN = r"\.[@a-zA-Z_][\w\.\[\]\*]*(\s*\|\s*[a-zA-Z_][\w]*(\([^)]*\))?)*"
 
     @classmethod
-    def validate(cls, value: str) -> ValidationResult:
-        """Validate a yq expression."""
-        if not value:
-            return ValidationResult(
-                valid=False,
-                is_partial=True,
-                error="Empty expression",
-                remaining_pattern=cls.PATTERN,
-            )
+    def empty_error(cls) -> str:
+        return "Empty expression"
 
-        regex = Regex(cls.PATTERN)
-
-        if regex.fullmatch(value):
-            return ValidationResult(valid=True)
-
-        if regex.is_prefix(value):
-            derivative = regex.d(value)
-            remaining = derivative.pattern if derivative else None
-            return ValidationResult(
-                valid=False,
-                is_partial=True,
-                error="Incomplete expression",
-                remaining_pattern=remaining,
-            )
-
+    @classmethod
+    def invalid_error(cls, value: str) -> str:
         if not value.startswith("."):
-            return ValidationResult(
-                valid=False,
-                error="yq expressions must start with '.'",
-                suggestions=[f".{value}"],
-            )
+            return "yq expressions must start with '.'"
+        return f"Invalid yq expression. Pattern: {cls.PATTERN}"
 
-        return ValidationResult(
-            valid=False, error=f"Invalid yq expression. Pattern: {cls.PATTERN}"
-        )
+    @classmethod
+    def get_suggestions(cls, value: str) -> list[str]:
+        if not value.startswith("."):
+            return [f".{value}"]
+        return []
 
     @classmethod
     def get_definition(cls) -> dict[str, Any]:
-        """Export constraint definition."""
         base = super().get_definition()
-        base["pattern"] = cls.PATTERN
         base["examples"] = [".users", ".items | length", ".data[] | select(.active)"]
         return base
 
 
 @ConstraintRegistry.register("CONFIG_FORMAT")
-class ConfigFormatConstraint(Constraint):
+class ConfigFormatConstraint(EnumConstraint):
     """Validates configuration file format identifiers."""
 
     description = "Valid configuration format: json, yaml, toml, or xml"
-
     ALLOWED: ClassVar[frozenset[str]] = frozenset({"json", "yaml", "toml", "xml"})
-
-    @classmethod
-    def validate(cls, value: str) -> ValidationResult:
-        """Validate a config format string."""
-        if not value:
-            return ValidationResult(
-                valid=False,
-                is_partial=True,
-                error="Empty format",
-                suggestions=list(cls.ALLOWED),
-            )
-
-        value_lower = value.lower()
-
-        if value_lower in cls.ALLOWED:
-            return ValidationResult(valid=True)
-
-        # Check for partial matches
-        partial_matches = [f for f in cls.ALLOWED if f.startswith(value_lower)]
-        if partial_matches:
-            return ValidationResult(
-                valid=False,
-                is_partial=True,
-                error=f"Incomplete format. Could be: {', '.join(partial_matches)}",
-                suggestions=partial_matches,
-            )
-
-        return ValidationResult(
-            valid=False,
-            error=f"Invalid format '{value}'. Must be one of: {', '.join(sorted(cls.ALLOWED))}",
-            suggestions=list(cls.ALLOWED),
-        )
-
-    @classmethod
-    def get_definition(cls) -> dict[str, Any]:
-        """Export constraint definition."""
-        base = super().get_definition()
-        base["allowed_values"] = sorted(cls.ALLOWED)
-        base["lmql_syntax"] = f"VAR in {sorted(cls.ALLOWED)}"
-        return base
 
 
 @ConstraintRegistry.register("INT")
@@ -403,7 +421,7 @@ class IntConstraint(Constraint):
 
 
 @ConstraintRegistry.register("KEY_PATH")
-class KeyPathConstraint(Constraint):
+class KeyPathConstraint(RegexConstraint):
     """Validates dot-separated key paths.
 
     Used for the key_path parameter in data operations.
@@ -411,48 +429,30 @@ class KeyPathConstraint(Constraint):
     """
 
     description = "Dot-separated key path (e.g., 'users.0.name')"
-
-    # Pattern allows: key, key.subkey, key.0, key.0.subkey
     PATTERN = r"[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+)*"
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate a key path."""
+        """Validate a key path, delegating to YQPathConstraint if starts with dot."""
         if not value:
             return ValidationResult(
                 valid=False, is_partial=True, error="Empty key path"
             )
 
-        # If starts with dot, it's a yq path - validate accordingly
+        # If starts with dot, it's a yq path - delegate
         if value.startswith("."):
             return YQPathConstraint.validate(value)
 
-        regex = Regex(cls.PATTERN)
+        # Use base regex validation
+        return super().validate(value)
 
-        if regex.fullmatch(value):
-            return ValidationResult(valid=True)
-
-        if regex.is_prefix(value):
-            derivative = regex.d(value)
-            remaining = derivative.pattern if derivative else None
-            return ValidationResult(
-                valid=False,
-                is_partial=True,
-                error="Incomplete key path",
-                remaining_pattern=remaining,
-            )
-
-        return ValidationResult(
-            valid=False,
-            error=f"Invalid key path. Must match: {cls.PATTERN}",
-            suggestions=["users", "config.database", "items.0.name"],
-        )
+    @classmethod
+    def get_suggestions(cls, value: str) -> list[str]:
+        return ["users", "config.database", "items.0.name"]
 
     @classmethod
     def get_definition(cls) -> dict[str, Any]:
-        """Export constraint definition."""
         base = super().get_definition()
-        base["pattern"] = cls.PATTERN
         base["examples"] = ["name", "users.0", "config.database.host"]
         return base
 
@@ -573,7 +573,7 @@ class FilePathConstraint(Constraint):
 
 
 # =============================================================================
-# Schema-derived constraints
+# Dynamic constraint factories
 # =============================================================================
 
 
@@ -587,51 +587,15 @@ def create_enum_constraint(name: str, allowed_values: list[str]) -> type[Constra
     Returns:
         New Constraint class for the enum
     """
-    allowed_set = frozenset(allowed_values)
 
-    class EnumConstraint(Constraint):
+    class DynamicEnumConstraint(EnumConstraint):
         """Dynamically created enum constraint."""
 
-        description = f"One of: {', '.join(sorted(allowed_set))}"
-        ALLOWED: ClassVar[frozenset[str]] = allowed_set
+        ALLOWED: ClassVar[frozenset[str]] = frozenset(allowed_values)
 
-        @classmethod
-        def validate(cls, value: str) -> ValidationResult:
-            if not value:
-                return ValidationResult(
-                    valid=False,
-                    is_partial=True,
-                    error="Empty value",
-                    suggestions=list(cls.ALLOWED),
-                )
-
-            if value in cls.ALLOWED:
-                return ValidationResult(valid=True)
-
-            # Partial matches
-            partial = [v for v in cls.ALLOWED if v.startswith(value)]
-            if partial:
-                return ValidationResult(
-                    valid=False,
-                    is_partial=True,
-                    error="Incomplete",
-                    suggestions=partial,
-                )
-
-            return ValidationResult(
-                valid=False,
-                error=f"Must be one of: {', '.join(sorted(cls.ALLOWED))}",
-                suggestions=list(cls.ALLOWED),
-            )
-
-        @classmethod
-        def get_definition(cls) -> dict[str, Any]:
-            base = super().get_definition()
-            base["allowed_values"] = sorted(cls.ALLOWED)
-            return base
-
-    EnumConstraint.name = name
-    return EnumConstraint
+    DynamicEnumConstraint.name = name
+    DynamicEnumConstraint.description = f"One of: {', '.join(sorted(allowed_values))}"
+    return DynamicEnumConstraint
 
 
 def create_pattern_constraint(
@@ -648,49 +612,14 @@ def create_pattern_constraint(
         New Constraint class for the pattern
     """
 
-    class PatternConstraint(Constraint):
+    class DynamicPatternConstraint(RegexConstraint):
         """Dynamically created pattern constraint."""
 
         PATTERN: ClassVar[str] = pattern
 
-        @classmethod
-        def validate(cls, value: str) -> ValidationResult:
-            if not value:
-                return ValidationResult(
-                    valid=False,
-                    is_partial=True,
-                    error="Empty value",
-                    remaining_pattern=cls.PATTERN,
-                )
-
-            regex = Regex(cls.PATTERN)
-
-            if regex.fullmatch(value):
-                return ValidationResult(valid=True)
-
-            if regex.is_prefix(value):
-                derivative = regex.d(value)
-                remaining = derivative.pattern if derivative else None
-                return ValidationResult(
-                    valid=False,
-                    is_partial=True,
-                    error="Incomplete input",
-                    remaining_pattern=remaining,
-                )
-
-            return ValidationResult(
-                valid=False, error=f"Must match pattern: {cls.PATTERN}"
-            )
-
-        @classmethod
-        def get_definition(cls) -> dict[str, Any]:
-            base = super().get_definition()
-            base["pattern"] = cls.PATTERN
-            return base
-
-    PatternConstraint.name = name
-    PatternConstraint.description = description or f"Matches pattern: {pattern}"
-    return PatternConstraint
+    DynamicPatternConstraint.name = name
+    DynamicPatternConstraint.description = description or f"Matches pattern: {pattern}"
+    return DynamicPatternConstraint
 
 
 # =============================================================================

@@ -177,6 +177,7 @@ unfixable = ["F401"]
 "packages/**/lmql_constraints.py" = [
 	"ANN401",  # Any type is correct for dynamic constraint values
 	"DOC201",  # Constraint methods have return types in base class docstring
+	"D102",    # Template method overrides documented in base class
 ]
 "packages/**/yq_wrapper.py" = [
 	"ANN401",  # Any type in YQResult.data field
