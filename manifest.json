@@ -1,0 +1,69 @@
+{
+  "manifest_version": "0.4",
+  "name": "mcp-json-yaml-toml",
+  "display_name": "Structured Data Tools (JSON/YAML/TOML)",
+  "version": "0.0.0",
+  "description": "Query, transform, and manipulate JSON, YAML, and TOML files using jq-style expressions with schema validation",
+  "long_description": "Provides AI agents with powerful tools to work with structured data files. Use jq/yq expressions to extract and transform data, perform CRUD operations on specific paths, validate files against JSON schemas from SchemaStore.org, convert between formats, and deep merge files. Preserves comments and formatting in YAML and TOML files.",
+  "author": {
+    "name": "Jamie Nelson",
+    "email": "jamie@bitflight.io",
+    "url": "https://github.com/bitflight-devops"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bitflight-devops/mcp-json-yaml-toml"
+  },
+  "homepage": "https://github.com/bitflight-devops/mcp-json-yaml-toml",
+  "documentation": "https://github.com/bitflight-devops/mcp-json-yaml-toml#readme",
+  "support": "https://github.com/bitflight-devops/mcp-json-yaml-toml/issues",
+  "icon": "logo.png",
+  "server": {
+    "type": "uv",
+    "entry_point": "packages/mcp_json_yaml_toml/server.py"
+  },
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  },
+  "tools": [
+    {
+      "name": "data_query",
+      "description": "Extract and transform data using jq/yq expressions without modifying files"
+    },
+    {
+      "name": "data",
+      "description": "Get, set, or delete values at specific paths in structured data files"
+    },
+    {
+      "name": "data_schema",
+      "description": "Validate files against schemas, manage SchemaStore.org associations"
+    },
+    {
+      "name": "data_convert",
+      "description": "Convert files between JSON, YAML, and TOML formats"
+    },
+    {
+      "name": "data_merge",
+      "description": "Deep merge two structured data files into one"
+    }
+  ],
+  "prompts": [
+    {
+      "name": "explain_config",
+      "description": "Analyze and explain a configuration file's structure and purpose"
+    },
+    {
+      "name": "suggest_improvements",
+      "description": "Review a config file and suggest security, performance, and readability improvements"
+    },
+    {
+      "name": "convert_to_schema",
+      "description": "Generate a JSON schema from an existing configuration file"
+    }
+  ],
+  "keywords": ["json", "yaml", "toml", "jq", "yq", "schema", "validation", "query", "transform", "config"],
+  "license": "MIT"
+}

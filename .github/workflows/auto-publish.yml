@@ -32,3 +32,38 @@ jobs:
 
       - name: Publish to PyPI
         run: uv publish
+
+      - name: Build MCPB bundle
+        run: |
+          # Extract version from git tag (e.g., "v1.2.3" -> "1.2.3")
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "Building MCPB bundle version: $VERSION"
+
+          # Update version in manifest.json
+          sed -i "s/\"version\": \"0.0.0\"/\"version\": \"$VERSION\"/" manifest.json
+
+          # Create bundle directory
+          mkdir -p mcpb-bundle
+
+          # Copy required files
+          cp manifest.json mcpb-bundle/
+          cp pyproject.toml mcpb-bundle/
+          cp README.md mcpb-bundle/
+          cp logo.png mcpb-bundle/ 2>/dev/null || echo "No logo.png found, skipping"
+          cp -r packages mcpb-bundle/
+
+          # Remove test files from bundle
+          rm -rf mcpb-bundle/packages/mcp_json_yaml_toml/tests
+
+          # Create the .mcpb file (it's just a zip)
+          cd mcpb-bundle
+          zip -r "../mcp-json-yaml-toml-${VERSION}.mcpb" .
+          cd ..
+
+          echo "Created mcp-json-yaml-toml-${VERSION}.mcpb"
+          ls -la *.mcpb
+
+      - name: Upload MCPB to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mcp-json-yaml-toml-*.mcpb

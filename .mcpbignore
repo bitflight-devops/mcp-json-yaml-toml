@@ -1,0 +1,43 @@
+# Python artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Test and dev artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+fixtures/
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+
+# Project files not needed at runtime
+scripts/
+*.md
+!README.md
+.claude/
+.mcp.json
+
+# MCPB bundler artifacts
+server/lib/
+server/venv/
+
+# Tests
+**/tests/
