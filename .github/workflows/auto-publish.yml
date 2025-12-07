@@ -33,7 +33,15 @@ jobs:
       - name: Publish to PyPI
         run: uv publish
 
-      - name: Build MCPB bundle
+      - name: Set up Node.js for mcpb CLI
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install mcpb CLI
+        run: npm install -g @anthropic-ai/mcpb
+
+      - name: Build and validate MCPB bundle
         run: |
           # Extract version from git tag (e.g., "v1.2.3" -> "1.2.3")
           VERSION=${GITHUB_REF_NAME#v}
@@ -42,26 +50,16 @@ jobs:
           # Update version in manifest.json
           sed -i "s/\"version\": \"0.0.0\"/\"version\": \"$VERSION\"/" manifest.json
 
-          # Create bundle directory
-          mkdir -p mcpb-bundle
+          # Use mcpb pack to validate manifest and create bundle
+          # This validates against the official MCPB spec
+          mcpb pack . "mcp-json-yaml-toml-${VERSION}.mcpb"
 
-          # Copy required files
-          cp manifest.json mcpb-bundle/
-          cp pyproject.toml mcpb-bundle/
-          cp README.md mcpb-bundle/
-          cp logo.png mcpb-bundle/ 2>/dev/null || echo "No logo.png found, skipping"
-          cp -r packages mcpb-bundle/
-
-          # Remove test files from bundle
-          rm -rf mcpb-bundle/packages/mcp_json_yaml_toml/tests
-
-          # Create the .mcpb file (it's just a zip)
-          cd mcpb-bundle
-          zip -r "../mcp-json-yaml-toml-${VERSION}.mcpb" .
-          cd ..
-
-          echo "Created mcp-json-yaml-toml-${VERSION}.mcpb"
+          echo "Created and validated mcp-json-yaml-toml-${VERSION}.mcpb"
           ls -la *.mcpb
+
+          # Verify bundle contents
+          echo "Bundle contents:"
+          unzip -l "mcp-json-yaml-toml-${VERSION}.mcpb"
 
       - name: Upload MCPB to release
         uses: softprops/action-gh-release@v2

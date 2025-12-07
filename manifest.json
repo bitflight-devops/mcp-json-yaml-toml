@@ -17,10 +17,13 @@
   "homepage": "https://github.com/bitflight-devops/mcp-json-yaml-toml",
   "documentation": "https://github.com/bitflight-devops/mcp-json-yaml-toml#readme",
   "support": "https://github.com/bitflight-devops/mcp-json-yaml-toml/issues",
-  "icon": "logo.png",
   "server": {
     "type": "uv",
-    "entry_point": "packages/mcp_json_yaml_toml/server.py"
+    "entry_point": "packages/mcp_json_yaml_toml/server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "mcp-json-yaml-toml"]
+    }
   },
   "compatibility": {
     "platforms": ["darwin", "linux", "win32"],
@@ -50,20 +53,7 @@
       "description": "Deep merge two structured data files into one"
     }
   ],
-  "prompts": [
-    {
-      "name": "explain_config",
-      "description": "Analyze and explain a configuration file's structure and purpose"
-    },
-    {
-      "name": "suggest_improvements",
-      "description": "Review a config file and suggest security, performance, and readability improvements"
-    },
-    {
-      "name": "convert_to_schema",
-      "description": "Generate a JSON schema from an existing configuration file"
-    }
-  ],
+  "prompts_generated": true,
   "keywords": ["json", "yaml", "toml", "jq", "yq", "schema", "validation", "query", "transform", "config"],
   "license": "MIT"
 }

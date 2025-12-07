@@ -25,8 +25,11 @@ fixtures/
 .git/
 .gitignore
 
-# CI/CD
+# CI/CD and dev tooling configs
 .github/
+.pre-commit-config.yaml
+.markdownlint-cli2.jsonc
+.shellcheckrc
 
 # Project files not needed at runtime
 scripts/
