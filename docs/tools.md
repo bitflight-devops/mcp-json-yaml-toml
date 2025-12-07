@@ -560,15 +560,15 @@ This tool is designed to help LLMs generate valid inputs for the other tools. It
 
 Returns a validation result with:
 
-| Field               | Type    | Description                                               |
-| ------------------- | ------- | --------------------------------------------------------- |
-| `valid`             | boolean | Whether the input fully satisfies the constraint          |
-| `constraint`        | string  | Name of the constraint used                               |
-| `value`             | string  | The validated value                                       |
-| `error`             | string  | Error message (only if invalid)                           |
-| `is_partial`        | boolean | True if input could become valid with more characters     |
-| `remaining_pattern` | string  | Regex pattern for valid continuations (when partial)      |
-| `suggestions`       | array   | Suggested corrections or completions                      |
+| Field                | Type    | Description                                                          |
+| -------------------- | ------- | -------------------------------------------------------------------- |
+| `valid`              | boolean | Whether the input fully satisfies the constraint                     |
+| `constraint`         | string  | Name of the constraint used                                          |
+| `value`              | string  | The validated value                                                  |
+| `error`              | string  | Error message (only if invalid)                                      |
+| `is_partial`         | boolean | True if input could become valid with more characters                |
+| `remaining_pattern?` | string  | Regex pattern for valid continuations; present only when is_partial  |
+| `suggestions?`       | array   | Suggested completions; present for enum constraints or partial match |
 
 ### Available Constraints
 
