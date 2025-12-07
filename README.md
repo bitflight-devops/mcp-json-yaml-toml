@@ -63,87 +63,57 @@ See [docs/tools.md](docs/tools.md) for detailed API reference and examples.
 ### Prerequisites
 
 - Python 3.11 or higher
-- An MCP-compatible client (Claude Code CLI, Cursor, Windsurf, etc.)
+- An MCP-compatible client (see [docs/clients.md](docs/clients.md) for supported clients)
 
 ### Installation
 
-MCP servers run as external processes and communicate via stdio with your MCP client.
+MCP servers run as external processes and communicate via stdio with your MCP client. This server uses `uvx` for automatic dependency management.
 
-### Claude Code (CLI Tool)
-
-The Claude Code CLI tool provides the easiest installation experience:
+**Basic installation command** (works with most MCP clients):
 
 ```bash
-# Basic install
-claude mcp add --scope user mcp-json-yaml-toml -- uvx mcp-json-yaml-toml
-
-# With environment variables (e.g., to limit formats)
-claude mcp add --scope user mcp-json-yaml-toml -e MCP_CONFIG_FORMATS=json,yaml -- uvx mcp-json-yaml-toml
+uvx mcp-json-yaml-toml
 ```
 
-**Updating**: When using `uvx`, clear the cache to get the latest version:
+### Client Configuration
 
-```bash
-uv cache clean mcp-json-yaml-toml
-```
+The server works with any MCP-compatible client. See [docs/clients.md](docs/clients.md) for detailed setup instructions for:
 
-The next time the MCP server runs, `uvx` will download the latest version.
+- **Claude Desktop** - GUI application for desktop use
+- **Claude Code CLI** - Command-line tool with `claude mcp add` command
+- **Cursor** - AI-powered code editor
+- **VS Code with Continue** - VS Code extension
+- **Windsurf** - Collaborative coding platform
+- **Zed Editor** - High-performance text editor
+- And other MCP-compatible tools
 
-### Claude Desktop
+Each client has its own configuration format and file location. The docs provide specific examples for each.
 
-1. Open your Claude Desktop configuration file:
+### Example Usage
 
-   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+Once configured, you can ask your AI assistant to perform operations like:
 
-2. Add the server to your `mcpServers` section:
+**Reading configuration values:**
+- "What stages are defined in my GitLab CI file?"
+- "Show me the project name from pyproject.toml"
+- "Get all dependencies from package.json"
 
-```json
-{
-  "mcpServers": {
-    "json-yaml-toml": {
-      "command": "uvx",
-      "args": ["mcp-json-yaml-toml"]
-    }
-  }
-}
-```
+**Converting between formats:**
+- "Convert config.yaml to JSON format"
+- "Export this TOML file as YAML"
 
-3. Restart Claude Desktop to activate the server.
+> **Note:** Conversion to TOML format from JSON/YAML is not supported due to yq limitations. See [docs/tools.md](docs/tools.md#supported-conversions) for details.
 
-### Other MCP Clients
+**Validation:**
+- "Validate this YAML file syntax"
+- "Check if config.json matches its schema from SchemaStore"
 
-For Cursor, Windsurf, VS Code with MCP extensions, and other clients, see [docs/clients.md](docs/clients.md) for detailed setup instructions.
+**Advanced queries:**
+- "Extract all job names from .gitlab-ci.yml"
+- "Merge base.yaml with production.yaml"
+- "Show the structure of config.json without values"
 
-### Try It Now
-
-Here are real examples you can use with any MCP client:
-
-#### Query Configuration Files
-
-- **"What stages are defined in my GitLab CI?"** - Returns: `build`, `test`, `deploy`, etc.
-- **"Show me the project name from pyproject.toml"** - Extracts: `mcp-json-yaml-toml`
-- **"Get all dependencies from package.json"** - Lists npm packages with versions
-
-#### Convert Between Formats
-
-- **"Convert this config.toml to YAML"** - Preserves all data in new format
-- **"Convert this config.toml to JSON"** - Export TOML to JSON format
-- **"Convert GitLab CI YAML to JSON for API use"** - Enables programmatic access
-
-> **Note:** Conversion to TOML format from JSON/YAML is not supported due to yq limitations. See [docs/tools.md](docs/tools.md#supported-conversions) for the full conversion matrix.
-
-#### Validate and Fix
-
-- **"Check if my YAML file is valid"** - Validates syntax before deployment
-- **"Validate against schema from SchemaStore"** - Ensures compliance with specs
-- **"Fix YAML indentation issues"** - Corrects formatting problems
-
-#### Advanced Operations
-
-- **"Extract all job names from .gitlab-ci.yml"** - Query: `.* | select(type == "object") | keys`
-- **"Merge base config with production overrides"** - Deep merges configurations
-- **"Show config structure without values"** - Returns keys only for overview
+These natural language prompts are translated by your AI assistant into the appropriate MCP tool calls.
 
 ---
 
