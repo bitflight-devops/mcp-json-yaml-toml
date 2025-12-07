@@ -105,6 +105,11 @@ class TestYQPathConstraint:
         assert result.is_partial is True
 
     def test_get_definition(self) -> None:
+        """
+        Verify that YQPathConstraint.get_definition() returns a definition dict containing the expected keys.
+        
+        Asserts that the definition's "name" is "YQ_PATH" and that the keys "pattern" and "examples" are present.
+        """
         defn = YQPathConstraint.get_definition()
         assert defn["name"] == "YQ_PATH"
         assert "pattern" in defn
@@ -132,6 +137,11 @@ class TestYQExpressionConstraint:
         assert result.is_partial is True
 
     def test_missing_dot(self) -> None:
+        """
+        Verify that YQExpressionConstraint rejects expressions missing a leading dot.
+        
+        Calls YQExpressionConstraint.validate with "items | length" and asserts the validation result is invalid.
+        """
         result = YQExpressionConstraint.validate("items | length")
         assert result.valid is False
 
@@ -199,6 +209,11 @@ class TestIntConstraint:
         assert result.valid is True
 
     def test_valid_with_leading_space(self) -> None:
+        """
+        Checks that IntConstraint.validate accepts an integer string with leading whitespace.
+        
+        Asserts that the validation result is valid for the input " 42".
+        """
         result = IntConstraint.validate(" 42")
         assert result.valid is True
 

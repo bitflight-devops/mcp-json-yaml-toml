@@ -42,10 +42,17 @@ class ValidationResult:
     suggestions: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, bool | str | list[str] | None]:
-        """Convert to dictionary for JSON serialization.
-
+        """
+        Serialize the ValidationResult to a JSON-serializable dictionary.
+        
         Returns:
-            Dictionary with validation result fields suitable for JSON.
+            A dictionary containing the validation outcome. Always contains:
+                - `valid` (bool): whether the value is fully valid.
+            May include:
+                - `error` (str): error message when invalid.
+                - `is_partial` (bool): true if the input could still become valid.
+                - `remaining_pattern` (str): regex pattern describing required continuation when partial.
+                - `suggestions` (list[str]): suggested completions or corrections.
         """
         result: dict[str, bool | str | list[str] | None] = {"valid": self.valid}
         if self.error:
@@ -77,21 +84,24 @@ class Constraint(ABC):
     @classmethod
     @abstractmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate a value against this constraint.
-
-        Args:
-            value: The string value to validate
-
+        """
+        Validate an input string against this constraint and produce a ValidationResult describing validity, partial status, and any suggestions.
+        
         Returns:
-            ValidationResult with validation outcome and details
+            ValidationResult: Describes whether the input is valid; if not, whether it is a partial match that could become valid with more input (is_partial) and the remaining pattern to complete (remaining_pattern); includes an error message and optional suggestions.
         """
 
     @classmethod
     def get_definition(cls) -> dict[str, str | bool | list[str]]:
-        """Export constraint definition for LLM clients.
-
+        """
+        Provide a client-facing definition of the constraint for LLM integration.
+        
         Returns:
-            Dictionary with constraint metadata for client-side use.
+            dict: Mapping with keys:
+                - "name": human-readable constraint name
+                - "description": human-readable description
+                - "lmql_syntax": LMQL invocation syntax for the constraint (e.g., "NAME(VAR)")
+                - "supports_partial": `True` when the constraint supports partial/incremental validation
         """
         return {
             "name": cls.name,
@@ -112,37 +122,47 @@ class RegexConstraint(Constraint):
 
     @classmethod
     def empty_error(cls) -> str:
-        """Return error message for empty input.
-
+        """
+        Provide the default error message for an empty input.
+        
         Returns:
-            Error message string.
+            str: The error message string.
         """
         return "Empty input"
 
     @classmethod
     def invalid_error(cls, value: str) -> str:
-        """Return error message for invalid (non-partial) input.
-
+        """
+        Produce an error message indicating the input is invalid and showing the expected regex pattern.
+        
+        Parameters:
+            value (str): The input string that failed validation.
+        
         Returns:
-            Error message string.
+            str: Error message stating the input is invalid and containing the expected pattern.
         """
         return f"Invalid input. Must match pattern: {cls.PATTERN}"
 
     @classmethod
     def get_suggestions(cls, value: str) -> list[str]:
-        """Return suggestions for invalid input.
-
+        """
+        Provide correction suggestions or completions for an invalid or partial input.
+        
+        Parameters:
+            value (str): The input string to analyze for suggested fixes or completions.
+        
         Returns:
-            List of suggested corrections.
+            suggestions (list[str]): Suggested corrections or completions for `value`; empty list if none. Override in subclasses to provide domain-specific suggestions.
         """
         return []
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate using LMQL Regex with partial match support.
-
+        """
+        Validate a string against the constraint's LMQL regex and detect partial matches that can be completed.
+        
         Returns:
-            ValidationResult with outcome and partial match details.
+            ValidationResult: Outcome of validation. `valid` is `True` for a full match. If not valid, `is_partial` is `True` when the input could be completed to a valid value and `remaining_pattern` contains the regex fragment expected next. `error` contains a human-readable message for empty, incomplete, or invalid input; `suggestions` may include possible corrections.
         """
         if not value:
             return ValidationResult(
@@ -177,10 +197,11 @@ class RegexConstraint(Constraint):
 
     @classmethod
     def get_definition(cls) -> dict[str, str | bool | list[str]]:
-        """Export constraint definition with pattern.
-
+        """
+        Provide the constraint's exported definition including its regex pattern.
+        
         Returns:
-            Dictionary with constraint metadata including regex pattern.
+            dict[str, str | bool | list[str]]: Constraint metadata (e.g., name, description, lmql_syntax, supports_partial) extended with a "pattern" key containing the constraint's regex pattern string.
         """
         base = super().get_definition()
         base["pattern"] = cls.PATTERN
@@ -197,10 +218,14 @@ class EnumConstraint(Constraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate against allowed values with partial match support.
-
+        """
+        Validate a string against the constraint's allowed values, supporting exact and prefix (partial) matches.
+        
         Returns:
-            ValidationResult with outcome and suggestions.
+            ValidationResult: `valid` is true for an exact allowed-value match.
+            If the input is empty the result is partial and suggests all allowed values.
+            If the input is a prefix of one or more allowed values the result is partial and suggests possible completions.
+            Otherwise the result is invalid and includes a suggestion list of allowed values.
         """
         if not value:
             return ValidationResult(
@@ -233,10 +258,13 @@ class EnumConstraint(Constraint):
 
     @classmethod
     def get_definition(cls) -> dict[str, str | bool | list[str]]:
-        """Export constraint definition with allowed values.
-
+        """
+        Provide a serializable definition of the enum constraint for client consumption.
+        
         Returns:
-            Dictionary with constraint metadata including allowed values.
+            dict: Constraint metadata including base fields from the parent definition plus:
+                - "allowed_values": a sorted list of permitted string values.
+                - "lmql_syntax": a string showing the membership expression for the allowed set.
         """
         base = super().get_definition()
         base["allowed_values"] = sorted(cls.ALLOWED)
@@ -255,16 +283,26 @@ class ConstraintRegistry:
 
     @classmethod
     def register(cls, name: str) -> Callable[[type[Constraint]], type[Constraint]]:
-        """Decorator to register a constraint class.
-
+        """
+        Register a constraint class under a given unique name in the registry.
+        
         Args:
-            name: Unique name for the constraint
-
+            name: Unique registry name to assign to the constraint class.
+        
         Returns:
-            Decorator function that registers the class.
+            A decorator that assigns `name` to a `Constraint` subclass, stores it in the registry, and returns the class.
         """
 
         def decorator(constraint_cls: type[Constraint]) -> type[Constraint]:
+            """
+            Register the given Constraint subclass under the enclosing registry name and return it.
+            
+            Parameters:
+                constraint_cls (type[Constraint]): The Constraint subclass to register.
+            
+            Returns:
+                type[Constraint]: The same class that was registered.
+            """
             constraint_cls.name = name
             cls._constraints[name] = constraint_cls
             return constraint_cls
@@ -273,26 +311,24 @@ class ConstraintRegistry:
 
     @classmethod
     def get(cls, name: str) -> type[Constraint] | None:
-        """Get a constraint class by name.
-
-        Args:
-            name: Constraint name
-
+        """
+        Retrieve a registered constraint class by its registry name.
+        
+        Parameters:
+            name (str): The registry name of the constraint to look up.
+        
         Returns:
-            Constraint class or None if not found
+            type[Constraint] | None: The Constraint subclass for `name`, or `None` if no such constraint is registered.
         """
         return cls._constraints.get(name)
 
     @classmethod
     def validate(cls, name: str, value: str) -> ValidationResult:
-        """Validate a value against a named constraint.
-
-        Args:
-            name: Constraint name
-            value: Value to validate
-
+        """
+        Validate a value against a registered constraint identified by name.
+        
         Returns:
-            ValidationResult from the constraint
+            ValidationResult: outcome of validating `value` against the named constraint. If the named constraint is not found, `valid` is `False` and `error` describes the unknown constraint.
         """
         constraint = cls.get(name)
         if not constraint:
@@ -301,19 +337,21 @@ class ConstraintRegistry:
 
     @classmethod
     def list_constraints(cls) -> list[str]:
-        """List all registered constraint names.
-
+        """
+        Return the names of all registered constraints.
+        
         Returns:
-            List of constraint names
+            list[str]: Registered constraint names.
         """
         return list(cls._constraints.keys())
 
     @classmethod
     def get_all_definitions(cls) -> dict[str, dict[str, str | bool | list[str]]]:
-        """Get definitions for all registered constraints.
-
+        """
+        Collect client-facing definitions for every registered constraint.
+        
         Returns:
-            Dictionary mapping names to constraint definitions.
+            definitions (dict[str, dict[str, str | bool | list[str]]]): Mapping from constraint name to its exported definition (e.g., name, description, lmql_syntax, pattern, allowed_values, and supports_partial).
         """
         return {name: c.get_definition() for name, c in cls._constraints.items()}
 
@@ -339,19 +377,24 @@ class YQPathConstraint(RegexConstraint):
 
     @classmethod
     def empty_error(cls) -> str:
-        """Return yq-specific error for empty input.
-
+        """
+        Error message used when a yq path input is empty.
+        
         Returns:
-            Error message indicating path must start with dot.
+            error_message (str): Message indicating the path must start with '.'.
         """
         return "Empty path. yq paths must start with '.'"
 
     @classmethod
     def invalid_error(cls, value: str) -> str:
-        """Return yq-specific error for invalid path.
-
+        """
+        Produce an error message explaining why a yq path value is invalid.
+        
+        Parameters:
+            value (str): The yq path string that failed validation.
+        
         Returns:
-            Error message with pattern hint.
+            str: An error message describing the invalidity; may instruct that the path must start with "." or include the expected pattern.
         """
         if not value.startswith("."):
             return "yq paths must start with '.'"
@@ -359,10 +402,14 @@ class YQPathConstraint(RegexConstraint):
 
     @classmethod
     def get_suggestions(cls, value: str) -> list[str]:
-        """Suggest adding leading dot if missing.
-
+        """
+        Return a suggested yq path completion when a leading dot is missing.
+        
+        Parameters:
+            value (str): Input path fragment to check.
+        
         Returns:
-            List with corrected path suggestion.
+            list[str]: A list containing a corrected path starting with '.' (or "." for empty input), or an empty list if no suggestion is needed.
         """
         if not value.startswith("."):
             return [f".{value}"] if value else ["."]
@@ -370,10 +417,11 @@ class YQPathConstraint(RegexConstraint):
 
     @classmethod
     def get_definition(cls) -> dict[str, str | bool | list[str]]:
-        """Export constraint definition with examples.
-
+        """
+        Return the constraint definition augmented with example yq paths.
+        
         Returns:
-            Dictionary with constraint metadata and yq path examples.
+            dict: Constraint metadata dictionary including an "examples" key with sample yq paths (e.g., ".name", ".users[0]", ".config.database.host").
         """
         base = super().get_definition()
         base["examples"] = [".name", ".users[0]", ".config.database.host"]
@@ -396,19 +444,24 @@ class YQExpressionConstraint(RegexConstraint):
 
     @classmethod
     def empty_error(cls) -> str:
-        """Return error for empty expression.
-
+        """
+        Error message used when the expression input is empty.
+        
         Returns:
-            Error message for empty input.
+            A string describing the empty-expression error.
         """
         return "Empty expression"
 
     @classmethod
     def invalid_error(cls, value: str) -> str:
-        """Return error for invalid yq expression.
-
+        """
+        Produce a human-readable error message for an invalid yq expression.
+        
+        Parameters:
+            value (str): The yq expression being validated.
+        
         Returns:
-            Error message with pattern hint.
+            str: Error message explaining why the expression is invalid; when the expression starts with '.', the message includes the expected pattern.
         """
         if not value.startswith("."):
             return "yq expressions must start with '.'"
@@ -416,10 +469,11 @@ class YQExpressionConstraint(RegexConstraint):
 
     @classmethod
     def get_suggestions(cls, value: str) -> list[str]:
-        """Suggest adding leading dot if missing.
-
+        """
+        Suggest a corrected expression by adding a leading dot when the input does not start with one.
+        
         Returns:
-            List with corrected expression suggestion.
+            list[str]: A list containing the corrected expression with a leading dot if the input lacked one, otherwise an empty list.
         """
         if not value.startswith("."):
             return [f".{value}"]
@@ -427,10 +481,11 @@ class YQExpressionConstraint(RegexConstraint):
 
     @classmethod
     def get_definition(cls) -> dict[str, str | bool | list[str]]:
-        """Export constraint definition with examples.
-
+        """
+        Provide the constraint's metadata for client use, including example expressions.
+        
         Returns:
-            Dictionary with constraint metadata and expression examples.
+            dict: Mapping of constraint metadata with an "examples" key containing sample expressions (e.g., ".users", ".items | length", ".data[] | select(.active)").
         """
         base = super().get_definition()
         base["examples"] = [".users", ".items | length", ".data[] | select(.active)"]
@@ -456,10 +511,10 @@ class IntConstraint(Constraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate an integer string.
-
-        Returns:
-            ValidationResult indicating if value is valid integer.
+        """
+        Determine whether a string represents a valid integer.
+        
+        @returns ValidationResult describing the outcome: `valid` is `true` when the string is a properly formatted integer (optional leading '-' followed by digits), `is_partial` is `true` when the input is empty or could become a valid integer with additional characters (e.g., whitespace-only or incomplete input), and `error` contains a human-readable message when not valid.
         """
         if not value:
             return ValidationResult(
@@ -492,10 +547,16 @@ class IntConstraint(Constraint):
 
     @classmethod
     def get_definition(cls) -> dict[str, str | bool | list[str]]:
-        """Export constraint definition.
-
+        """
+        Return the constraint definition metadata for integer validation.
+        
         Returns:
-            Dictionary with constraint metadata for integer validation.
+            dict: Definition mapping including keys:
+                - "name": constraint name,
+                - "description": human-readable description,
+                - "supports_partial": whether partial/incremental validation is supported,
+                - "pattern": the regex "-?\d+" describing valid integer text,
+                - "lmql_syntax": the LMQL syntax hint "INT(VAR)".
         """
         base = super().get_definition()
         base["pattern"] = r"-?\d+"
@@ -516,10 +577,14 @@ class KeyPathConstraint(RegexConstraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate a key path, delegating to YQPathConstraint if starts with dot.
-
+        """
+        Validate a dot-separated key path; if the input starts with '.', delegate validation to YQPathConstraint.
+        
+        Parameters:
+            value (str): The key path to validate.
+        
         Returns:
-            ValidationResult from key path or yq path validation.
+            ValidationResult: Result describing whether the key path is valid. If the input is incomplete the result will have `is_partial=True` and may include `remaining_pattern` for completion; invalid results include an `error` message and optional `suggestions`.
         """
         if not value:
             return ValidationResult(
@@ -535,19 +600,22 @@ class KeyPathConstraint(RegexConstraint):
 
     @classmethod
     def get_suggestions(cls, value: str) -> list[str]:
-        """Return example key paths.
-
+        """
+        Provide example key path suggestions.
+        
         Returns:
-            List of example key path suggestions.
+            A list of example key path suggestions.
         """
         return ["users", "config.database", "items.0.name"]
 
     @classmethod
     def get_definition(cls) -> dict[str, str | bool | list[str]]:
-        """Export constraint definition with examples.
-
+        """
+        Return the constraint definition extended with example key paths.
+        
         Returns:
-            Dictionary with constraint metadata and key path examples.
+            Dictionary of constraint metadata (name, description, lmql_syntax, supports_partial, etc.)
+            with an added "examples" entry containing sample key paths like "name", "users.0", and "config.database.host".
         """
         base = super().get_definition()
         base["examples"] = ["name", "users.0", "config.database.host"]
@@ -565,10 +633,14 @@ class JSONValueConstraint(Constraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate a JSON value string.
-
+        """
+        Validate a JSON value represented as a string.
+        
+        Parses the input as JSON and reports whether it is valid, invalid, or a partial/incomplete JSON fragment.
+        If the value is empty, returns a partial result with an "expecting JSON" error. If parsing fails, detects common incomplete forms (unterminated string, unterminated array, unterminated object) and returns a partial result with a specific error; otherwise returns an invalid result with the JSON decode error message.
+        
         Returns:
-            ValidationResult indicating if value is valid JSON.
+            ValidationResult: `valid` is `true` when parsing succeeds; when `valid` is `false`, `is_partial` is `true` for incomplete fragments and `error` contains a short diagnostic message.
         """
         if not value:
             return ValidationResult(
@@ -610,10 +682,11 @@ class JSONValueConstraint(Constraint):
 
     @classmethod
     def get_definition(cls) -> dict[str, str | bool | list[str]]:
-        """Export constraint definition.
-
+        """
+        Provide the constraint definition augmented with representative JSON value examples.
+        
         Returns:
-            Dictionary with constraint metadata and JSON value examples.
+            Dictionary with constraint metadata, including an ``examples`` key containing a list of sample JSON value strings.
         """
         base = super().get_definition()
         base["examples"] = [
@@ -642,10 +715,11 @@ class FilePathConstraint(Constraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate a file path string.
-
+        """
+        Validate a file path string's syntax.
+        
         Returns:
-            ValidationResult indicating if path syntax is valid.
+            ValidationResult: Describes whether the path syntax is valid; when invalid, `error` contains a message. The validator is permissive and may accept complex or unusual paths as valid.
         """
         if not value:
             return ValidationResult(valid=False, error="Empty file path")
@@ -674,10 +748,13 @@ class FilePathConstraint(Constraint):
 
     @classmethod
     def get_definition(cls) -> dict[str, str | bool | list[str]]:
-        """Export constraint definition.
-
+        """
+        Return the constraint definition extended with the file-path regex pattern and examples.
+        
         Returns:
-            Dictionary with constraint metadata and file path examples.
+            dict: Constraint metadata including base definition keys plus:
+                - "pattern": the regex pattern string for validating file paths.
+                - "examples": a list of example file paths (e.g., "config.json", "./data/settings.yaml", "~/configs/app.toml").
         """
         base = super().get_definition()
         base["pattern"] = cls.PATTERN
@@ -691,14 +768,15 @@ class FilePathConstraint(Constraint):
 
 
 def create_enum_constraint(name: str, allowed_values: list[str]) -> type[Constraint]:
-    """Dynamically create an enum constraint from a list of values.
-
-    Args:
-        name: Name for the constraint
-        allowed_values: List of allowed string values
-
+    """
+    Create a Constraint subclass enforcing membership in a fixed set of string values.
+    
+    Parameters:
+        name (str): Public name assigned to the generated constraint class.
+        allowed_values (list[str]): Exact string values that will be accepted by the constraint (used as provided).
+    
     Returns:
-        New Constraint class for the enum
+        type[Constraint]: A new EnumConstraint subclass with `ALLOWED` set to the provided values and with `.name` and `.description` populated.
     """
 
     class DynamicEnumConstraint(EnumConstraint):
@@ -714,15 +792,16 @@ def create_enum_constraint(name: str, allowed_values: list[str]) -> type[Constra
 def create_pattern_constraint(
     name: str, pattern: str, description: str = ""
 ) -> type[Constraint]:
-    """Dynamically create a regex pattern constraint.
-
-    Args:
-        name: Name for the constraint
-        pattern: Regex pattern to match
-        description: Human-readable description
-
+    """
+    Create a RegexConstraint subclass that validates values against the provided pattern.
+    
+    Parameters:
+        name (str): The registry name assigned to the generated constraint class.
+        pattern (str): The regex pattern string used for validation (assigned to the class's `PATTERN`).
+        description (str): Human-readable description for the constraint; if empty, a default description is generated.
+    
     Returns:
-        New Constraint class for the pattern
+        constraint_cls (type[Constraint]): A new Constraint subclass whose `PATTERN` is set to `pattern` and whose `name` and `description` are set as provided.
     """
 
     class DynamicPatternConstraint(RegexConstraint):
@@ -743,20 +822,20 @@ def create_pattern_constraint(
 def validate_tool_input(
     constraint_name: str, value: str, raise_on_invalid: bool = False
 ) -> ValidationResult:
-    """Validate a tool input value against a named constraint.
-
-    This is the main entry point for server-side validation.
-
-    Args:
-        constraint_name: Name of the constraint to use
-        value: Value to validate
-        raise_on_invalid: If True, raise ToolError on invalid input
-
+    """
+    Validate a value against a named constraint and return the corresponding ValidationResult.
+    
+    Arguments:
+        constraint_name: Name of the registered constraint to use for validation.
+        value: The input string to validate.
+        raise_on_invalid: If True, raise ToolError when validation is invalid and not partial;
+            the raised error message includes the constraint error and any suggestions.
+    
     Returns:
-        ValidationResult
-
+        ValidationResult: Outcome of validating `value` against the named constraint.
+    
     Raises:
-        ToolError: If raise_on_invalid=True and validation fails
+        ToolError: If `raise_on_invalid` is True and the validation result is invalid (not partial).
     """
     result = ConstraintRegistry.validate(constraint_name, value)
 
@@ -770,16 +849,15 @@ def validate_tool_input(
 
 
 def get_constraint_hint(constraint_name: str, value: str) -> str | None:
-    """Get a hint for fixing an invalid value.
-
-    Useful for including in error messages to help LLMs self-correct.
-
-    Args:
-        constraint_name: Name of the constraint
-        value: The invalid value
-
+    """
+    Produce a concise hint to help fix a value that does not satisfy the named constraint.
+    
+    Parameters:
+        constraint_name (str): Registered constraint name to validate against.
+        value (str): Value to validate.
+    
     Returns:
-        Hint string or None
+        hint (str | None): Concatenated hint containing the validation error, a "Pattern to complete: ..." entry if applicable, and up to three suggested completions (joined with commas); returns `None` if the value is valid or no hintable information is available.
     """
     result = ConstraintRegistry.validate(constraint_name, value)
 
