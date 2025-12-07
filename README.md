@@ -5,6 +5,8 @@
 [![PyPI version](https://badge.fury.io/py/mcp-json-yaml-toml.svg)](https://badge.fury.io/py/mcp-json-yaml-toml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
+<img src="https://github.com/user-attachments/assets/bc1d4078-a72a-4def-8c5b-a1c653e98816" alt="JYT Logo" width="200">
+
 **A token-efficient, schema-aware MCP server for safely reading and modifying JSON, YAML, and TOML files.**
 
 Stop AI coding tools from breaking your data files. No more grep guesswork, hallucinated fields, or invalid configs. This MCP server gives AI assistants a strict, round-trip safe interface for working with structured data.
@@ -95,6 +97,10 @@ See [docs/clients.md](docs/clients.md) for detailed setup instructions for speci
 - **VS Code with Continue** - VS Code extension  
 - **Windsurf** - Collaborative coding platform
 - **Zed Editor** - High-performance text editor
+- **OpenAI Codex** - OpenAI's code generation platform
+- **Google Antigravity IDE** - Google's development environment
+- **Qwen Code** - Qwen's code assistant
+- **OpenCode** - Open source code tools
 - And other MCP-compatible tools
 
 ### Example Usage
