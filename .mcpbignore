@@ -37,6 +37,7 @@ scripts/
 !README.md
 .claude/
 .mcp.json
+logo.png
 
 # MCPB bundler artifacts
 server/lib/

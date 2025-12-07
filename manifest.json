@@ -17,7 +17,7 @@
   "homepage": "https://github.com/bitflight-devops/mcp-json-yaml-toml",
   "documentation": "https://github.com/bitflight-devops/mcp-json-yaml-toml#readme",
   "support": "https://github.com/bitflight-devops/mcp-json-yaml-toml/issues",
-  "icon": "logo.png",
+  "icon": "icon.png",
   "server": {
     "type": "uv",
     "entry_point": "packages/mcp_json_yaml_toml/server.py",
