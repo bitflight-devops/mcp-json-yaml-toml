@@ -576,7 +576,7 @@ Returns a validation result with:
 | --------------- | ------------------------------------ | ----------------------------------------- |
 | `YQ_PATH`       | yq path expression                   | `.name`, `.users[0]`, `.data.items[*]`    |
 | `YQ_EXPRESSION` | Full yq expression with pipes        | `.items \| length`, `.users \| map(.id)`  |
-| `CONFIG_FORMAT` | Supported config format              | `json`, `yaml`, `toml`, `xml`             |
+| `CONFIG_FORMAT` | Supported config format              | `json`, `yaml`, `toml`                    |
 | `KEY_PATH`      | Dot-separated key path               | `name`, `database.host`, `servers.0.port` |
 | `INT`           | Integer value                        | `42`, `-123`, `0`                         |
 | `JSON_VALUE`    | Valid JSON value                     | `"hello"`, `{"key": "value"}`, `[1, 2]`   |
@@ -678,7 +678,7 @@ Returns a list of all registered constraints:
     {
       "name": "CONFIG_FORMAT",
       "description": "Supported configuration file format",
-      "allowed_values": ["json", "yaml", "toml", "xml"]
+      "allowed_values": ["json", "yaml", "toml"]
     }
     // ... more constraints
   ],

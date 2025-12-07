@@ -780,7 +780,7 @@ class TestConstraintTools:
     def test_constraint_validate_valid_yq_path(self) -> None:
         """
         Verify that the YQ_PATH constraint accepts a valid yq-style path.
-        
+
         Asserts that validating the string ".name" with the "YQ_PATH" constraint yields a result marked valid, includes the constraint name and the original value, and does not contain an error entry.
         """
         result = constraint_validate_fn("YQ_PATH", ".name")
@@ -820,7 +820,7 @@ class TestConstraintTools:
     def test_constraint_validate_config_format(self) -> None:
         """
         Verify CONFIG_FORMAT enum constraint accepts allowed formats and rejects invalid ones.
-        
+
         Asserts that "json" and "yaml" validate successfully and that "csv" is reported as invalid.
         """
         result = constraint_validate_fn("CONFIG_FORMAT", "json")
@@ -923,7 +923,7 @@ class TestConstraintResources:
     def test_list_all_constraints_resource(self) -> None:
         """
         Verify that the constraint registry exposes all expected constraint definitions.
-        
+
         Asserts that the registry contains definitions for YQ_PATH, CONFIG_FORMAT, INT, KEY_PATH, JSON_VALUE, and FILE_PATH.
         """
         definitions = ConstraintRegistry.get_all_definitions()
@@ -938,7 +938,7 @@ class TestConstraintResources:
     def test_get_constraint_definition_resource(self) -> None:
         """
         Verify that the YQ_PATH constraint resource exposes a complete definition.
-        
+
         Asserts the returned definition has name "YQ_PATH" and includes the keys "description", "pattern", and "examples".
         """
         from mcp_json_yaml_toml.lmql_constraints import YQPathConstraint
@@ -953,7 +953,7 @@ class TestConstraintResources:
     def test_get_constraint_definition_config_format(self) -> None:
         """
         Verify that the CONFIG_FORMAT constraint definition exposes the expected allowed formats.
-        
+
         Asserts the definition name equals "CONFIG_FORMAT" and that the `allowed_values` list includes "json", "yaml", and "toml".
         """
         from mcp_json_yaml_toml.lmql_constraints import ConfigFormatConstraint

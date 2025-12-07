@@ -107,7 +107,7 @@ class TestYQPathConstraint:
     def test_get_definition(self) -> None:
         """
         Verify that YQPathConstraint.get_definition() returns a definition dict containing the expected keys.
-        
+
         Asserts that the definition's "name" is "YQ_PATH" and that the keys "pattern" and "examples" are present.
         """
         defn = YQPathConstraint.get_definition()
@@ -139,7 +139,7 @@ class TestYQExpressionConstraint:
     def test_missing_dot(self) -> None:
         """
         Verify that YQExpressionConstraint rejects expressions missing a leading dot.
-        
+
         Calls YQExpressionConstraint.validate with "items | length" and asserts the validation result is invalid.
         """
         result = YQExpressionConstraint.validate("items | length")
@@ -159,10 +159,6 @@ class TestConfigFormatConstraint:
 
     def test_valid_toml(self) -> None:
         result = ConfigFormatConstraint.validate("toml")
-        assert result.valid is True
-
-    def test_valid_xml(self) -> None:
-        result = ConfigFormatConstraint.validate("xml")
         assert result.valid is True
 
     def test_case_insensitive(self) -> None:
@@ -211,7 +207,7 @@ class TestIntConstraint:
     def test_valid_with_leading_space(self) -> None:
         """
         Checks that IntConstraint.validate accepts an integer string with leading whitespace.
-        
+
         Asserts that the validation result is valid for the input " 42".
         """
         result = IntConstraint.validate(" 42")
@@ -231,6 +227,13 @@ class TestIntConstraint:
         result = IntConstraint.validate("")
         assert result.valid is False
         assert result.is_partial is True
+
+    def test_lone_minus_is_partial(self) -> None:
+        """Lone minus sign is incomplete, not invalid."""
+        result = IntConstraint.validate("-")
+        assert result.valid is False
+        assert result.is_partial is True
+        assert result.error is None
 
 
 class TestKeyPathConstraint:

@@ -1374,23 +1374,22 @@ def data_merge(
         ),
     ] = None,
 ) -> dict[str, Any]:
-    """
-    Merge two configuration files into a single deep-merged configuration.
-    
+    """Merge two configuration files into a single deep-merged configuration.
+
     Performs a deep merge where values from the second (overlay) file override or extend
     those in the first (base) file. If output_file is provided the merged result is written
     to that path; otherwise the merged content is returned in the response.
-    
+
     Parameters:
         file_path1 (str): Path to the base configuration file.
         file_path2 (str): Path to the overlay configuration file whose values override the base.
         output_format (str | None): Desired output format: "json", "yaml", or "toml". Defaults to the format of the first file.
         output_file (str | None): Optional path to write the merged output. When omitted, merged content is returned.
-    
+
     Returns:
         dict: A payload describing the merge. On success includes "success": True, "file1", "file2",
         "output_format", and either "result" (merged content) or "output_file" (written path).
-    
+
     Raises:
         ToolError: If an input file is missing, its format is not enabled, the output format is invalid, or the merge fails.
     """
@@ -1475,9 +1474,8 @@ def data_merge(
 
 @mcp.resource("lmql://constraints")
 def list_all_constraints() -> dict[str, Any]:
-    """
-    Provide metadata and definitions for all registered LMQL constraints.
-    
+    """Provide metadata and definitions for all registered LMQL constraints.
+
     Returns:
         A dictionary with:
         - "constraints": a mapping of all constraint definitions keyed by name.
@@ -1493,12 +1491,11 @@ def list_all_constraints() -> dict[str, Any]:
 
 @mcp.resource("lmql://constraints/{name}")
 def get_constraint_definition(name: str) -> dict[str, Any]:
-    """
-    Retrieve the definition of a named LMQL constraint.
-    
+    """Retrieve the definition of a named LMQL constraint.
+
     Raises:
         ToolError: If the constraint name is not registered; the error message lists available constraints.
-    
+
     Returns:
         dict: Constraint definition containing fields such as pattern, examples, and LMQL syntax.
     """
@@ -1556,9 +1553,8 @@ def constraint_validate(
 
 @mcp.tool(annotations={"readOnlyHint": True})
 def constraint_list() -> dict[str, Any]:
-    """
-    Return a list of all registered LMQL constraints with their metadata.
-    
+    """Return a list of all registered LMQL constraints with their metadata.
+
     Returns:
         result (dict): A dictionary with keys:
             - "constraints": a list of constraint objects; each object includes a "name" key and the constraint's definition fields (e.g., "description", any other metadata).
@@ -1576,18 +1572,17 @@ def constraint_list() -> dict[str, Any]:
 
 @mcp.prompt()
 def explain_config(file_path: str) -> str:
-    """
-    Produce a natural-language prompt that requests an analysis of a configuration file.
-    
+    """Produce a natural-language prompt that requests an analysis of a configuration file.
+
     The generated prompt asks an assistant to:
     1. Identify the file format (JSON, YAML, TOML).
     2. Summarize the file's key sections and their purpose.
     3. Highlight critical settings and potential misconfigurations.
     4. Check adherence to an available schema, if one exists.
-    
+
     Parameters:
         file_path (str): Path to the configuration file to be analyzed.
-    
+
     Returns:
         prompt (str): A formatted prompt string referring to the provided file path.
     """
