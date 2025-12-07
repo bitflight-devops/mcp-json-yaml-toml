@@ -92,16 +92,7 @@ Most MCP clients use a JSON configuration format. Add this to your client's MCP 
 }
 ```
 
-See [docs/clients.md](docs/clients.md) for detailed setup instructions for specific clients:
-- **Cursor** - AI-powered code editor
-- **VS Code with Continue** - VS Code extension  
-- **Windsurf** - Collaborative coding platform
-- **Zed Editor** - High-performance text editor
-- **OpenAI Codex** - OpenAI's code generation platform
-- **Google Antigravity IDE** - Google's development environment
-- **Qwen Code** - Qwen's code assistant
-- **OpenCode** - Open source code tools
-- And other MCP-compatible tools
+See [docs/clients.md](docs/clients.md) for detailed setup instructions for specific clients including Cursor, VS Code with Continue, Windsurf, Zed Editor, and other MCP-compatible tools.
 
 ### Example Usage
 
