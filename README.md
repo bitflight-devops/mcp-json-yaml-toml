@@ -36,6 +36,18 @@ AI coding tools often destroy structured data files:
 
 **Compatible with any MCP client**: Claude Code CLI, Cursor, Windsurf, VS Code with MCP extensions, and more.
 
+### What It Provides
+
+The server provides 5 MCP tools for structured data manipulation:
+
+- **`data`**: Get, set, or delete values at specific paths in configuration files
+- **`data_query`**: Run advanced yq expressions for complex queries and transformations
+- **`data_schema`**: Validate files against JSON schemas and manage schema catalogs
+- **`data_convert`**: Convert between JSON, YAML, and TOML formats
+- **`data_merge`**: Deep merge two configuration files with environment overrides
+
+See [docs/tools.md](docs/tools.md) for detailed API reference and examples.
+
 ### Key Features
 
 - **Powerful querying**: Use yq's jq-compatible expressions to extract nested data
@@ -77,9 +89,7 @@ uv cache clean mcp-json-yaml-toml
 
 The next time the MCP server runs, `uvx` will download the latest version.
 
-### Claude Desktop (GUI Application)
-
-> **Note**: Claude Desktop is a separate GUI application from Claude Code CLI. If you're using the Claude Code CLI tool, use the installation method above instead.
+### Claude Desktop
 
 1. Open your Claude Desktop configuration file:
 
