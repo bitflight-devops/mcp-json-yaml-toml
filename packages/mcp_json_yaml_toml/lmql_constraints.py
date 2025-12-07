@@ -13,11 +13,14 @@ from __future__ import annotations
 import string
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import orjson
 from fastmcp.exceptions import ToolError
 from lmql.ops.regex import Regex
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass
@@ -38,9 +41,13 @@ class ValidationResult:
     remaining_pattern: str | None = None
     suggestions: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        result: dict[str, Any] = {"valid": self.valid}
+    def to_dict(self) -> dict[str, bool | str | list[str] | None]:
+        """Convert to dictionary for JSON serialization.
+
+        Returns:
+            Dictionary with validation result fields suitable for JSON.
+        """
+        result: dict[str, bool | str | list[str] | None] = {"valid": self.valid}
         if self.error:
             result["error"] = self.error
         if self.is_partial:
@@ -80,11 +87,11 @@ class Constraint(ABC):
         """
 
     @classmethod
-    def get_definition(cls) -> dict[str, Any]:
+    def get_definition(cls) -> dict[str, str | bool | list[str]]:
         """Export constraint definition for LLM clients.
 
         Returns:
-            Dictionary with constraint metadata for client-side use
+            Dictionary with constraint metadata for client-side use.
         """
         return {
             "name": cls.name,
@@ -105,22 +112,38 @@ class RegexConstraint(Constraint):
 
     @classmethod
     def empty_error(cls) -> str:
-        """Error message for empty input."""
+        """Return error message for empty input.
+
+        Returns:
+            Error message string.
+        """
         return "Empty input"
 
     @classmethod
     def invalid_error(cls, value: str) -> str:
-        """Error message for invalid (non-partial) input."""
+        """Return error message for invalid (non-partial) input.
+
+        Returns:
+            Error message string.
+        """
         return f"Invalid input. Must match pattern: {cls.PATTERN}"
 
     @classmethod
     def get_suggestions(cls, value: str) -> list[str]:
-        """Get suggestions for invalid input."""
+        """Return suggestions for invalid input.
+
+        Returns:
+            List of suggested corrections.
+        """
         return []
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate using LMQL Regex with partial match support."""
+        """Validate using LMQL Regex with partial match support.
+
+        Returns:
+            ValidationResult with outcome and partial match details.
+        """
         if not value:
             return ValidationResult(
                 valid=False,
@@ -153,8 +176,12 @@ class RegexConstraint(Constraint):
         )
 
     @classmethod
-    def get_definition(cls) -> dict[str, Any]:
-        """Export constraint definition with pattern."""
+    def get_definition(cls) -> dict[str, str | bool | list[str]]:
+        """Export constraint definition with pattern.
+
+        Returns:
+            Dictionary with constraint metadata including regex pattern.
+        """
         base = super().get_definition()
         base["pattern"] = cls.PATTERN
         return base
@@ -170,7 +197,11 @@ class EnumConstraint(Constraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate against allowed values with partial match support."""
+        """Validate against allowed values with partial match support.
+
+        Returns:
+            ValidationResult with outcome and suggestions.
+        """
         if not value:
             return ValidationResult(
                 valid=False,
@@ -201,8 +232,12 @@ class EnumConstraint(Constraint):
         )
 
     @classmethod
-    def get_definition(cls) -> dict[str, Any]:
-        """Export constraint definition with allowed values."""
+    def get_definition(cls) -> dict[str, str | bool | list[str]]:
+        """Export constraint definition with allowed values.
+
+        Returns:
+            Dictionary with constraint metadata including allowed values.
+        """
         base = super().get_definition()
         base["allowed_values"] = sorted(cls.ALLOWED)
         base["lmql_syntax"] = f"VAR in {sorted(cls.ALLOWED)}"
@@ -219,14 +254,14 @@ class ConstraintRegistry:
     _constraints: ClassVar[dict[str, type[Constraint]]] = {}
 
     @classmethod
-    def register(cls, name: str) -> Any:
+    def register(cls, name: str) -> Callable[[type[Constraint]], type[Constraint]]:
         """Decorator to register a constraint class.
 
         Args:
             name: Unique name for the constraint
 
         Returns:
-            Decorator function that registers the class
+            Decorator function that registers the class.
         """
 
         def decorator(constraint_cls: type[Constraint]) -> type[Constraint]:
@@ -274,11 +309,11 @@ class ConstraintRegistry:
         return list(cls._constraints.keys())
 
     @classmethod
-    def get_all_definitions(cls) -> dict[str, dict[str, Any]]:
+    def get_all_definitions(cls) -> dict[str, dict[str, str | bool | list[str]]]:
         """Get definitions for all registered constraints.
 
         Returns:
-            Dictionary mapping names to constraint definitions
+            Dictionary mapping names to constraint definitions.
         """
         return {name: c.get_definition() for name, c in cls._constraints.items()}
 
@@ -304,22 +339,42 @@ class YQPathConstraint(RegexConstraint):
 
     @classmethod
     def empty_error(cls) -> str:
+        """Return yq-specific error for empty input.
+
+        Returns:
+            Error message indicating path must start with dot.
+        """
         return "Empty path. yq paths must start with '.'"
 
     @classmethod
     def invalid_error(cls, value: str) -> str:
+        """Return yq-specific error for invalid path.
+
+        Returns:
+            Error message with pattern hint.
+        """
         if not value.startswith("."):
             return "yq paths must start with '.'"
         return f"Invalid yq path syntax. Must match pattern: {cls.PATTERN}"
 
     @classmethod
     def get_suggestions(cls, value: str) -> list[str]:
+        """Suggest adding leading dot if missing.
+
+        Returns:
+            List with corrected path suggestion.
+        """
         if not value.startswith("."):
             return [f".{value}"] if value else ["."]
         return []
 
     @classmethod
-    def get_definition(cls) -> dict[str, Any]:
+    def get_definition(cls) -> dict[str, str | bool | list[str]]:
+        """Export constraint definition with examples.
+
+        Returns:
+            Dictionary with constraint metadata and yq path examples.
+        """
         base = super().get_definition()
         base["examples"] = [".name", ".users[0]", ".config.database.host"]
         return base
@@ -341,22 +396,42 @@ class YQExpressionConstraint(RegexConstraint):
 
     @classmethod
     def empty_error(cls) -> str:
+        """Return error for empty expression.
+
+        Returns:
+            Error message for empty input.
+        """
         return "Empty expression"
 
     @classmethod
     def invalid_error(cls, value: str) -> str:
+        """Return error for invalid yq expression.
+
+        Returns:
+            Error message with pattern hint.
+        """
         if not value.startswith("."):
             return "yq expressions must start with '.'"
         return f"Invalid yq expression. Pattern: {cls.PATTERN}"
 
     @classmethod
     def get_suggestions(cls, value: str) -> list[str]:
+        """Suggest adding leading dot if missing.
+
+        Returns:
+            List with corrected expression suggestion.
+        """
         if not value.startswith("."):
             return [f".{value}"]
         return []
 
     @classmethod
-    def get_definition(cls) -> dict[str, Any]:
+    def get_definition(cls) -> dict[str, str | bool | list[str]]:
+        """Export constraint definition with examples.
+
+        Returns:
+            Dictionary with constraint metadata and expression examples.
+        """
         base = super().get_definition()
         base["examples"] = [".users", ".items | length", ".data[] | select(.active)"]
         return base
@@ -381,7 +456,11 @@ class IntConstraint(Constraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate an integer string."""
+        """Validate an integer string.
+
+        Returns:
+            ValidationResult indicating if value is valid integer.
+        """
         if not value:
             return ValidationResult(
                 valid=False, is_partial=True, error="Empty value - expecting integer"
@@ -412,8 +491,12 @@ class IntConstraint(Constraint):
         return ValidationResult(valid=False, error="Invalid integer format")
 
     @classmethod
-    def get_definition(cls) -> dict[str, Any]:
-        """Export constraint definition."""
+    def get_definition(cls) -> dict[str, str | bool | list[str]]:
+        """Export constraint definition.
+
+        Returns:
+            Dictionary with constraint metadata for integer validation.
+        """
         base = super().get_definition()
         base["pattern"] = r"-?\d+"
         base["lmql_syntax"] = "INT(VAR)"
@@ -433,7 +516,11 @@ class KeyPathConstraint(RegexConstraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate a key path, delegating to YQPathConstraint if starts with dot."""
+        """Validate a key path, delegating to YQPathConstraint if starts with dot.
+
+        Returns:
+            ValidationResult from key path or yq path validation.
+        """
         if not value:
             return ValidationResult(
                 valid=False, is_partial=True, error="Empty key path"
@@ -448,10 +535,20 @@ class KeyPathConstraint(RegexConstraint):
 
     @classmethod
     def get_suggestions(cls, value: str) -> list[str]:
+        """Return example key paths.
+
+        Returns:
+            List of example key path suggestions.
+        """
         return ["users", "config.database", "items.0.name"]
 
     @classmethod
-    def get_definition(cls) -> dict[str, Any]:
+    def get_definition(cls) -> dict[str, str | bool | list[str]]:
+        """Export constraint definition with examples.
+
+        Returns:
+            Dictionary with constraint metadata and key path examples.
+        """
         base = super().get_definition()
         base["examples"] = ["name", "users.0", "config.database.host"]
         return base
@@ -468,7 +565,11 @@ class JSONValueConstraint(Constraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate a JSON value string."""
+        """Validate a JSON value string.
+
+        Returns:
+            ValidationResult indicating if value is valid JSON.
+        """
         if not value:
             return ValidationResult(
                 valid=False, is_partial=True, error="Empty value - expecting JSON"
@@ -508,8 +609,12 @@ class JSONValueConstraint(Constraint):
             return ValidationResult(valid=False, error=f"Invalid JSON: {e}")
 
     @classmethod
-    def get_definition(cls) -> dict[str, Any]:
-        """Export constraint definition."""
+    def get_definition(cls) -> dict[str, str | bool | list[str]]:
+        """Export constraint definition.
+
+        Returns:
+            Dictionary with constraint metadata and JSON value examples.
+        """
         base = super().get_definition()
         base["examples"] = [
             '"hello"',
@@ -537,7 +642,11 @@ class FilePathConstraint(Constraint):
 
     @classmethod
     def validate(cls, value: str) -> ValidationResult:
-        """Validate a file path string."""
+        """Validate a file path string.
+
+        Returns:
+            ValidationResult indicating if path syntax is valid.
+        """
         if not value:
             return ValidationResult(valid=False, error="Empty file path")
 
@@ -564,8 +673,12 @@ class FilePathConstraint(Constraint):
         return ValidationResult(valid=True)  # Be permissive for complex paths
 
     @classmethod
-    def get_definition(cls) -> dict[str, Any]:
-        """Export constraint definition."""
+    def get_definition(cls) -> dict[str, str | bool | list[str]]:
+        """Export constraint definition.
+
+        Returns:
+            Dictionary with constraint metadata and file path examples.
+        """
         base = super().get_definition()
         base["pattern"] = cls.PATTERN
         base["examples"] = ["config.json", "./data/settings.yaml", "~/configs/app.toml"]

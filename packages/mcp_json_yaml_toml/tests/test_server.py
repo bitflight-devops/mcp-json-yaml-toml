@@ -967,9 +967,11 @@ class TestConstraintResources:
 
         assert result["name"] == "CONFIG_FORMAT"
         assert "allowed_values" in result
-        assert "json" in result["allowed_values"]
-        assert "yaml" in result["allowed_values"]
-        assert "toml" in result["allowed_values"]
+        allowed = result["allowed_values"]
+        assert isinstance(allowed, list)
+        assert "json" in allowed
+        assert "yaml" in allowed
+        assert "toml" in allowed
 
     def test_get_constraint_definition_unknown(self) -> None:
         """Test unknown constraint returns None.

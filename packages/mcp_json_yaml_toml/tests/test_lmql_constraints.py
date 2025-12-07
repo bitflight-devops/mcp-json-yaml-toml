@@ -178,7 +178,9 @@ class TestConfigFormatConstraint:
     def test_get_definition(self) -> None:
         defn = ConfigFormatConstraint.get_definition()
         assert "allowed_values" in defn
-        assert "json" in defn["allowed_values"]
+        allowed = defn["allowed_values"]
+        assert isinstance(allowed, list)
+        assert "json" in allowed
 
 
 class TestIntConstraint:
