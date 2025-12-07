@@ -55,6 +55,17 @@
     }
   ],
   "prompts_generated": true,
-  "keywords": ["json", "yaml", "toml", "jq", "yq", "schema", "validation", "query", "transform", "config"],
+  "keywords": [
+    "json",
+    "yaml",
+    "toml",
+    "jq",
+    "yq",
+    "schema",
+    "validation",
+    "query",
+    "transform",
+    "config"
+  ],
   "license": "MIT"
 }
