@@ -69,25 +69,35 @@ See [docs/tools.md](docs/tools.md) for detailed API reference and examples.
 
 MCP servers run as external processes and communicate via stdio with your MCP client. This server uses `uvx` for automatic dependency management.
 
-**Basic installation command** (works with most MCP clients):
+#### Claude Code (CLI)
+
+The Claude Code CLI tool provides a streamlined installation:
 
 ```bash
-uvx mcp-json-yaml-toml
+claude mcp add --scope user mcp-json-yaml-toml -- uvx mcp-json-yaml-toml
 ```
 
-### Client Configuration
+#### Other MCP Clients
 
-The server works with any MCP-compatible client. See [docs/clients.md](docs/clients.md) for detailed setup instructions for:
+Most MCP clients use a JSON configuration format. Add this to your client's MCP configuration file:
 
-- **Claude Desktop** - GUI application for desktop use
-- **Claude Code CLI** - Command-line tool with `claude mcp add` command
+```json
+{
+  "mcpServers": {
+    "json-yaml-toml": {
+      "command": "uvx",
+      "args": ["mcp-json-yaml-toml"]
+    }
+  }
+}
+```
+
+See [docs/clients.md](docs/clients.md) for detailed setup instructions for specific clients:
 - **Cursor** - AI-powered code editor
-- **VS Code with Continue** - VS Code extension
+- **VS Code with Continue** - VS Code extension  
 - **Windsurf** - Collaborative coding platform
 - **Zed Editor** - High-performance text editor
 - And other MCP-compatible tools
-
-Each client has its own configuration format and file location. The docs provide specific examples for each.
 
 ### Example Usage
 
@@ -140,8 +150,8 @@ See [docs/tools.md](docs/tools.md) for environment variables and configuration o
 git clone https://github.com/bitflight-devops/mcp-json-yaml-toml.git
 cd mcp-json-yaml-toml
 
-# Install with development dependencies
-uv pip install -e ".[dev]"
+# Install dependencies (including dev dependencies)
+uv sync
 
 # Install pre-commit hooks
 pre-commit install
