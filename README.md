@@ -102,7 +102,7 @@ Once configured, you can ask your AI assistant to perform operations like:
 - "Convert config.yaml to JSON format"
 - "Export this TOML file as YAML"
 
-> **Note:** Conversion to TOML format from JSON/YAML is not supported due to yq limitations. See [docs/tools.md](docs/tools.md#supported-conversions) for details.
+> **Note:** Conversion TO TOML is not supported. See [docs/tools.md](docs/tools.md#supported-conversions) for details.
 
 **Validation:**
 - "Validate this YAML file syntax"
