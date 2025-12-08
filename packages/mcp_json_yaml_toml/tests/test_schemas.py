@@ -253,3 +253,65 @@ class TestSchemaManagerFetchFromIdeCache:
 
         assert result is not None
         assert result["type"] == "string"
+
+    def test_finds_schema_by_id_with_domain_variant(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify schema found when $id uses different domain than query URL."""
+        # Create hash-based cache directory (vscode-yaml style)
+        cache_dir = tmp_path / "ide_cache"
+        cache_dir.mkdir()
+
+        # Schema with json.schemastore.org in $id
+        schema_data = {
+            "$id": "https://json.schemastore.org/github-workflow.json",
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+        }
+        schema_file = cache_dir / "abc123hash"
+        schema_file.write_text(json.dumps(schema_data))
+
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+        )
+
+        manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
+
+        # Query with www.schemastore.org (catalog URL)
+        result = manager._fetch_from_ide_cache(
+            "github-workflow.json",
+            schema_url="https://www.schemastore.org/github-workflow.json",
+        )
+
+        assert result is not None
+        assert result["$id"] == "https://json.schemastore.org/github-workflow.json"
+        assert result["type"] == "object"
+
+    def test_finds_schema_by_filename_fallback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify schema found by filename when domains differ completely."""
+        cache_dir = tmp_path / "ide_cache"
+        cache_dir.mkdir()
+
+        # Schema with different base domain
+        schema_data = {
+            "$id": "https://example.com/schemas/my-schema.json",
+            "type": "boolean",
+        }
+        schema_file = cache_dir / "xyz789hash"
+        schema_file.write_text(json.dumps(schema_data))
+
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+        )
+
+        manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
+
+        # Query with completely different domain but same filename
+        result = manager._fetch_from_ide_cache(
+            "my-schema.json", schema_url="https://other-domain.org/my-schema.json"
+        )
+
+        assert result is not None
+        assert result["type"] == "boolean"

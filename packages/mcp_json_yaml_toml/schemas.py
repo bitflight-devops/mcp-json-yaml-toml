@@ -200,6 +200,49 @@ class SchemaManager:
             orjson.dumps(self.config, option=orjson.OPT_INDENT_2)
         )
 
+    def get_schema_path_for_file(self, file_path: Path) -> Path | None:
+        """Find and return the cached schema file path for a given file.
+
+        This fetches and caches the schema if needed, then returns the path
+        to the cached schema file rather than loading it into memory.
+
+        Args:
+            file_path: Path to the file to find a schema for.
+
+        Returns:
+            Path to the cached schema file if found, None otherwise.
+        """
+        # 1. Check file associations first (highest priority)
+        file_str = str(file_path.resolve())
+        file_associations = self.config.get("file_associations", {})
+        if file_str in file_associations:
+            assoc = file_associations[file_str]
+            schema_url = assoc.get("schema_url") if isinstance(assoc, dict) else assoc
+            if isinstance(schema_url, str):
+                return self._fetch_schema_to_cache(schema_url)
+
+        # 2. Check catalog patterns
+        catalog = self._get_catalog()
+        if not catalog:
+            return None
+
+        filename = file_path.name
+
+        for schema_info in catalog.get("schemas", []):
+            if "fileMatch" not in schema_info:
+                continue
+
+            for pattern in schema_info["fileMatch"]:
+                # Check exact filename match first (fast path)
+                if filename == pattern:
+                    return self._fetch_schema_to_cache(schema_info["url"])
+
+                # Check glob pattern match
+                if _match_glob_pattern(file_path, pattern):
+                    return self._fetch_schema_to_cache(schema_info["url"])
+
+        return None
+
     def get_schema_for_file(self, file_path: Path) -> dict[str, Any] | None:
         """Find and return the schema for a given file.
 
@@ -358,6 +401,48 @@ class SchemaManager:
             return None
         return catalog
 
+    def _get_cache_path_for_url(self, url: str) -> Path:
+        """Get the cache path for a schema URL.
+
+        Args:
+            url: URL of the schema.
+
+        Returns:
+            Path where the schema would be cached.
+        """
+        schema_filename = url.rsplit("/", maxsplit=1)[-1]
+        if not schema_filename.endswith(".json"):
+            schema_filename += ".json"
+        return self.cache_dir / schema_filename
+
+    def _fetch_schema_to_cache(self, url: str) -> Path | None:
+        """Fetch a schema and return the cache path.
+
+        Ensures the schema is cached locally and returns the path to the cache file.
+
+        Args:
+            url: URL of the schema to fetch.
+
+        Returns:
+            Path to the cached schema file, or None if fetch fails.
+        """
+        cache_path = self._get_cache_path_for_url(url)
+
+        # If cache is valid, return it directly
+        if self._is_cache_valid(cache_path):
+            return cache_path
+
+        # Try to fetch and cache the schema
+        schema = self._fetch_schema(url)
+        if schema is not None:
+            return cache_path
+
+        # Check if we have a stale cache we can use
+        if cache_path.exists():
+            return cache_path
+
+        return None
+
     def _fetch_schema(self, url: str) -> dict[str, Any] | None:
         """Fetch a schema from a URL, using cache if available.
 
@@ -367,12 +452,8 @@ class SchemaManager:
         Returns:
             Parsed schema dict if available, None if fetch fails and no cache exists.
         """
-        # Create a safe filename from URL
-        schema_filename = url.rsplit("/", maxsplit=1)[-1]
-        if not schema_filename.endswith(".json"):
-            schema_filename += ".json"
-
-        cache_path = self.cache_dir / schema_filename
+        cache_path = self._get_cache_path_for_url(url)
+        schema_filename = cache_path.name
 
         if self._is_cache_valid(cache_path):
             try:
@@ -383,7 +464,7 @@ class SchemaManager:
                 return cached
 
         # Check IDE caches before making network request
-        ide_schema = self._fetch_from_ide_cache(schema_filename)
+        ide_schema = self._fetch_from_ide_cache(schema_filename, schema_url=url)
         if ide_schema:
             # Cache it locally for future use
             cache_path.write_bytes(orjson.dumps(ide_schema))
@@ -412,11 +493,90 @@ class SchemaManager:
             return None
         return schema
 
-    def _fetch_from_ide_cache(self, schema_filename: str) -> dict[str, Any] | None:
+    def _normalize_schema_url(self, url: str) -> str:
+        """Normalize schema URL for comparison.
+
+        Handles domain variants between www.schemastore.org and json.schemastore.org.
+
+        Args:
+            url: URL to normalize.
+
+        Returns:
+            Normalized URL with consistent domain.
+        """
+        # Normalize www.schemastore.org to json.schemastore.org for comparison
+        return url.replace(
+            "https://www.schemastore.org/", "https://json.schemastore.org/"
+        )
+
+    def _urls_match(self, url1: str, url2: str) -> bool:
+        """Check if two schema URLs match, handling domain variants.
+
+        Args:
+            url1: First URL to compare.
+            url2: Second URL to compare.
+
+        Returns:
+            True if URLs match after normalization, False otherwise.
+        """
+        if url1 == url2:
+            return True
+
+        # Normalize both URLs and compare
+        normalized1 = self._normalize_schema_url(url1)
+        normalized2 = self._normalize_schema_url(url2)
+
+        if normalized1 == normalized2:
+            return True
+
+        # Fallback: compare just the filename portion
+        filename1 = url1.rsplit("/", maxsplit=1)[-1]
+        filename2 = url2.rsplit("/", maxsplit=1)[-1]
+
+        return filename1 == filename2 and filename1.endswith(".json")
+
+    def _search_hash_based_cache(
+        self, cache_dir: Path, schema_url: str
+    ) -> dict[str, Any] | None:
+        """Search hash-based cache (vscode-yaml style) by checking $id in content.
+
+        Args:
+            cache_dir: Directory containing hash-named schema files.
+            schema_url: URL to match against schema $id field.
+
+        Returns:
+            Parsed schema dict if found, None otherwise.
+        """
+        if not cache_dir.exists():
+            return None
+
+        for cached_file in cache_dir.iterdir():
+            if not cached_file.is_file():
+                continue
+            try:
+                content = orjson.loads(cached_file.read_bytes())
+                if isinstance(content, dict):
+                    schema_id = content.get("$id")
+                    if isinstance(schema_id, str) and self._urls_match(
+                        schema_id, schema_url
+                    ):
+                        return content
+            except (orjson.JSONDecodeError, OSError):
+                continue
+        return None
+
+    def _fetch_from_ide_cache(
+        self, schema_filename: str, schema_url: str | None = None
+    ) -> dict[str, Any] | None:
         """Try to find schema in IDE cache locations using concurrent checking.
+
+        Searches for schemas by:
+        1. Exact filename match (e.g., github-workflow.json)
+        2. Schema $id field match for hash-based caches (e.g., vscode-yaml)
 
         Args:
             schema_filename: Name of the schema file to look for.
+            schema_url: Optional URL to match against schema $id field.
 
         Returns:
             Parsed schema dict if found, None otherwise.
@@ -424,11 +584,7 @@ class SchemaManager:
         cache_dirs = _get_ide_schema_locations()
 
         def try_load_schema(cache_dir: Path) -> dict[str, Any] | None:
-            """Try to load schema from a specific directory.
-
-            Returns:
-                Parsed schema dict if found and valid, None otherwise.
-            """
+            # Try exact filename match first
             schema_path = cache_dir / schema_filename
             if schema_path.exists():
                 try:
@@ -437,6 +593,10 @@ class SchemaManager:
                     pass
                 else:
                     return loaded
+
+            # Try hash-based cache lookup
+            if schema_url:
+                return self._search_hash_based_cache(cache_dir, schema_url)
             return None
 
         # Check all directories concurrently
@@ -449,7 +609,6 @@ class SchemaManager:
             for future in as_completed(futures):
                 result = future.result()
                 if result is not None:
-                    # Cancel remaining futures since we found a match
                     for f in futures:
                         f.cancel()
                     return result

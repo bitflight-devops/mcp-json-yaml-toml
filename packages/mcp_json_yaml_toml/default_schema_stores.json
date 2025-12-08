@@ -1,7 +1,15 @@
 {
   "ide_patterns": [
     "~/.config/Cursor/User/globalStorage/redhat.vscode-yaml/schemas",
+    "~/.config/Cursor/User/globalStorage/redhat.vscode-yaml/schemas_cache",
+    "~/.config/Code/User/globalStorage/redhat.vscode-yaml/schemas",
+    "~/.config/Code/User/globalStorage/redhat.vscode-yaml/schemas_cache",
+    "~/.config/Antigravity/User/globalStorage/redhat.vscode-yaml/schemas",
+    "~/.config/Antigravity/User/globalStorage/redhat.vscode-yaml/schemas_cache",
     "~/Library/Application Support/Cursor/User/globalStorage/redhat.vscode-yaml/schemas",
+    "~/Library/Application Support/Cursor/User/globalStorage/redhat.vscode-yaml/schemas_cache",
+    "~/Library/Application Support/Code/User/globalStorage/redhat.vscode-yaml/schemas",
+    "~/Library/Application Support/Code/User/globalStorage/redhat.vscode-yaml/schemas_cache",
     "~/.vscode/extensions/redhat.vscode-yaml-*/schemas",
     "~/.cache/JetBrains/*/jsonSchemas",
     "~/Library/Caches/JetBrains/*/jsonSchemas"

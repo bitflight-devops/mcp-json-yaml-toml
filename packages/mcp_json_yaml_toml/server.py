@@ -1131,16 +1131,10 @@ def _handle_schema_validate(
             if not schema_file.exists():
                 raise ToolError(f"Schema file not found: {schema_path}")
         else:
-            schema_data = schema_manager.get_schema_for_file(file_path_obj)
-            if schema_data:
-                import tempfile
-
-                with tempfile.NamedTemporaryFile(
-                    mode="wb", suffix=".json", delete=False
-                ) as tmp:
-                    tmp.write(orjson.dumps(schema_data))
-                    schema_file = Path(tmp.name)
-            else:
+            # Try to get cached schema path from SchemaManager
+            schema_file = schema_manager.get_schema_path_for_file(file_path_obj)
+            if not schema_file:
+                # Fall back to local schema file search
                 schema_file = _find_schema_file(file_path_obj)
 
         if schema_file:
