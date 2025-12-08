@@ -4,6 +4,7 @@ Handles automatic schema discovery via Schema Store and local caching.
 """
 
 import datetime
+import fnmatch
 import logging
 import os
 import time
@@ -16,6 +17,45 @@ import orjson
 
 SCHEMA_STORE_CATALOG_URL = "https://www.schemastore.org/api/json/catalog.json"
 CACHE_EXPIRY_SECONDS = 24 * 60 * 60  # 24 hours
+
+
+def _match_glob_pattern(file_path: Path, pattern: str) -> bool:
+    """Match a file path against a SchemaStore glob pattern.
+
+    Supports:
+    - ** for matching any directory depth
+    - * for matching any filename part
+    - Negation patterns like !(config) are not supported
+
+    Args:
+        file_path: Absolute or relative path to match.
+        pattern: Glob pattern from SchemaStore (e.g., '**/.github/workflows/*.yml').
+
+    Returns:
+        True if the path matches the pattern.
+    """
+    # Skip negation patterns - too complex for basic matching
+    if "!(" in pattern:
+        return False
+
+    path_str = str(file_path)
+
+    # Normalize separators
+    pattern = pattern.replace("\\", "/")
+    path_str = path_str.replace("\\", "/")
+
+    # Handle ** patterns by converting to fnmatch-compatible form
+    if "**/" in pattern:
+        # Pattern like **/.github/workflows/*.yml
+        # Need to match any prefix, then the rest literally
+        suffix = pattern.split("**/", 1)[1]
+        # Check if path ends with the suffix pattern
+        return fnmatch.fnmatch(path_str, "*/" + suffix) or fnmatch.fnmatch(
+            path_str, suffix
+        )
+
+    # Simple glob pattern
+    return fnmatch.fnmatch(path_str, pattern)
 
 
 def _load_default_ide_patterns() -> list[str]:
@@ -185,14 +225,18 @@ class SchemaManager:
 
         filename = file_path.name
 
-        # Check for exact filename match
         for schema_info in catalog.get("schemas", []):
-            if "fileMatch" in schema_info and filename in schema_info["fileMatch"]:
-                return self._fetch_schema(schema_info["url"])
+            if "fileMatch" not in schema_info:
+                continue
 
-        # 3. Check for pattern match (simple glob)
-        # Note: Schema Store uses glob patterns. We'll implement basic support.
-        # For now, exact match is the primary use case.
+            for pattern in schema_info["fileMatch"]:
+                # Check exact filename match first (fast path)
+                if filename == pattern:
+                    return self._fetch_schema(schema_info["url"])
+
+                # Check glob pattern match
+                if _match_glob_pattern(file_path, pattern):
+                    return self._fetch_schema(schema_info["url"])
 
         return None
 
@@ -226,12 +270,17 @@ class SchemaManager:
 
         filename = file_path.name
         for schema_info in catalog.get("schemas", []):
-            if "fileMatch" in schema_info and filename in schema_info["fileMatch"]:
-                return {
-                    "name": schema_info.get("name", "unknown"),
-                    "url": schema_info.get("url"),
-                    "source": "catalog",
-                }
+            if "fileMatch" not in schema_info:
+                continue
+
+            for pattern in schema_info["fileMatch"]:
+                # Check exact filename match first (fast path)
+                if filename == pattern or _match_glob_pattern(file_path, pattern):
+                    return {
+                        "name": schema_info.get("name", "unknown"),
+                        "url": schema_info.get("url"),
+                        "source": "catalog",
+                    }
 
         return None
 
