@@ -368,6 +368,107 @@ class TestData:
         modified_data = json.loads(temp_config.read_text())
         assert "version" not in modified_data
 
+    # --- TOML Output Format Auto-Fallback Tests ---
+
+    @pytest.mark.integration
+    def test_data_get_toml_nested_auto_fallback(self, sample_toml_config: Path) -> None:
+        """Test data get auto-falls back to JSON for nested TOML data.
+
+        Tests: Auto-fallback from TOML to JSON when yq can't encode nested structures
+        How: Get nested object from TOML without specifying output_format
+        Why: Verify automatic JSON fallback when TOML encoder fails with "only scalars"
+        """
+        # Arrange - TOML file with nested structure
+        # Act - get nested object without specifying output format (defaults to TOML)
+        result = data_fn(str(sample_toml_config), operation="get", key_path="database")
+
+        # Assert - auto-fallback to JSON successful
+        assert result["success"] is True
+        assert result["format"] == "json"  # Fell back from toml to json
+        assert isinstance(result["result"], dict)
+        assert result["result"]["host"] == "localhost"
+        assert result["result"]["port"] == 5432
+
+    @pytest.mark.integration
+    def test_data_get_toml_explicit_format_fails(
+        self, sample_toml_config: Path
+    ) -> None:
+        """Test data get raises error when TOML output explicitly requested for nested data.
+
+        Tests: Error when explicitly requesting TOML output for nested structures
+        How: Get nested object from TOML with explicit output_format='toml'
+        Why: Verify explicit TOML request shows proper error instead of silent fallback
+        """
+        # Arrange - TOML file with nested structure
+        # Act - explicitly request TOML output for nested data
+        # Assert - raises ToolError with yq message
+        with pytest.raises(ToolError) as exc_info:
+            data_fn(
+                str(sample_toml_config),
+                operation="get",
+                key_path="database",
+                output_format="toml",
+            )
+
+        # Verify error message mentions the yq limitation
+        assert "Query failed" in str(exc_info.value)
+
+    @pytest.mark.integration
+    def test_data_query_toml_nested_auto_fallback(
+        self, sample_toml_config: Path
+    ) -> None:
+        """Test data_query auto-falls back to JSON for nested TOML data.
+
+        Tests: Auto-fallback in data_query tool for TOML nested structures
+        How: Query nested object from TOML without specifying output_format
+        Why: Verify data_query also implements auto-fallback behavior
+        """
+        # Arrange - TOML file with nested structure
+        # Act - query nested object without specifying output format
+        result = data_query_fn(str(sample_toml_config), ".database")
+
+        # Assert - auto-fallback to JSON successful
+        assert result["success"] is True
+        assert result["format"] == "json"  # Fell back from toml to json
+        assert isinstance(result["result"], dict)
+        assert result["result"]["host"] == "localhost"
+        assert result["result"]["port"] == 5432
+
+    @pytest.mark.integration
+    def test_data_query_toml_explicit_format_fails(
+        self, sample_toml_config: Path
+    ) -> None:
+        """Test data_query raises error when TOML output explicitly requested.
+
+        Tests: Error when explicitly requesting TOML output in data_query
+        How: Query nested object with explicit output_format='toml'
+        Why: Verify explicit TOML request shows proper error
+        """
+        # Arrange - TOML file with nested structure
+        # Act & Assert - raises ToolError
+        with pytest.raises(ToolError) as exc_info:
+            data_query_fn(str(sample_toml_config), ".database", output_format="toml")
+
+        # Verify error message
+        assert "Query failed" in str(exc_info.value)
+
+    @pytest.mark.integration
+    def test_data_get_toml_scalar_no_fallback(self, sample_toml_config: Path) -> None:
+        """Test data get returns TOML for scalar values (no fallback needed).
+
+        Tests: TOML output works for scalar values without fallback
+        How: Get scalar value from TOML without specifying output_format
+        Why: Verify fallback only occurs for nested structures, not scalars
+        """
+        # Arrange - TOML file
+        # Act - get scalar value (defaults to TOML output)
+        result = data_fn(str(sample_toml_config), operation="get", key_path="name")
+
+        # Assert - TOML output works for scalars (no fallback)
+        assert result["success"] is True
+        # For scalar strings, TOML output includes newline, strip for comparison
+        assert result["result"].strip() == "test-app"
+
 
 class TestDataSchema:
     """Test unified data_schema tool."""

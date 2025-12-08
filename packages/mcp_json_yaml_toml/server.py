@@ -364,6 +364,7 @@ def _handle_data_get_value(
     output_fmt: FormatType,
     cursor: str | None,
     schema_info: dict[str, Any] | None,
+    output_format_explicit: bool = True,
 ) -> dict[str, Any]:
     """Handle GET operation with return_type='all' for data values.
 
@@ -374,6 +375,7 @@ def _handle_data_get_value(
         output_fmt: Output format
         cursor: Optional pagination cursor
         schema_info: Optional schema information
+        output_format_explicit: Whether output format was explicitly specified
 
     Returns:
         Response dict with data value
@@ -426,6 +428,23 @@ def _handle_data_get_value(
             response["schema_info"] = schema_info
         return response
     except YQExecutionError as e:
+        # Auto-fallback to JSON if TOML output was auto-selected and yq can't encode nested structures
+        if (
+            not output_format_explicit
+            and output_fmt == "toml"
+            and input_format == "toml"
+            and "only scalars" in str(e.stderr)
+        ):
+            # Retry with JSON output format
+            return _handle_data_get_value(
+                path,
+                key_path,
+                input_format,
+                "json",
+                cursor,
+                schema_info,
+                output_format_explicit=True,
+            )
         raise ToolError(f"Query failed: {e}") from e
 
 
@@ -747,6 +766,9 @@ def _dispatch_get_operation(
             f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
         )
 
+    # Track whether output format was explicitly provided
+    output_format_explicit = output_format is not None
+
     if output_format is None:
         output_fmt: FormatType = input_format
     else:
@@ -764,7 +786,13 @@ def _dispatch_get_operation(
         )
 
     return _handle_data_get_value(
-        path, key_path, input_format, output_fmt, cursor, schema_info
+        path,
+        key_path,
+        input_format,
+        output_fmt,
+        cursor,
+        schema_info,
+        output_format_explicit,
     )
 
 
@@ -839,7 +867,7 @@ def _dispatch_delete_operation(
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
-def data_query(
+def data_query(  # noqa: C901
     file_path: Annotated[str, Field(description="Path to configuration file")],
     expression: Annotated[
         str,
@@ -879,8 +907,11 @@ def data_query(
             f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
         )
 
+    # Track whether output format was explicitly provided
+    output_format_explicit = output_format is not None
+
     # Use input format as output if not specified
-    output_format = (
+    output_format_value: FormatType = (
         input_format if output_format is None else validate_format(output_format).value
     )
 
@@ -889,13 +920,13 @@ def data_query(
             expression,
             input_file=path,
             input_format=input_format,
-            output_format=output_format,
+            output_format=output_format_value,
         )
 
         # Prepare result string for pagination
         result_str = (
             result.stdout
-            if output_format != "json"
+            if output_format_value != "json"
             else orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
         )
 
@@ -912,7 +943,7 @@ def data_query(
             response = {
                 "success": True,
                 "result": pagination["data"],
-                "format": output_format,
+                "format": output_format_value,
                 "file": str(path),
                 "paginated": True,
             }
@@ -924,12 +955,56 @@ def data_query(
         # Small result - no pagination needed
         return {
             "success": True,
-            "result": result_str if output_format != "json" else result.data,
-            "format": output_format,
+            "result": result_str if output_format_value != "json" else result.data,
+            "format": output_format_value,
             "file": str(path),
         }
 
     except YQExecutionError as e:
+        # Auto-fallback to JSON if TOML output was auto-selected and yq can't encode nested structures
+        if (
+            not output_format_explicit
+            and output_format_value == "toml"
+            and input_format == "toml"
+            and "only scalars" in str(e.stderr)
+        ):
+            # Retry with JSON output format
+            output_format_value = "json"
+            result = execute_yq(
+                expression,
+                input_file=path,
+                input_format=input_format,
+                output_format=output_format_value,
+            )
+            result_str = orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
+
+            if len(result_str) > PAGE_SIZE_CHARS or cursor is not None:
+                hint = None
+                if isinstance(result.data, list):
+                    hint = "Result is a list. Use '.[start:end]' to slice or '. | length' to count."
+                elif isinstance(result.data, dict):
+                    hint = "Result is an object. Use '.key' to select or '. | keys' to list keys."
+
+                pagination = _paginate_result(result_str, cursor, advisory_hint=hint)
+                response = {
+                    "success": True,
+                    "result": pagination["data"],
+                    "format": output_format_value,
+                    "file": str(path),
+                    "paginated": True,
+                }
+                if "nextCursor" in pagination:
+                    response["nextCursor"] = pagination["nextCursor"]
+                if "advisory" in pagination:
+                    response["advisory"] = pagination["advisory"]
+                return response
+
+            return {
+                "success": True,
+                "result": result.data,
+                "format": output_format_value,
+                "file": str(path),
+            }
         raise ToolError(f"Query failed: {e}") from e
 
 

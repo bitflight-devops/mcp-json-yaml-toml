@@ -24,8 +24,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -33,7 +31,7 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install 3.12
+        run: uv python install 3.14
 
       - name: Install dependencies
         run: uv sync
@@ -47,8 +45,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -56,7 +52,7 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install 3.12
+        run: uv python install 3.14
 
       - name: Install dependencies
         run: uv sync
@@ -71,8 +67,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -80,7 +74,7 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install 3.12
+        run: uv python install 3.14
 
       - name: Install dependencies
         run: uv sync
@@ -89,14 +83,12 @@ jobs:
         run: uv run mypy packages/ --show-error-codes
         continue-on-error: false
 
-  test:
-    name: Tests
+  typecheck-pyright:
+    name: Type Checking (basedpyright)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -104,7 +96,33 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install 3.12
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Type check with basedpyright
+        run: uv run basedpyright packages/
+        continue-on-error: false
+
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: uv sync
@@ -114,7 +132,7 @@ jobs:
 
       - name: Upload coverage XML
         uses: actions/upload-artifact@v5
-        if: always()
+        if: matrix.python-version == '3.14'
         with:
           name: coverage-xml
           path: coverage.xml
@@ -170,7 +188,7 @@ jobs:
 
   release:
     name: Tag and Release
-    needs: [format, lint, typecheck, test]
+    needs: [format, lint, typecheck, typecheck-pyright, test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
