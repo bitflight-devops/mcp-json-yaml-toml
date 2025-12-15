@@ -131,7 +131,7 @@ jobs:
         run: uv run pytest --cov=packages/mcp_json_yaml_toml --cov-report=xml --cov-report=term
 
       - name: Upload coverage XML
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: matrix.python-version == '3.14'
         with:
           name: coverage-xml
