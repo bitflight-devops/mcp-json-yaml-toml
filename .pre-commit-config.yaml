@@ -1,4 +1,16 @@
-# Pre-commit configuration for mcp-json-yaml-toml repository
+# prek - Pre-commit Re-engineered in Rust
+# install via: `uv tool install prek`
+# prek is a Rust-based drop-in replacement for pre-commit created by https://github.com/j178/prek
+# Sources:
+# - https://github.com/j178/prek
+# - https://prek.j178.dev/
+# - https://pypi.org/project/prek/
+# - https://hugovk.dev/blog/2025/ready-prek-go/
+# - https://pydevtools.com/blog/prek-pre-commit-but-fast/
+
+default_stages:
+  - commit-msg
+  - pre-commit
 
 repos:
   - repo: https://github.com/mxr/sync-pre-commit-deps
@@ -6,34 +18,23 @@ repos:
     hooks:
       - id: sync-pre-commit-deps
 
-  - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v4.3.0
+  # WORKAROUND: prek bug https://github.com/j178/prek/issues/1194
+  # commit-msg hooks don't receive the commit message file on Linux
+  - repo: local
     hooks:
       - id: conventional-pre-commit
-        name: Validate Conventional Commits format
+        name: Conventional Commit
         stages: [commit-msg]
-        args:
-          - --strict
-          - --force-scope
-          - feat
-          - fix
-          - chore
-          - docs
-          - test
-          - refactor
-          - perf
-          - ci
-          - style
-          - build
+        language: system
+        always_run: true
+        entry: uv run --with conventional-pre-commit conventional-pre-commit --strict --force-scope .git/COMMIT_EDITMSG
 
   # Standard pre-commit hooks for general file maintenance
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: \.lock$
-      - id: end-of-file-fixer
-        exclude: \.lock$
+        exclude: (\.lock$|^libraries/)
       - id: check-yaml
         args: [--unsafe] # Allow Python tags in mkdocs.yml
       - id: check-json
@@ -50,29 +51,32 @@ repos:
 
   # Python formatting and linting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.4
+    rev: v0.14.10
     hooks:
       - id: ruff
         name: Lint Python with ruff
         args: [--fix]
       - id: ruff-format
         name: Format Python with ruff
+
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.19.1
+    rev: v0.20.0
     hooks:
       - id: markdownlint-cli2
+        exclude: ^libraries/miot-(cose|provisioning-object)-py/
 
   # YAML/JSON formatting
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
+    rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
         name: Format YAML, JSON, and Markdown files
         types_or: [yaml, json, markdown]
-        exclude: (\.lock$|mkdocs\.yml|docs/generated/)
+        args: [--ignore-path, .prettierignore]
+        exclude: (\.lock$|mkdocs\.yml|docs/generated/|^libraries/miot-(cose|provisioning-object)-py/)
 
   - repo: https://github.com/DetachHead/basedpyright-prek-mirror
-    rev: 1.34.0
+    rev: 1.36.1
     hooks:
       - id: basedpyright
 
@@ -92,44 +96,21 @@ repos:
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
+        exclude: ^scripts/apt-fast
 
   # Local hooks for type checking
   - repo: local
     hooks:
       - id: mypy
         name: mypy
-        entry: uv run -q --no-sync --with pep723-loader pep723-loader mypy
+        entry: uv run -q --active --inexact --with pep723-loader --with mypy pep723-loader mypy
         language: system
         types: [python]
         pass_filenames: true
-
-      - id: robotidy
-        name: Format Robot Framework files
-        entry: uv run -q --no-sync --with robotframework-tidy robotidy --check --diff robotTests/
-        language: system
-        files: \.robot$
-        pass_filenames: false
-
-      - id: robocop
-        name: Lint Robot Framework files
-        entry: uv run -q --no-sync --with robotframework-robocop robocop robotTests/
-        language: system
-        files: \.robot$
-        pass_filenames: false
+        args: ["--config-file", "pyproject.toml"]
 
 # Configuration for specific hooks
 default_language_version:
   python: python3
 
-# Exclude patterns
-exclude: |
-  (?x)^(
-    \.git/|
-    \.venv/|
-    __pycache__/|
-    \.mypy_cache/|
-    \.cache/|
-    \.pytest_cache/|
-    \.lock$|
-    typings/
-  )
+exclude: (\.pem$|\.cer$|\.crt$|\.key$|\.lock$|mkdocs\.yml|docs/generated/|^libraries/miot-(cose|provisioning-object)-py/|^libraries/keytable.*|^libraries/suitManifestBuilder)

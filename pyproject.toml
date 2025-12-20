@@ -33,6 +33,7 @@ dependencies = [
 	"tomlkit>=0.13.0",
 	"httpx>=0.27.0",
 	"lmql>=0.7.0",
+	"jsonschema>=4.25.1",
 ]
 
 [dependency-groups]
@@ -121,6 +122,7 @@ extend-select = [
 ]
 ignore = [
 	"ANN401",  # Any type is how we handle JSON/YAML data structures
+	"DOC201",  # return not documented in docstring
 	"DOC501",  # Raised exception {id} missing from docstring
 	"DOC502",  # Raised exception is not explicitly raised
 	"E501",    # Line too long ({width} > {limit})
@@ -156,8 +158,7 @@ unfixable = ["F401"]
 ]
 "typings/**" = ["N", "ANN", "A"]
 "**/scripts/**" = [
-	"DOC201", # return not documented in docstring
-	"T201",   # print() statements are intentional for CI output visibility
+	"T201", # print() statements are intentional for CI output visibility
 ]
 "packages/**/version.py" = ["ANN", "PLC"]
 
