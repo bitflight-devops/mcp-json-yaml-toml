@@ -83,7 +83,7 @@ jobs:
         run: uv run mypy packages/ --show-error-codes
         continue-on-error: false
 
-  typecheck-pyright:
+  basedpyright:
     name: Type Checking (basedpyright)
     runs-on: ubuntu-latest
     steps:
@@ -104,6 +104,52 @@ jobs:
       - name: Type check with basedpyright
         run: uv run basedpyright packages/
         continue-on-error: false
+
+  lint-extra:
+    name: Extra Lints (Markdown, Prettier, Shell)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint Markdown
+        run: npx -y markdownlint-cli2 "**/*.md"
+
+      - name: Check Formatting (Prettier)
+        run: npx -y prettier --check "**/*.{md,json,yaml,yml}" --ignore-path .gitignore
+
+      - name: ShellCheck
+        run: |
+          if [ -d "scripts" ]; then
+            find scripts -name "*.sh" | xargs -r shellcheck
+          fi
+
+      - name: shfmt
+        run: |
+          if [ -d "scripts" ]; then
+            find scripts -name "*.sh" | xargs -r npx -y shfmt -d
+          fi
+
+  validate-manifest:
+    name: Validate MCPB Manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Validate manifest
+        run: npx -y @anthropic-ai/mcpb validate manifest.json
 
   test:
     name: Tests (Python ${{ matrix.python-version }})
@@ -188,7 +234,16 @@ jobs:
 
   release:
     name: Tag and Release
-    needs: [format, lint, typecheck, typecheck-pyright, test]
+    needs:
+      [
+        format,
+        lint,
+        typecheck,
+        basedpyright,
+        lint-extra,
+        test,
+        validate-manifest,
+      ]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:

@@ -4,7 +4,7 @@
   "display_name": "Structured Data Tools (JSON/YAML/TOML)",
   "version": "0.0.0",
   "description": "Query, transform, and manipulate JSON, YAML, and TOML files using jq-style expressions with schema validation",
-  "long_description": "Provides AI agents with powerful tools to work with structured data files. Use jq/yq expressions to extract and transform data, perform CRUD operations on specific paths, validate files against JSON schemas from SchemaStore.org, convert between formats, and deep merge files. Preserves comments and formatting in YAML and TOML files.",
+  "long_description": "Provides AI agents with powerful tools to work with structured data files. Use jq/yq expressions to extract and transform data, perform CRUD operations on specific paths, validate files against JSON schemas from SchemaStore.org, convert between formats, and deep merge files. Preserves comments and formatting in YAML and TOML files. All processing happens locally; see PRIVACY.md for details.",
   "author": {
     "name": "Jamie Nelson",
     "email": "jamie@bitflight.io",
@@ -17,7 +17,7 @@
   "homepage": "https://github.com/bitflight-devops/mcp-json-yaml-toml",
   "documentation": "https://github.com/bitflight-devops/mcp-json-yaml-toml#readme",
   "support": "https://github.com/bitflight-devops/mcp-json-yaml-toml/issues",
-  "icon": "icon.png",
+  "icon": ".github/icon.png",
   "server": {
     "type": "uv",
     "entry_point": "packages/mcp_json_yaml_toml/server.py",
@@ -75,6 +75,5 @@
     "transform",
     "config"
   ],
-  "license": "MIT",
-  "privacy_policy": "This MCP server has no runtime dependencies on external API services. Configuration files are processed entirely locally. External network requests occur only in these scenarios: (1) yq binary auto-download from GitHub releases (JIT, only when binary is missing for your platform/architecture); (2) JSON schema downloads from SchemaStore.org (only when schema validation is requested and schema is not found in local cache or IDE schema directories). No user data, file contents, or usage telemetry is collected, stored, or transmitted to any external service."
+  "license": "MIT"
 }

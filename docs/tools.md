@@ -8,15 +8,15 @@ For client setup instructions, see [clients.md](clients.md). For configuration o
 
 The server provides 7 focused tools optimized for LLM interaction with JSON, YAML, and TOML files:
 
-| Tool                                        | Purpose                          | Key Features                               |
-| ------------------------------------------- | -------------------------------- | ------------------------------------------ |
-| [`data`](#data)                             | Get, set, delete data            | Get, set, delete values at any path        |
-| [`data_query`](#data_query)                 | Advanced data extraction         | Use yq expressions for complex queries     |
-| [`data_schema`](#data_schema)               | Schema validation and management | Validate syntax, manage schema catalogs    |
-| [`data_convert`](#data_convert)             | Format conversion                | Convert between JSON, YAML, TOML           |
-| [`data_merge`](#data_merge)                 | Configuration merging            | Deep merge with environment overrides      |
+| Tool                                          | Purpose                          | Key Features                               |
+| --------------------------------------------- | -------------------------------- | ------------------------------------------ |
+| [`data`](#data)                               | Get, set, delete data            | Get, set, delete values at any path        |
+| [`data_query`](#data_query)                   | Advanced data extraction         | Use yq expressions for complex queries     |
+| [`data_schema`](#data_schema)                 | Schema validation and management | Validate syntax, manage schema catalogs    |
+| [`data_convert`](#data_convert)               | Format conversion                | Convert between JSON, YAML, TOML           |
+| [`data_merge`](#data_merge)                   | Configuration merging            | Deep merge with environment overrides      |
 | [`constraint_validate`](#constraint_validate) | Input constraint validation      | Validate with partial match for streaming  |
-| [`constraint_list`](#constraint_list)       | List available constraints       | Discover constraints for guided generation |
+| [`constraint_list`](#constraint_list)         | List available constraints       | Discover constraints for guided generation |
 
 ---
 
@@ -551,10 +551,10 @@ This tool is designed to help LLMs generate valid inputs for the other tools. It
 
 ### Parameters
 
-| Parameter         | Type   | Required | Description                                      |
-| ----------------- | ------ | -------- | ------------------------------------------------ |
-| `constraint_name` | string | Yes      | Name of constraint (e.g., `YQ_PATH`, `INT`)      |
-| `value`           | string | Yes      | Value to validate against the constraint         |
+| Parameter         | Type   | Required | Description                                 |
+| ----------------- | ------ | -------- | ------------------------------------------- |
+| `constraint_name` | string | Yes      | Name of constraint (e.g., `YQ_PATH`, `INT`) |
+| `value`           | string | Yes      | Value to validate against the constraint    |
 
 ### Response
 
@@ -569,18 +569,6 @@ Returns a validation result with:
 | `is_partial`         | boolean | True if input could become valid with more characters                |
 | `remaining_pattern?` | string  | Regex pattern for valid continuations; present only when is_partial  |
 | `suggestions?`       | array   | Suggested completions; present for enum constraints or partial match |
-
-### Available Constraints
-
-| Constraint      | Description                          | Example Valid Values                      |
-| --------------- | ------------------------------------ | ----------------------------------------- |
-| `YQ_PATH`       | yq path expression                   | `.name`, `.users[0]`, `.data.items[*]`    |
-| `YQ_EXPRESSION` | Full yq expression with pipes        | `.items \| length`, `.users \| map(.id)`  |
-| `CONFIG_FORMAT` | Supported config format              | `json`, `yaml`, `toml`                    |
-| `KEY_PATH`      | Dot-separated key path               | `name`, `database.host`, `servers.0.port` |
-| `INT`           | Integer value                        | `42`, `-123`, `0`                         |
-| `JSON_VALUE`    | Valid JSON value                     | `"hello"`, `{"key": "value"}`, `[1, 2]`   |
-| `FILE_PATH`     | Valid file path                      | `config.json`, `./data/settings.yaml`     |
 
 ### Examples
 
@@ -646,11 +634,14 @@ Returns:
 }
 ```
 
+> [!NOTE]
+> For a technical deep dive on how to use these constraints for LLM steering, see [Deep Dive: LMQL Constraints](#deep-dive-lmql-constraints).
+
 ### Use Cases
 
-1. **Guided Generation**: Use partial match detection to guide LLM token generation toward valid inputs
-2. **Early Error Detection**: Validate inputs before calling data tools to provide better error messages
-3. **Autocomplete**: Use suggestions and remaining patterns to offer completion options
+1. **Guided Generation**: Use partial match detection to guide LLM token generation toward valid inputs.
+2. **Early Error Detection**: Validate inputs before calling data tools to provide better error messages.
+3. **Autocomplete**: Use suggestions and remaining patterns to offer completion options in UI tools.
 
 ---
 
@@ -696,13 +687,52 @@ Returns all constraint definitions for the LLM to understand available validatio
 
 ---
 
+## Deep Dive: LMQL Constraints
+
+The `constraint_validate` tool exposes server-side validation logic powered by [LMQL](https://lmql.ai). While traditional validation is binary (valid/invalid), LMQL constraints support **partial validation**, which is crucial for modern AI agent workflows.
+
+### Partial Validation & `remaining_pattern`
+
+When an AI agent is halfway through generating a string (e.g., to be used as a `key_path`), it can use `constraint_validate` to check if the string-so-far can still lead to a valid result.
+
+If `is_partial` is `true`, the `remaining_pattern` field contains a Regex pattern describing exactly what characters are allowed to follow.
+
+| Field               | Description                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------- |
+| `is_partial`        | `true` if the input is syntactically correct so far but incomplete.                           |
+| `remaining_pattern` | A regex pattern for the _continuation_ of the string.                                         |
+| `suggestions`       | For `Enum` or `Regex` constraints, a list of strings that would make the current input valid. |
+
+### Guided Generation Flow
+
+AI agents can use this tool iteratively:
+
+1. **Thought**: "I need to query the database host from `config.yaml`."
+2. **Partial Call**: `constraint_validate(constraint_name="YQ_PATH", value=".db")`
+3. **Response**: `is_partial=true`, `remaining_pattern="[a-zA-Z0-9_]*..."`
+4. **Agent Action**: Continues generating `.db.host`, knowing `.db` is a valid start.
+
+### Full List of Built-in Constraints
+
+| Name            | Description                                | Regex Pattern (Simplified)                                    |
+| --------------- | ------------------------------------------ | ------------------------------------------------------------- |
+| `YQ_PATH`       | Strict yq path starting with `.`           | `\.[a-zA-Z_][\w]*(\.[\w]*\|\[\d+\]\|\[\*\])*`                 |
+| `YQ_EXPRESSION` | Full yq expression with pipes              | `\.[@a-zA-Z_][\w\.\[\]\*]*(\s*\|\s*[a-zA-Z_][\w]*(\(.*\))?)*` |
+| `CONFIG_FORMAT` | Supported file formats                     | `(json\|yaml\|toml)`                                          |
+| `KEY_PATH`      | Permissive key path (leading `.` optional) | `[a-zA-Z_][\w]*(\.[\w]+)*`                                    |
+| `INT`           | Strictly digits (optional minus)           | `-?\d+`                                                       |
+| `JSON_VALUE`    | Any valid JSON fragment                    | (State machine based)                                         |
+| `FILE_PATH`     | Valid file path characters                 | `[~./]?[\w./-]+`                                              |
+
+---
+
 ## MCP Resources
 
 The server also provides MCP resources for constraint discovery:
 
-| Resource URI                  | Description                          |
-| ----------------------------- | ------------------------------------ |
-| `lmql://constraints`          | List all constraint definitions      |
-| `lmql://constraints/{name}`   | Get specific constraint definition   |
+| Resource URI                | Description                        |
+| --------------------------- | ---------------------------------- |
+| `lmql://constraints`        | List all constraint definitions    |
+| `lmql://constraints/{name}` | Get specific constraint definition |
 
 These resources can be read by MCP clients to understand available constraints before making tool calls.
