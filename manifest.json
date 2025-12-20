@@ -76,5 +76,5 @@
     "config"
   ],
   "license": "MIT",
-  "privacy_policy": "This MCP server connects to external services: SchemaStore.org for JSON schema validation and the GitHub API to download yq binaries during installation. Configuration file contents are processed locally and are not transmitted to external services unless explicitly validating against schemas from SchemaStore.org. No user data is collected, stored, or transmitted for analytics or tracking purposes."
+  "privacy_policy": "This MCP server has no runtime dependencies on external API services. Configuration files are processed entirely locally. External network requests occur only in these scenarios: (1) yq binary auto-download from GitHub releases (JIT, only when binary is missing for your platform/architecture); (2) JSON schema downloads from SchemaStore.org (only when schema validation is requested and schema is not found in local cache or IDE schema directories). No user data, file contents, or usage telemetry is collected, stored, or transmitted to any external service."
 }
