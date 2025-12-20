@@ -52,6 +52,14 @@
     {
       "name": "data_merge",
       "description": "Deep merge two structured data files into one"
+    },
+    {
+      "name": "constraint_validate",
+      "description": "Validate inputs against LMQL constraints with partial match support"
+    },
+    {
+      "name": "constraint_list",
+      "description": "List available constraints for guided generation"
     }
   ],
   "prompts_generated": true,
@@ -67,5 +75,6 @@
     "transform",
     "config"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "privacy_policy": "This MCP server connects to external services: SchemaStore.org for JSON schema validation and the GitHub API to download yq binaries during installation. Configuration file contents are processed locally and are not transmitted to external services unless explicitly validating against schemas from SchemaStore.org. No user data is collected, stored, or transmitted for analytics or tracking purposes."
 }
