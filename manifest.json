@@ -52,6 +52,14 @@
     {
       "name": "data_merge",
       "description": "Deep merge two structured data files into one"
+    },
+    {
+      "name": "constraint_validate",
+      "description": "Validate inputs against LMQL constraints with partial match support"
+    },
+    {
+      "name": "constraint_list",
+      "description": "List available constraints for guided generation"
     }
   ],
   "prompts_generated": true,
@@ -67,5 +75,6 @@
     "transform",
     "config"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "privacy_policy": "This MCP server has no runtime dependencies on external API services. Configuration files are processed entirely locally. External network requests occur only in these scenarios: (1) yq binary auto-download from GitHub releases (JIT, only when binary is missing for your platform/architecture); (2) JSON schema downloads from SchemaStore.org (only when schema validation is requested and schema is not found in local cache or IDE schema directories). No user data, file contents, or usage telemetry is collected, stored, or transmitted to any external service."
 }
