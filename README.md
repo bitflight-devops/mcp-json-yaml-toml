@@ -168,7 +168,6 @@ mcp-json-yaml-toml/
 │   ├── server.py                 # MCP implementation
 │   ├── yq_wrapper.py             # Binary management
 │   ├── schemas.py                # Schema validation
-│   └── tests/                    # Test suite
 ├── .github/                      # CI/CD and assets
 ├── docs/                         # Documentation
 └── pyproject.toml                # Project config

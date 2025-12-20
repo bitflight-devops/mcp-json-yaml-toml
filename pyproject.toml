@@ -120,6 +120,7 @@ extend-select = [
 	"YTT",   # see: https://docs.astral.sh/ruff/rules/#flake8-2020-ytt
 ]
 ignore = [
+	"ANN401",  # Any type is how we handle JSON/YAML data structures
 	"DOC501",  # Raised exception {id} missing from docstring
 	"DOC502",  # Raised exception is not explicitly raised
 	"E501",    # Line too long ({width} > {limit})
@@ -138,19 +139,19 @@ unfixable = ["F401"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = [
-	"S",    # Security checks not needed in tests
-	"D",    # Docstring requirements relaxed for tests
-	"E501", # Line length relaxed for test data
-	"ANN",  # Type annotations optional for test fixtures/methods
-	"DOC",  # Docstring content requirements relaxed
-	"PLC",  # Local imports acceptable in test helpers
-	"SLF",  # Private name imports acceptable for testing internals
-	"PLR",  # Testing private methods is valid test pattern
-	"EXE",  # Shebang executable check skipped for PEP723 test files
-	"N",    # camelCase in test names acceptable when testing API fields
-	"T",    # print() statements are intentional for CI output visibility
-	"BLE",  # Catching exceptions for test verification is acceptable
-	"PT011", # pytest.raises match patterns optional in tests
+	"S",      # Security checks not needed in tests
+	"D",      # Docstring requirements relaxed for tests
+	"E501",   # Line length relaxed for test data
+	"ANN",    # Type annotations optional for test fixtures/methods
+	"DOC",    # Docstring content requirements relaxed
+	"PLC",    # Local imports acceptable in test helpers
+	"SLF",    # Private name imports acceptable for testing internals
+	"PLR",    # Testing private methods is valid test pattern
+	"EXE",    # Shebang executable check skipped for PEP723 test files
+	"N",      # camelCase in test names acceptable when testing API fields
+	"T",      # print() statements are intentional for CI output visibility
+	"BLE",    # Catching exceptions for test verification is acceptable
+	"PT011",  # pytest.raises match patterns optional in tests
 	"PYI036", # Test __exit__ signatures can be flexible
 ]
 "typings/**" = ["N", "ANN", "A"]

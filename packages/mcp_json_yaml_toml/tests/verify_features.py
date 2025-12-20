@@ -3,12 +3,8 @@
 This module contains verification tests for data_query tool and pagination hints.
 """
 
-import sys
 from pathlib import Path
 from typing import Any
-
-# Add package to path
-sys.path.insert(0, str(Path.cwd() / "packages"))
 
 from mcp_json_yaml_toml.server import data_query
 
@@ -42,13 +38,8 @@ def call_tool(tool: object, *args: Any, **kwargs: Any) -> dict[str, Any]:
 def test_hints() -> None:
     """Test pagination hints with a large file query."""
     print("\nTesting hints...")
-    github_test_yml = Path(".github/workflows/test.yml").resolve()
-
-    if not github_test_yml.exists():
-        print(f"Fixture not found: {github_test_yml}")
-        return
-
     # Query that returns the whole file (which is large)
+    github_test_yml = Path(".github/workflows/test.yml")
     print(f"Querying {github_test_yml} as JSON to trigger pagination")
     result = call_tool(data_query, str(github_test_yml), ".", output_format="json")
 

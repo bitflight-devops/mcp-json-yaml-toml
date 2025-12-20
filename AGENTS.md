@@ -38,15 +38,15 @@ uv run prek run --files <file_path1> <file_path2>
 
 ### Full Linting Suite (Enforced in CI)
 
-| Gate         | Command                                           | Description                  |
-| ------------ | ------------------------------------------------- | ---------------------------- |
-| **Format**   | `uv run ruff format --check`                      | Python formatting check      |
-| **Lint**     | `uv run ruff check`                               | Python linting (500+ rules)  |
-| **Type 1**   | `uv run mypy packages/ --show-error-codes`        | Mypy static type analysis    |
-| **Type 2**   | `uv run basedpyright packages/`                   | Pyright strict type analysis |
-| **Markdown** | `npx markdownlint-cli2 "**/*.md"`                 | Markdown style enforcement   |
-| **Prettier** | `npx prettier --check`                            | YAML/JSON/MD formatting      |
-| **Tests**    | `uv run pytest --cov=packages/mcp_json_yaml_toml` | Test suite with coverage     |
+| Gate         | Command                                    | Description                              |
+| ------------ | ------------------------------------------ | ---------------------------------------- |
+| **Format**   | `uv run ruff format --check`               | Python formatting check                  |
+| **Lint**     | `uv run ruff check`                        | Python linting (500+ rules)              |
+| **Type 1**   | `uv run mypy packages/ --show-error-codes` | Mypy static type analysis                |
+| **Type 2**   | `uv run basedpyright packages/`            | Pyright strict type analysis             |
+| **Markdown** | `npx markdownlint-cli2 "**/*.md"`          | Markdown style enforcement               |
+| **Prettier** | `npx prettier --check`                     | YAML/JSON/MD formatting                  |
+| **Tests**    | `uv run pytest`                            | Test suite (coverage enabled by default) |
 
 ---
 
@@ -60,9 +60,11 @@ uv sync  # Install all dependencies and dev-tools
 
 ### Testing Requirements
 
-- **Coverage**: Minimum 60% required for new features.
+- **Creating Tests**: Place all tests in `packages/mcp_json_yaml_toml/tests/` using the `test_*.py` naming convention. Use `conftest.py` for shared fixtures.
+- **Coverage**: Minimum 60% required for new features (Current: ~79%). Settings are automatically applied from `pyproject.toml`.
 - **Parallelism**: Tests run in parallel automatically.
-- **Manual Run**: `uv run pytest --no-cov -q` for fast iterations.
+- **Manual Run**: `uv run pytest` for standard execution. Use `-k <pattern>` to run specific tests.
+- **Feature Verification**: Run `uv run packages/mcp_json_yaml_toml/tests/verify_features.py` to manually verify pagination and hint advisory logic.
 
 ### Commit Conventions
 
