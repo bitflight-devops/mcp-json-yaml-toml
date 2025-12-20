@@ -160,25 +160,6 @@ unfixable = ["F401"]
 	"T201",   # print() statements are intentional for CI output visibility
 ]
 "packages/**/version.py" = ["ANN", "PLC"]
-# JSON/YAML/TOML processing modules use Any for arbitrary structured data by design
-"packages/**/server.py" = [
-	"ANN401",  # Any type is correct for JSON/YAML data structures
-	"PLC0415", # Lazy imports are intentional (circular imports, optional deps)
-	"PLR0911", # Match statements naturally have many return paths
-	"PLR0912", # Complex parsing functions have many branches by nature
-	"TRY300",  # Style preference - returns in try blocks are acceptable
-	"SLF001",  # Internal API access is intentional
-	"DOC201",  # MCP tools have return structure in Output contract section
-]
-"packages/**/yaml_optimizer.py" = [
-	"ANN401",  # Any type is correct for arbitrary YAML structures
-	"PLC0415", # Lazy imports are intentional
-]
-"packages/**/toml_utils.py" = ["ANN401"]
-"packages/**/yq_wrapper.py" = [
-	"ANN401",  # Any type in YQResult.data field
-	"PLC0415", # Lazy imports for fcntl/uuid in download function
-]
 
 [tool.ruff.lint.pycodestyle]
 max-line-length = 120
