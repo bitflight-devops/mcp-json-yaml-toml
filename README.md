@@ -34,7 +34,7 @@ AI coding tools often destroy structured data files:
 - **Safe modifications**: Validate before writing; preserve comments and formatting
 - **Multi-format support**: JSON, YAML, and TOML through a unified interface
 - **Constraint validation**: LMQL-powered input validation with partial match support for guided generation
-- **Primarily local operation**: Configuration files are processed locally; external services are used only for schema validation (SchemaStore.org) and binary downloads (GitHub API during installation)
+- **Local operation**: All processing happens locally; one-time initialization may download yq binary for your platform and cache JSON schemas for validation
 - **Cross-platform**: Works on Linux, macOS, and Windows with bundled yq binaries
 
 **Compatible with any MCP client**: Claude Code CLI, Cursor, Windsurf, VS Code with MCP extensions, and more.
