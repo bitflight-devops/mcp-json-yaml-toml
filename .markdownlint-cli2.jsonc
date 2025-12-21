@@ -44,5 +44,6 @@
     "strong-style": false,
     "ul-indent": false,
     "MD040": false
-  }
+  },
+  "ignores": [".venv", "node_modules", "**/node_modules/**", "**/.venv/**"]
 }
