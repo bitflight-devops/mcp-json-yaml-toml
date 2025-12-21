@@ -7,6 +7,7 @@ and optimize them using anchors and aliases to maintain DRY principles.
 import hashlib
 import os
 from collections import defaultdict
+from io import StringIO
 from typing import Any
 
 import orjson
@@ -319,8 +320,6 @@ def optimize_yaml(data: Any) -> str | None:
     yaml.default_flow_style = False
     yaml.preserve_quotes = True
     yaml.width = 4096  # Avoid line wrapping
-
-    from io import StringIO
 
     stream = StringIO()
     yaml.dump(modified_data, stream)

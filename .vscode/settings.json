@@ -1,0 +1,15 @@
+{
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "python.venvPath": "${workspaceFolder}/.venv",
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  "terminal.activateEnvironment": true,
+  "python.analysis.extraPaths": ["packages"],
+  "basedpyright.analysis.extraPaths": ["packages"]
+}

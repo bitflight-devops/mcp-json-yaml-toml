@@ -1045,6 +1045,18 @@ wheels = [
 ]
 
 [[package]]
+name = "json-strong-typing"
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jsonschema" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8a/6a/c7f3734d6cf153cd712943dcc048b4aa9fd9d36fc08b5777c1967c505bd0/json_strong_typing-0.4.2.tar.gz", hash = "sha256:88d4d22e33609f2a3fd24ccd2967f3ba73cc733d1f5925cdef269cf332ed1c8b", size = 57471, upload-time = "2025-11-27T22:16:18.32Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/8e/b75522ef037b4c6ab1a852a7cc75253fabfcd483af130a4b107e8ca6bdbb/json_strong_typing-0.4.2-py3-none-any.whl", hash = "sha256:c557ac357d7b616511c2132595bddf7e86bf50aea15f3004399467645a44d427", size = 49899, upload-time = "2025-11-27T22:16:17.328Z" },
+]
+
+[[package]]
 name = "jsonschema"
 version = "4.25.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1290,6 +1302,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },
+    { name = "json-strong-typing" },
     { name = "jsonschema" },
     { name = "lmql" },
     { name = "orjson" },
@@ -1311,12 +1324,14 @@ dev = [
     { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "tiktoken" },
+    { name = "types-jsonschema" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = ">=0.3.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "json-strong-typing", specifier = ">=0.4.2" },
     { name = "jsonschema", specifier = ">=4.25.1" },
     { name = "lmql", specifier = ">=0.7.0" },
     { name = "orjson", specifier = ">=3.10.0" },
@@ -1339,6 +1354,7 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff", specifier = ">=0.9.4" },
     { name = "tiktoken", specifier = ">=0.12.0" },
+    { name = "types-jsonschema", specifier = ">=4.25.1.20251009" },
 ]
 
 [[package]]
@@ -2994,6 +3010,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6d/c1/933d30fd7a123ed981e2a1eedafceab63cb379db0402e438a13bc51bbb15/typer-0.20.1.tar.gz", hash = "sha256:68585eb1b01203689c4199bc440d6be616f0851e9f0eb41e4a778845c5a0fd5b", size = 105968, upload-time = "2025-12-19T16:48:56.302Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/52/1f2df7e7d1be3d65ddc2936d820d4a3d9777a54f4204f5ca46b8513eff77/typer-0.20.1-py3-none-any.whl", hash = "sha256:4b3bde918a67c8e03d861aa02deca90a95bbac572e71b1b9be56ff49affdb5a8", size = 47381, upload-time = "2025-12-19T16:48:53.679Z" },
+]
+
+[[package]]
+name = "types-jsonschema"
+version = "4.25.1.20251009"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "referencing" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ef/da/5b901088da5f710690b422137e8ae74197fb1ca471e4aa84dd3ef0d6e295/types_jsonschema-4.25.1.20251009.tar.gz", hash = "sha256:75d0f5c5dd18dc23b664437a0c1a625743e8d2e665ceaf3aecb29841f3a5f97f", size = 15661, upload-time = "2025-10-09T02:54:36.963Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/6a/e5146754c0dfc272f176db9c245bc43cc19030262d891a5a85d472797e60/types_jsonschema-4.25.1.20251009-py3-none-any.whl", hash = "sha256:f30b329037b78e7a60146b1146feb0b6fb0b71628637584409bada83968dad3e", size = 15925, upload-time = "2025-10-09T02:54:35.847Z" },
 ]
 
 [[package]]
