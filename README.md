@@ -207,19 +207,26 @@ uv run prek run --files <file edited>
 
 ## Project Structure
 
-```text
-mcp-json-yaml-toml/
-├── packages/mcp_json_yaml_toml/  # Core logic
-│   ├── server.py                 # MCP server & tool definitions
-│   ├── schemas.py                # Schema validation & management
-│   ├── lmql_constraints.py       # LMQL constraint logic
-│   ├── yq_wrapper.py             # Binary management & wrapping
-│   ├── yaml_optimizer.py         # YAML anchor/alias optimization
-│   ├── toml_utils.py             # TOML preservation utilities
-│   └── config.py                 # Configuration management
-├── .github/                      # CI/CD and assets
-├── docs/                         # Documentation
-└── pyproject.toml                # Project config
+```mermaid
+graph TD
+    Repo[mcp-json-yaml-toml]
+    Repo --> Packages[packages/mcp_json_yaml_toml]
+    Repo --> Github[.github]
+    Repo --> Docs[docs]
+    Repo --> Config[pyproject.toml]
+
+    subgraph "Core Logic"
+        Packages --> Server[server.py<br/>MCP Server & Tools]
+        Packages --> Schemas[schemas.py<br/>Schema Validation]
+        Packages --> Constraints[lmql_constraints.py<br/>LMQL Constraints]
+        Packages --> YQ[yq_wrapper.py<br/>Binary Manager]
+        Packages --> YAML[yaml_optimizer.py<br/>YAML Anchors]
+        Packages --> TOML[toml_utils.py<br/>TOML Utils]
+        Packages --> Conf[config.py<br/>Config Manager]
+    end
+
+    style Packages fill:#f9f,stroke:#333,stroke-width:2px
+    style Repo fill:#eee,stroke:#333,stroke-width:4px
 ```
 
 ---
