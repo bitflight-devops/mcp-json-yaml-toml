@@ -90,88 +90,88 @@ This document describes each dependency and its specific usage within the MCP JS
 
 ---
 
+### `lmql` (>=0.7.0)
+
+**Purpose**: Guided generation and input validation
+
+**Usage**:
+
+- `constraint_validate` tool - Partial and complete input validation
+- `constraint_list` tool - Listing available steering constraints
+- Uses regex derivative technology to provide remaining patterns for continuous generation.
+
+**Files**: `server.py`
+
+---
+
+### `json-strong-typing` (>=0.4.2)
+
+**Purpose**: Enhanced type safety and automated deserialization
+
+**Usage**:
+
+- Modeling structured data in `schemas.py` and `server.py`
+- Automatic conversion from JSON dictionaries to Python `@dataclass` instances
+- Used for `SchemaConfig`, `SchemaCatalog`, and `IDESchemaIndex`.
+
+**Files**: `schemas.py`, `server.py`
+
+---
+
+### `jsonschema` (>=4.25.1)
+
+**Purpose**: Core schema validation engine
+
+**Usage**:
+
+- Validating files during `data_schema` actions
+- **Enforced validation on write** in `data` tool
+- Integrated with `referencing` to manage schema registries and avoid legacy auto-fetches.
+
+**Files**: `server.py`, `schemas.py`
+
+---
+
 ## External Tool Dependencies
 
-### `yq` (binary, not Python package)
+### `yq` (binary)
 
-**Purpose**: Command-line YAML/JSON/TOML processor
-
-**Usage**:
-
-- **Primary data manipulation** - All read/write/query operations
-- Format conversion (YAML ↔ JSON ↔ TOML ↔ XML)
-- JQ-style querying and transformations
-- Bundled as platform-specific binary in `bin/` directory
-
-**Files**: `yq_wrapper.py` (executes binary via subprocess)
-
-**Why yq?**:
-
-- Battle-tested, widely used tool
-- Handles edge cases better than pure Python libraries
-- Supports multiple formats with consistent interface
-- XML support (not available in Python YAML/TOML libs)
-
----
-
-## Optional Dependencies
-
-### `jsonschema` (optional, imported dynamically)
-
-**Purpose**: JSON Schema validation
+**Purpose**: Multi-format data manipulation and transformation
 
 **Usage**:
 
-- Validating configuration files against JSON schemas
-- Imported only when validation is requested
-- Not a hard dependency - gracefully degrades if not installed
-
-**Files**: `server.py` (line 206: `import jsonschema`)
-
----
-
-## Development Dependencies
-
-See `pyproject.toml` `[project.optional-dependencies]` for:
-
-- `pytest` - Testing framework
-- `pytest-cov` - Test coverage
-- `pytest-asyncio` - Async test support
-- `pytest-mock` - Mocking utilities
-- `mypy` - Type checking
-- `ruff` - Linting and formatting
-
----
-
-## Dependency Consolidation Opportunities
-
-### ✅ Removed: `pyyaml`
-
-- **Status**: Removed (not used anywhere)
-- **Replaced by**: `ruamel.yaml` (superset functionality)
-
-### ✅ Added: `tomlkit`
-
-- **Status**: Added for TOML write support
-- **Reason**: yq cannot write TOML files, and we need to preserve comments
-- **Benefit**: Maintains file fidelity (comments, formatting) just like `ruamel.yaml`
-
-### ✅ Minimal Dependencies
-
-- Only 5 core runtime dependencies
-- Each serves a distinct, necessary purpose
-- No redundancy or overlap
+- Primary engine for `data_query` and `data_convert`
+- Handles complex path expressions and format translations
+- JIT asset: Auto-downloaded and managed via `yq_wrapper.py`.
 
 ---
 
 ## Summary
 
-| Dependency    | Purpose                  | Can Remove?                   |
-| ------------- | ------------------------ | ----------------------------- |
-| `fastmcp`     | MCP server framework     | ❌ Core                       |
-| `orjson`      | Fast JSON parsing        | ❌ Core                       |
-| `ruamel.yaml` | YAML anchor optimization | ❌ Core                       |
-| `tomlkit`     | TOML read/write          | ❌ Core (yq can't write TOML) |
-| `httpx`       | Schema fetching          | ❌ Core                       |
-| `jsonschema`  | Schema validation        | ⚠️ Optional                   |
-| `yq` (binary) | Data manipulation        | ❌ Core                       |
+| Dependency           | Purpose                        | Status             |
+| -------------------- | ------------------------------ | ------------------ |
+| `fastmcp`            | MCP server framework           | ❌ Core            |
+| `orjson`             | Fast JSON parsing              | ❌ Core            |
+| `ruamel.yaml`        | YAML anchor optimization       | ❌ Core            |
+| `tomlkit`            | Style-preserving TOML          | ❌ Core            |
+| `lmql`               | Guided generation              | ❌ Core            |
+| `json-strong-typing` | Type safety & dataclasses      | ❌ Core            |
+| `jsonschema`         | Schema validation              | ❌ Core            |
+| `referencing`        | Schema registry management     | ❌ Core (internal) |
+| `yq` (binary)        | Data manipulation & conversion | ❌ Core            |
+
+---
+
+## Dependency Consolidation
+
+### ✅ Standardized: `json-strong-typing`
+
+Replaced manual dictionary validation with strong-typed dataclasses for configuration and schema metadata.
+
+### ✅ Removed: `pyyaml`
+
+Strictly use `ruamel.yaml` for production-grade anchor support.
+
+### ✅ Updated: `jsonschema` & `referencing`
+
+Migrated to modern `Registry` based validation to eliminate deprecated auto-resolving behavior.

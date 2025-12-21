@@ -41,15 +41,16 @@ AI coding tools often destroy structured data files:
 
 - **Token-efficient**: Extract exactly what you need without loading entire files.
 - **Schema validation**: Enforce correctness using SchemaStore.org or custom schemas.
-- **Safe modifications**: Validate before writing; preserve comments and formatting.
+- **Safe modifications**: **Enforced validation on write**; preserve comments and formatting.
 - **Multi-format**: JSON, YAML, and TOML through a unified interface.
-- **Constraint validation**: LMQL-powered validation for guided generation.
+- **Directive-based detection**: Support for `# yaml-language-server`, `#:schema`, and `$schema` keys in all formats.
+- **Constraint-based guided generation**: Native LMQL support for proactive validation of partial inputs.
 - **Local-First**: All processing happens locally. No data ever leaves your machine.
-- **Transparent JIT Assets**: The server **will** auto-download the `yq` binary if missing. When an AI agent uses validation tools, the server automatically fetches and caches missing JSON schemas from SchemaStore.org.
+- **Transparent JIT Assets**: The server auto-downloads `yq` if missing and fetches missing schemas from SchemaStore.org for local caching.
 
 > [!NOTE]
 >
-> **JSONC Support**: Files with `.jsonc` extension (JSON with Comments) are fully supported for **reading**, **querying**, and **schema validation**. However, **write operations will strip comments** due to JSON library limitations.
+> **JSONC Support**: Files with `.jsonc` extension (JSON with Comments) are fully supported for **reading**, **querying**, and **schema validation**. However, **write operations will strip comments** due to library limitations.
 
 ---
 
@@ -96,37 +97,45 @@ Add this to your client's MCP configuration:
 
 ---
 
+## Schema Discovery & Recognition
+
+The server automatically identifies the correct JSON schema for your files using multiple strategies:
+
+1.  **Directives**: Recognizes `# yaml-language-server: $schema=...` and `#:schema ...` directives.
+2.  **In-File Keys**: Detects `$schema` keys in JSON and YAML (also supports quoted `"$schema"` in TOML).
+3.  **Local IDE Config**: Discovers schemas from VS Code/Cursor extension settings and caches.
+4.  **SchemaStore.org**: Performs glob-based auto-detection against thousands of known formats.
+5.  **Manual Association**: Use the `data_schema` tool to bind a file to a specific schema URL or name.
+
 ---
 
 ## LMQL & Guided Generation
 
-This server provides native support for **LMQL (Language Model Query Language)** to enable "Guided Generation". This allows AI agents to validate their thoughts and proposed actions incrementally, ensuring that every path expression or configuration value they generate is syntactically correct before it's even executed.
+This server provides native support for **LMQL (Language Model Query Language)** to enable **Guided Generation**. This allows AI agents to validate partial inputs (e.g., path expressions) incrementally before execution.
 
 - **Incremental Validation**: Check partial inputs (e.g., `.data.us`) and get the remaining pattern needed.
-- **Improved Reliability**: Eliminate "syntax errors" by guiding the LLM toward valid tool inputs.
+- **Improved Reliability**: Eliminate syntax errors by guiding the LLM toward valid tool inputs.
 - **Rich Feedback**: Get suggestions and detailed error messages for common mistakes.
 
 > [!TIP]
-> See the [Deep Dive: LMQL Constraints](docs/tools.md#deep-dive-lmql-constraints) for a full list of available constraints and detailed usage examples.
+> See the [Deep Dive: LMQL Constraints](docs/tools.md#deep-dive-lmql-constraints) for detailed usage examples.
 
 ---
 
 ## Available Tools
 
-The server provides 7 core tools for data manipulation:
-
-| Tool                  | Description                                           |
-| --------------------- | ----------------------------------------------------- |
-| `data`                | Get, set, or delete values at specific paths          |
-| `data_query`          | Run advanced yq/jq expressions for transformations    |
-| `data_schema`         | Validate files against JSON schemas (SchemaStore.org) |
-| `data_convert`        | Convert between JSON, YAML, and TOML formats          |
-| `data_merge`          | Deep merge structured data files                      |
-| `constraint_validate` | Validate inputs against LMQL constraints              |
-| `constraint_list`     | List available generation constraints                 |
+| Tool                  | Description                                    |
+| --------------------- | ---------------------------------------------- |
+| `data`                | Get, set, or delete values at specific paths   |
+| `data_query`          | Advanced yq/jq expressions for transformations |
+| `data_schema`         | Manage schemas and validate files              |
+| `data_convert`        | Convert between JSON, YAML, and TOML           |
+| `data_merge`          | Deep merge structured data files               |
+| `constraint_validate` | Validate inputs against LMQL constraints       |
+| `constraint_list`     | List available generation constraints          |
 
 > [!NOTE]
-> Conversion **TO TOML** is currently not supported. See [docs/tools.md](docs/tools.md) for details.
+> Conversion **TO TOML** is not supported due to yq's internal encoder limitations for complex structures.
 
 ---
 

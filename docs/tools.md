@@ -8,15 +8,15 @@ For client setup instructions, see [clients.md](clients.md). For configuration o
 
 The server provides 7 focused tools optimized for LLM interaction with JSON, YAML, and TOML files:
 
-| Tool                                          | Purpose                          | Key Features                               |
-| --------------------------------------------- | -------------------------------- | ------------------------------------------ |
-| [`data`](#data)                               | Get, set, delete data            | Get, set, delete values at any path        |
-| [`data_query`](#data_query)                   | Advanced data extraction         | Use yq expressions for complex queries     |
-| [`data_schema`](#data_schema)                 | Schema validation and management | Validate syntax, manage schema catalogs    |
-| [`data_convert`](#data_convert)               | Format conversion                | Convert between JSON, YAML, TOML           |
-| [`data_merge`](#data_merge)                   | Configuration merging            | Deep merge with environment overrides      |
-| [`constraint_validate`](#constraint_validate) | Input constraint validation      | Validate with partial match for streaming  |
-| [`constraint_list`](#constraint_list)         | List available constraints       | Discover constraints for guided generation |
+| Tool                                          | Purpose                          | Key Features                                         |
+| --------------------------------------------- | -------------------------------- | ---------------------------------------------------- |
+| [`data`](#data)                               | Get, set, delete data            | **Enforced validation on write**, preserves comments |
+| [`data_query`](#data_query)                   | Advanced data extraction         | yq/jq expressions for complex queries                |
+| [`data_schema`](#data_schema)                 | Schema validation and management | **Automatic detection** and catalog management       |
+| [`data_convert`](#data_convert)               | Format conversion                | Convert between formats (restricted TOML)            |
+| [`data_merge`](#data_merge)                   | Configuration merging            | Deep merge with environment overrides                |
+| [`constraint_validate`](#constraint_validate) | Input constraint validation      | Partial match for guided generation                  |
+| [`constraint_list`](#constraint_list)         | List available constraints       | Discover and document requirements                   |
 
 ---
 
@@ -38,7 +38,7 @@ Get, set, or delete data at specific paths in JSON, YAML, or TOML files.
 | `output_format` | enum   | No       | Output format: `json`, `yaml`, `toml`                                                                             |
 | `cursor`        | string | No       | Pagination cursor for large results                                                                               |
 
-> **Note:** The `set` and `delete` operations always modify the file directly (in-place). Changes are written immediately to preserve comments and formatting.
+> **Note:** The `set` and `delete` operations modify the file directly (in-place). If a schema is associated or detected for the file, **validation is automatically enforced before any changes are committed**.
 
 \*Required for certain operations
 
@@ -217,6 +217,13 @@ Manage and validate against JSON schemas.
 \*Required for certain actions
 
 ### Actions
+
+The `data_schema` tool acts as the central hub for schema management. It automatically resolves schemas using multiple strategies:
+
+1.  **Directives**: Recognizes `# yaml-language-server` and `#:schema`.
+2.  **In-File Keys**: Detects `$schema` entries.
+3.  **Local IDE Cache**: Discovers schemas from VS Code/Cursor.
+4.  **Auto-Detection**: Glob-based matching via SchemaStore.org.
 
 #### `validate`
 
