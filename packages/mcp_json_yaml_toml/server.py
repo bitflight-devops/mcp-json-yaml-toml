@@ -1,13 +1,13 @@
-"""MCP server for querying and modifying JSON, YAML, and TOML configuration files.
+"""MCP server for querying and modifying JSON, YAML, and TOML files.
 
 This server provides tools for reading, modifying, validating, and transforming
-configuration files using yq. Tools are dynamically registered based on the
+files using yq. Tools are dynamically registered based on the
 MCP_CONFIG_FORMATS environment variable.
 """
 
 import base64
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_never
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeGuard, assert_never
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -17,7 +17,8 @@ from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from jsonschema import validate as jsonschema_validate
 from jsonschema.exceptions import SchemaError, ValidationError
-from pydantic import Field
+from pydantic import BaseModel, Field
+from strong_typing.core import JsonType
 
 from mcp_json_yaml_toml.config import (
     is_format_enabled,
@@ -44,6 +45,29 @@ mcp = FastMCP("config-tools", mask_error_details=False)
 
 # Initialize Schema Manager
 schema_manager = SchemaManager()
+
+
+class SchemaResponse(BaseModel):
+    """Response format for schema retrieval."""
+
+    success: bool
+    file: str
+    message: str
+    schema_: dict[str, Any] | None = Field(default=None, alias="schema")
+    schema_info: dict[str, Any] | None = None
+    schema_file: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+def is_schema(value: Any) -> TypeGuard[JsonType]:
+    """Check if value is a valid Schema (dict)."""
+    return isinstance(value, dict) and all(
+        isinstance(key, str)
+        and isinstance(value, bool | int | float | str | dict | list)
+        for key, value in value.items()
+    )
+
 
 # Pagination constants
 PAGE_SIZE_CHARS = 10000
@@ -252,37 +276,9 @@ def _detect_file_format(file_path: Path) -> FormatType:
         ) from None
 
 
-def _find_schema_file(config_path: Path) -> Path | None:
-    """Find schema file for the given config file.
-
-    Looks for .schema.json, .schema.yaml, or .schema.yml files with the same base name.
-
-    Args:
-        config_path: Path to config file
-
-    Returns:
-        Path to schema file if found, None otherwise
-    """
-    base_name = config_path.stem
-
-    # Try different schema file patterns
-    schema_patterns = [
-        f"{base_name}.schema.json",
-        f"{base_name}.schema.yaml",
-        f"{base_name}.schema.yml",
-    ]
-
-    for pattern in schema_patterns:
-        schema_path = config_path.parent / pattern
-        if schema_path.exists():
-            return schema_path
-
-    return None
-
-
 def _handle_data_get_schema(
     path: Path, schema_manager: SchemaManager
-) -> dict[str, Any]:
+) -> SchemaResponse:
     """Handle GET operation with data_type='schema'.
 
     Args:
@@ -290,46 +286,23 @@ def _handle_data_get_schema(
         schema_manager: Schema manager instance
 
     Returns:
-        Response dict with schema information
+        SchemaResponse model with schema information
     """
     schema_info = schema_manager.get_schema_info_for_file(path)
     schema_data = schema_manager.get_schema_for_file(path)
 
     if schema_data:
-        response = {
-            "success": True,
-            "file": str(path),
-            "schema": schema_data,
-            "message": "Schema found via Schema Store",
-        }
-        if schema_info:
-            response["schema_info"] = schema_info
-        return response
+        return SchemaResponse(
+            success=True,
+            file=str(path),
+            schema=schema_data,
+            message="Schema found via Schema Store",
+            schema_info=schema_info,
+        )
 
-    # Fall back to local adjacent schema file search
-    local_schema_file = _find_schema_file(path)
-    if local_schema_file:
-        try:
-            schema_content = orjson.loads(local_schema_file.read_bytes())
-            return {
-                "success": True,
-                "file": str(path),
-                "schema": schema_content,
-                "schema_file": str(local_schema_file),
-                "message": "Schema found via adjacent file",
-            }
-        except (OSError, orjson.JSONDecodeError) as e:
-            return {
-                "success": False,
-                "file": str(path),
-                "message": f"Found schema file but failed to parse: {e}",
-            }
-
-    return {
-        "success": False,
-        "file": str(path),
-        "message": f"No schema found for file: {path.name}",
-    }
+    return SchemaResponse(
+        success=False, file=str(path), message=f"No schema found for file: {path.name}"
+    )
 
 
 def _handle_data_get_structure(
@@ -823,7 +796,10 @@ def _dispatch_get_operation(
         ToolError: If format disabled or validation fails
     """
     if data_type == "schema":
-        return _handle_data_get_schema(path, schema_manager)
+        # Return dict representation of Pydantic model
+        return _handle_data_get_schema(path, schema_manager).model_dump(
+            exclude_none=True, by_alias=True
+        )
 
     input_format = _detect_file_format(path)
     if not is_format_enabled(input_format):
@@ -838,8 +814,7 @@ def _dispatch_get_operation(
     if output_format is None:
         output_fmt: FormatType = input_format
     else:
-        validated = validate_format(output_format)
-        output_fmt = FormatType(validated.value)
+        output_fmt = validate_format(output_format)
 
     if return_type == "keys":
         return _handle_data_get_structure(
@@ -934,7 +909,7 @@ def _dispatch_delete_operation(
 
 @mcp.tool(annotations={"readOnlyHint": True})
 def data_query(
-    file_path: Annotated[str, Field(description="Path to configuration file")],
+    file_path: Annotated[str, Field(description="Path to file")],
     expression: Annotated[
         str,
         Field(
@@ -977,10 +952,9 @@ def data_query(
     output_format_explicit = output_format is not None
 
     # Use input format as output if not specified
+    # Use input format as output if not specified
     output_format_value: FormatType = (
-        input_format
-        if output_format is None
-        else FormatType(validate_format(output_format).value)
+        input_format if output_format is None else validate_format(output_format)
     )
 
     try:
@@ -1073,7 +1047,7 @@ def _get_pagination_hint(data: Any) -> str | None:
 
 @mcp.tool()
 def data(
-    file_path: Annotated[str, Field(description="Path to configuration file")],
+    file_path: Annotated[str, Field(description="Path to file")],
     operation: Annotated[
         Literal["get", "set", "delete"],
         Field(description="Operation: 'get', 'set', or 'delete'"),
@@ -1196,9 +1170,6 @@ def _handle_schema_validate(
         else:
             # Try to get cached schema path from SchemaManager
             schema_file = schema_manager.get_schema_path_for_file(file_path_obj)
-            if not schema_file:
-                # Fall back to local schema file search
-                schema_file = _find_schema_file(file_path_obj)
 
         if schema_file:
             validation_results["schema_file"] = str(schema_file)
@@ -1403,7 +1374,7 @@ def data_schema(
 
 @mcp.tool(annotations={"readOnlyHint": True})
 def data_convert(
-    file_path: Annotated[str, Field(description="Path to source configuration file")],
+    file_path: Annotated[str, Field(description="Path to source file")],
     output_format: Annotated[
         Literal["json", "yaml", "toml"],
         Field(description="Target format to convert to"),
@@ -1415,9 +1386,9 @@ def data_convert(
         ),
     ] = None,
 ) -> dict[str, Any]:
-    """Convert configuration file format.
+    """Convert file format.
 
-    Use when you need to transform a configuration file from one format (JSON, YAML, TOML) to another.
+    Use when you need to transform a file from one format (JSON, YAML, TOML) to another.
 
     Output contract: Returns {"success": bool, "result": str, ...} or writes to file.
     Side effects: Writes to output_file if provided.
@@ -1437,8 +1408,7 @@ def data_convert(
         )
 
     # Validate output format
-    validated = validate_format(output_format)
-    output_fmt: FormatType = FormatType(validated.value)
+    output_fmt: FormatType = validate_format(output_format)
 
     if input_format == output_fmt:
         raise ToolError(f"Input and output formats are the same: {input_format}")
@@ -1487,12 +1457,8 @@ def data_convert(
 
 @mcp.tool(annotations={"readOnlyHint": True})
 def data_merge(
-    file_path1: Annotated[
-        str, Field(description="Path to first configuration file (base)")
-    ],
-    file_path2: Annotated[
-        str, Field(description="Path to second configuration file (overlay)")
-    ],
+    file_path1: Annotated[str, Field(description="Path to first file (base)")],
+    file_path2: Annotated[str, Field(description="Path to second file (overlay)")],
     output_format: Annotated[
         Literal["json", "yaml", "toml"] | None,
         Field(description="Output format (defaults to format of first file)"),
@@ -1504,15 +1470,15 @@ def data_merge(
         ),
     ] = None,
 ) -> dict[str, Any]:
-    """Merge two configuration files into a single deep-merged configuration.
+    """Merge two files into a single deep-merged configuration.
 
     Performs a deep merge where values from the second (overlay) file override or extend
     those in the first (base) file. If output_file is provided the merged result is written
     to that path; otherwise the merged content is returned in the response.
 
     Parameters:
-        file_path1 (str): Path to the base configuration file.
-        file_path2 (str): Path to the overlay configuration file whose values override the base.
+        file_path1 (str): Path to the base file.
+        file_path2 (str): Path to the overlay file whose values override the base.
         output_format (str | None): Desired output format: "json", "yaml", or "toml". Defaults to the format of the first file.
         output_file (str | None): Optional path to write the merged output. When omitted, merged content is returned.
 
@@ -1547,7 +1513,7 @@ def data_merge(
         )
 
     # Determine output format
-    output_fmt = FormatType(validate_format(output_format or format1.value).value)
+    output_fmt = validate_format(output_format or format1.value)
 
     try:
         # Read both files into JSON for merging

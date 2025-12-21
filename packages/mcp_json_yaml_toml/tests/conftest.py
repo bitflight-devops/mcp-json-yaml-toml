@@ -34,7 +34,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 @pytest.fixture
 def sample_json_config(tmp_path: Path) -> Path:
-    """Create sample JSON configuration file for testing.
+    """Create sample JSON file for testing.
 
     Tests: JSON format handling
     How: Write sample JSON config to temp file
@@ -44,7 +44,7 @@ def sample_json_config(tmp_path: Path) -> Path:
         tmp_path: Pytest temporary directory
 
     Returns:
-        Path to created JSON config file
+        Path to created JSON file
     """
     config_data = {
         "name": "test-app",
@@ -58,14 +58,14 @@ def sample_json_config(tmp_path: Path) -> Path:
         "servers": ["server1.example.com", "server2.example.com"],
     }
 
-    config_path = tmp_path / "config.json"
-    config_path.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
-    return config_path
+    file_path = tmp_path / "config.json"
+    file_path.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
+    return file_path
 
 
 @pytest.fixture
 def sample_yaml_config(tmp_path: Path) -> Path:
-    """Create sample YAML configuration file for testing.
+    """Create sample YAML file for testing.
 
     Tests: YAML format handling
     How: Write sample YAML config to temp file
@@ -75,7 +75,7 @@ def sample_yaml_config(tmp_path: Path) -> Path:
         tmp_path: Pytest temporary directory
 
     Returns:
-        Path to created YAML config file
+        Path to created YAML file
     """
     yaml_content = """name: test-app
 version: 1.0.0
@@ -93,14 +93,14 @@ servers:
   - server2.example.com
 """
 
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml_content, encoding="utf-8")
-    return config_path
+    file_path = tmp_path / "config.yaml"
+    file_path.write_text(yaml_content, encoding="utf-8")
+    return file_path
 
 
 @pytest.fixture
 def sample_toml_config(tmp_path: Path) -> Path:
-    """Create sample TOML configuration file for testing.
+    """Create sample TOML file for testing.
 
     Tests: TOML format handling
     How: Write sample TOML config to temp file
@@ -110,7 +110,7 @@ def sample_toml_config(tmp_path: Path) -> Path:
         tmp_path: Pytest temporary directory
 
     Returns:
-        Path to created TOML config file
+        Path to created TOML file
     """
     toml_content = """name = "test-app"
 version = "1.0.0"
@@ -130,14 +130,14 @@ beta = false
 servers = ["server1.example.com", "server2.example.com"]
 """
 
-    config_path = tmp_path / "config.toml"
-    config_path.write_text(toml_content, encoding="utf-8")
-    return config_path
+    file_path = tmp_path / "config.toml"
+    file_path.write_text(toml_content, encoding="utf-8")
+    return file_path
 
 
 @pytest.fixture
 def sample_xml_config(tmp_path: Path) -> Path:
-    """Create sample XML configuration file for testing.
+    """Create sample XML file for testing.
 
     Tests: XML format handling
     How: Write sample XML config to temp file
@@ -147,7 +147,7 @@ def sample_xml_config(tmp_path: Path) -> Path:
         tmp_path: Pytest temporary directory
 
     Returns:
-        Path to created XML config file
+        Path to created XML file
     """
     xml_content = """<?xml version="1.0" encoding="UTF-8"?>
 <config>
@@ -172,9 +172,9 @@ def sample_xml_config(tmp_path: Path) -> Path:
 </config>
 """
 
-    config_path = tmp_path / "config.xml"
-    config_path.write_text(xml_content, encoding="utf-8")
-    return config_path
+    file_path = tmp_path / "config.xml"
+    file_path.write_text(xml_content, encoding="utf-8")
+    return file_path
 
 
 # ==============================================================================
@@ -223,7 +223,7 @@ def sample_json_schema(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def invalid_json_config(tmp_path: Path) -> Path:
-    """Create invalid JSON configuration file for error testing.
+    """Create invalid JSON file for error testing.
 
     Tests: JSON syntax error handling
     How: Write malformed JSON to temp file
@@ -235,14 +235,14 @@ def invalid_json_config(tmp_path: Path) -> Path:
     Returns:
         Path to created invalid JSON file
     """
-    config_path = tmp_path / "invalid.json"
-    config_path.write_text('{"name": "test", "unclosed": ', encoding="utf-8")
-    return config_path
+    file_path = tmp_path / "invalid.json"
+    file_path.write_text('{"name": "test", "unclosed": ', encoding="utf-8")
+    return file_path
 
 
 @pytest.fixture
 def invalid_yaml_config(tmp_path: Path) -> Path:
-    """Create invalid YAML configuration file for error testing.
+    """Create invalid YAML file for error testing.
 
     Tests: YAML syntax error handling
     How: Write malformed YAML to temp file
@@ -254,11 +254,11 @@ def invalid_yaml_config(tmp_path: Path) -> Path:
     Returns:
         Path to created invalid YAML file
     """
-    config_path = tmp_path / "invalid.yaml"
-    config_path.write_text(
+    file_path = tmp_path / "invalid.yaml"
+    file_path.write_text(
         "name: test\n  bad_indent: value\nmore: [unclosed", encoding="utf-8"
     )
-    return config_path
+    return file_path
 
 
 # ==============================================================================

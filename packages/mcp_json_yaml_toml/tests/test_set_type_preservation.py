@@ -1,7 +1,7 @@
 """Tests for SET operation type preservation across JSON, YAML, and TOML files.
 
 This module verifies that the `data` tool's SET operation correctly preserves
-value types when writing to configuration files. The discovered bug causes
+value types when writing to files. The discovered bug causes
 strings that look like numbers (e.g., "3.11") to be coerced to floats.
 
 Tests: Type preservation in SET operations via actual MCP JSON-RPC protocol
@@ -56,9 +56,9 @@ def json_config_with_types(tmp_path: Path) -> Path:
         "object_value": {"nested": "value", "count": 10},
     }
 
-    config_path = tmp_path / "config.json"
-    config_path.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
-    return config_path
+    file_path = tmp_path / "config.json"
+    file_path.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
+    return file_path
 
 
 @pytest.fixture
@@ -91,9 +91,9 @@ object_value:
   count: 10
 """
 
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml_content, encoding="utf-8")
-    return config_path
+    file_path = tmp_path / "config.yaml"
+    file_path.write_text(yaml_content, encoding="utf-8")
+    return file_path
 
 
 @pytest.fixture
@@ -120,9 +120,9 @@ nested = "value"
 count = 10
 """
 
-    config_path = tmp_path / "config.toml"
-    config_path.write_text(toml_content, encoding="utf-8")
-    return config_path
+    file_path = tmp_path / "config.toml"
+    file_path.write_text(toml_content, encoding="utf-8")
+    return file_path
 
 
 # ==============================================================================
@@ -139,7 +139,7 @@ def get_value_via_protocol(
 
     Args:
         mcp_client: MCP client connected via JSON-RPC protocol
-        file_path: Path to configuration file
+        file_path: Path to file
         key_path: Dot-separated key path
 
     Returns:
@@ -164,7 +164,7 @@ def set_value_via_protocol(
 
     Args:
         mcp_client: MCP client connected via JSON-RPC protocol
-        file_path: Path to configuration file
+        file_path: Path to file
         key_path: Dot-separated key path
         json_value: Value as JSON string
 
@@ -189,7 +189,7 @@ def read_file_and_parse_value(file_path: Path, key_path: str) -> Any:
     written to the file.
 
     Args:
-        file_path: Path to configuration file
+        file_path: Path to file
         key_path: Dot-separated key path (supports simple single-level keys)
 
     Returns:
@@ -248,13 +248,13 @@ class TestStringTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a new string value via MCP protocol
-        set_value_via_protocol(mcp_client, config_path, "string_value", '"world"')
+        set_value_via_protocol(mcp_client, file_path, "string_value", '"world"')
 
         # Assert - verify actual file content (bypass protocol for verification)
-        actual_value = read_file_and_parse_value(config_path, "string_value")
+        actual_value = read_file_and_parse_value(file_path, "string_value")
         assert isinstance(actual_value, str), (
             f"Expected str, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -286,13 +286,13 @@ class TestStringTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a string that looks like a float via MCP protocol
-        set_value_via_protocol(mcp_client, config_path, "string_numeric", '"3.12"')
+        set_value_via_protocol(mcp_client, file_path, "string_numeric", '"3.12"')
 
         # Assert - verify actual file content (bypass protocol for verification)
-        actual_value = read_file_and_parse_value(config_path, "string_numeric")
+        actual_value = read_file_and_parse_value(file_path, "string_numeric")
         assert isinstance(actual_value, str), (
             f"Type coercion bug in {file_format} via MCP protocol: "
             f"Expected str, got {type(actual_value).__name__}: {actual_value!r}. "
@@ -324,13 +324,13 @@ class TestStringTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a string that looks like an integer via MCP protocol
-        set_value_via_protocol(mcp_client, config_path, "string_integer", '"99"')
+        set_value_via_protocol(mcp_client, file_path, "string_integer", '"99"')
 
         # Assert - verify actual file content (bypass protocol for verification)
-        actual_value = read_file_and_parse_value(config_path, "string_integer")
+        actual_value = read_file_and_parse_value(file_path, "string_integer")
         assert isinstance(actual_value, str), (
             f"Type coercion bug in {file_format} via MCP protocol: "
             f"Expected str, got {type(actual_value).__name__}: {actual_value!r}. "
@@ -361,13 +361,13 @@ class TestStringTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a string that looks like a boolean via MCP protocol
-        set_value_via_protocol(mcp_client, config_path, "string_bool", '"false"')
+        set_value_via_protocol(mcp_client, file_path, "string_bool", '"false"')
 
         # Assert - verify actual file content (bypass protocol for verification)
-        actual_value = read_file_and_parse_value(config_path, "string_bool")
+        actual_value = read_file_and_parse_value(file_path, "string_bool")
         assert isinstance(actual_value, str), (
             f"Type coercion bug in {file_format} via MCP protocol: "
             f"Expected str, got {type(actual_value).__name__}: {actual_value!r}. "
@@ -407,13 +407,13 @@ class TestNumericTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set an integer value via MCP protocol
-        set_value_via_protocol(mcp_client, config_path, "integer_value", "100")
+        set_value_via_protocol(mcp_client, file_path, "integer_value", "100")
 
         # Assert - verify actual file content
-        actual_value = read_file_and_parse_value(config_path, "integer_value")
+        actual_value = read_file_and_parse_value(file_path, "integer_value")
         assert isinstance(actual_value, int), (
             f"Expected int, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -442,13 +442,13 @@ class TestNumericTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a float value via MCP protocol
-        set_value_via_protocol(mcp_client, config_path, "float_value", str(math.e))
+        set_value_via_protocol(mcp_client, file_path, "float_value", str(math.e))
 
         # Assert - verify actual file content
-        actual_value = read_file_and_parse_value(config_path, "float_value")
+        actual_value = read_file_and_parse_value(file_path, "float_value")
         assert isinstance(actual_value, float), (
             f"Expected float, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -480,13 +480,13 @@ class TestNumericTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a whole number as float via MCP protocol
-        set_value_via_protocol(mcp_client, config_path, "float_whole", "5.0")
+        set_value_via_protocol(mcp_client, file_path, "float_whole", "5.0")
 
         # Assert - value is numeric (JSON doesn't distinguish int/float for whole numbers)
-        actual_value = read_file_and_parse_value(config_path, "float_whole")
+        actual_value = read_file_and_parse_value(file_path, "float_whole")
         assert isinstance(actual_value, (int, float)), (
             f"Expected numeric, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -524,13 +524,13 @@ class TestBooleanTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set boolean true via MCP protocol (was false)
-        set_value_via_protocol(mcp_client, config_path, "bool_false", "true")
+        set_value_via_protocol(mcp_client, file_path, "bool_false", "true")
 
         # Assert - verify actual file content
-        actual_value = read_file_and_parse_value(config_path, "bool_false")
+        actual_value = read_file_and_parse_value(file_path, "bool_false")
         assert isinstance(actual_value, bool), (
             f"Expected bool, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -559,13 +559,13 @@ class TestBooleanTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set boolean false via MCP protocol (was true)
-        set_value_via_protocol(mcp_client, config_path, "bool_true", "false")
+        set_value_via_protocol(mcp_client, file_path, "bool_true", "false")
 
         # Assert - verify actual file content
-        actual_value = read_file_and_parse_value(config_path, "bool_true")
+        actual_value = read_file_and_parse_value(file_path, "bool_true")
         assert isinstance(actual_value, bool), (
             f"Expected bool, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -600,13 +600,13 @@ class TestNullTypePreservation:
         """
         # Arrange - select appropriate fixture
         config_map = {"json": json_config_with_types, "yaml": yaml_config_with_types}
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # First set to a non-null value, then set back to null via protocol
-        set_value_via_protocol(mcp_client, config_path, "string_value", "null")
+        set_value_via_protocol(mcp_client, file_path, "string_value", "null")
 
         # Assert - verify actual file content
-        actual_value = read_file_and_parse_value(config_path, "string_value")
+        actual_value = read_file_and_parse_value(file_path, "string_value")
         assert actual_value is None, (
             f"Expected None, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -643,15 +643,15 @@ class TestComplexTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a new array of strings via MCP protocol
         set_value_via_protocol(
-            mcp_client, config_path, "array_strings", '["x", "y", "z"]'
+            mcp_client, file_path, "array_strings", '["x", "y", "z"]'
         )
 
         # Assert - verify actual file content
-        actual_value = read_file_and_parse_value(config_path, "array_strings")
+        actual_value = read_file_and_parse_value(file_path, "array_strings")
         assert isinstance(actual_value, list), (
             f"Expected list, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -684,15 +684,13 @@ class TestComplexTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a new array of integers via MCP protocol
-        set_value_via_protocol(
-            mcp_client, config_path, "array_integers", "[10, 20, 30]"
-        )
+        set_value_via_protocol(mcp_client, file_path, "array_integers", "[10, 20, 30]")
 
         # Assert - verify actual file content
-        actual_value = read_file_and_parse_value(config_path, "array_integers")
+        actual_value = read_file_and_parse_value(file_path, "array_integers")
         assert isinstance(actual_value, list), (
             f"Expected list, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -722,15 +720,15 @@ class TestComplexTypePreservation:
         """
         # Arrange - select appropriate fixture
         config_map = {"json": json_config_with_types, "yaml": yaml_config_with_types}
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a new object via MCP protocol
         set_value_via_protocol(
-            mcp_client, config_path, "object_value", '{"key": "val", "num": 42}'
+            mcp_client, file_path, "object_value", '{"key": "val", "num": 42}'
         )
 
         # Assert - verify actual file content
-        actual_value = read_file_and_parse_value(config_path, "object_value")
+        actual_value = read_file_and_parse_value(file_path, "object_value")
         assert isinstance(actual_value, dict), (
             f"Expected dict, got {type(actual_value).__name__}: {actual_value!r}"
         )
@@ -787,16 +785,16 @@ class TestNumericLookingStringEdgeCases:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - set a numeric-looking string via MCP protocol (JSON-encoded)
         json_encoded_value = json.dumps(string_value)
         set_value_via_protocol(
-            mcp_client, config_path, "string_value", json_encoded_value
+            mcp_client, file_path, "string_value", json_encoded_value
         )
 
         # Assert - verify actual file content (bypass protocol for verification)
-        actual_value = read_file_and_parse_value(config_path, "string_value")
+        actual_value = read_file_and_parse_value(file_path, "string_value")
         assert isinstance(actual_value, str), (
             f"Type coercion bug for '{string_value}' in {file_format} via MCP protocol: "
             f"Expected str, got {type(actual_value).__name__}: {actual_value!r}"
@@ -835,7 +833,7 @@ class TestRoundTripTypePreservation:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Define test cases: (key, new_json_value, expected_type, expected_value)
         test_cases: list[tuple[str, str, type, Any]] = [
@@ -849,8 +847,8 @@ class TestRoundTripTypePreservation:
 
         # Act & Assert - verify each type survives round-trip
         for key, json_value, expected_type, expected_value in test_cases:
-            set_value_via_protocol(mcp_client, config_path, key, json_value)
-            actual_value = read_file_and_parse_value(config_path, key)
+            set_value_via_protocol(mcp_client, file_path, key, json_value)
+            actual_value = read_file_and_parse_value(file_path, key)
 
             # Handle list comparison for TOML (may return special list type)
             if expected_type is list:
@@ -919,13 +917,13 @@ class TestAIAgentUsagePatternsBug:
         Result: File contains `pythonVersion = "3.12"` (a string as intended).
         """
         # Arrange - Use TOML config (where bug was originally observed)
-        config_path = toml_config_with_types
+        file_path = toml_config_with_types
 
         # Act - Send value with value_type="string" to treat it as literal string
         mcp_client.call_tool(
             "data",
             {
-                "file_path": str(config_path),
+                "file_path": str(file_path),
                 "operation": "set",
                 "key_path": "string_numeric",
                 "value": "3.12",  # The string we want to set
@@ -934,7 +932,7 @@ class TestAIAgentUsagePatternsBug:
         )
 
         # Assert - The file should contain the STRING "3.12", not the NUMBER 3.12
-        actual_value = read_file_and_parse_value(config_path, "string_numeric")
+        actual_value = read_file_and_parse_value(file_path, "string_numeric")
 
         assert isinstance(actual_value, str), (
             f"Expected str with value_type='string', got {type(actual_value).__name__}: {actual_value!r}"
@@ -958,13 +956,13 @@ class TestAIAgentUsagePatternsBug:
         Result: File contains `port: "8080"` (a string as intended).
         """
         # Arrange
-        config_path = yaml_config_with_types
+        file_path = yaml_config_with_types
 
         # Act - AI agent sends value with value_type="string"
         mcp_client.call_tool(
             "data",
             {
-                "file_path": str(config_path),
+                "file_path": str(file_path),
                 "operation": "set",
                 "key_path": "string_integer",
                 "value": "8080",  # The string we want to set
@@ -973,7 +971,7 @@ class TestAIAgentUsagePatternsBug:
         )
 
         # Assert - Should be STRING "8080", not INTEGER 8080
-        actual_value = read_file_and_parse_value(config_path, "string_integer")
+        actual_value = read_file_and_parse_value(file_path, "string_integer")
 
         assert isinstance(actual_value, str), (
             f"Expected str with value_type='string', got {type(actual_value).__name__}: {actual_value!r}"
@@ -997,13 +995,13 @@ class TestAIAgentUsagePatternsBug:
         Result: File contains `enabled: "true"` (string as intended).
         """
         # Arrange
-        config_path = json_config_with_types
+        file_path = json_config_with_types
 
         # Act - AI agent sends value with value_type="string"
         mcp_client.call_tool(
             "data",
             {
-                "file_path": str(config_path),
+                "file_path": str(file_path),
                 "operation": "set",
                 "key_path": "string_bool",
                 "value": "true",  # The string we want to set
@@ -1012,7 +1010,7 @@ class TestAIAgentUsagePatternsBug:
         )
 
         # Assert - Should be STRING "true", not BOOLEAN True
-        actual_value = read_file_and_parse_value(config_path, "string_bool")
+        actual_value = read_file_and_parse_value(file_path, "string_bool")
 
         assert isinstance(actual_value, str), (
             f"Expected str with value_type='string', got {type(actual_value).__name__}: {actual_value!r}"
@@ -1042,13 +1040,13 @@ class TestAIAgentUsagePatternsBug:
         """
         # Arrange
         config_map = {"json": json_config_with_types, "yaml": yaml_config_with_types}
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - AI agent sends value with value_type="string"
         mcp_client.call_tool(
             "data",
             {
-                "file_path": str(config_path),
+                "file_path": str(file_path),
                 "operation": "set",
                 "key_path": "string_value",
                 "value": "null",  # The string we want to set
@@ -1057,7 +1055,7 @@ class TestAIAgentUsagePatternsBug:
         )
 
         # Assert - Should be STRING "null", not None
-        actual_value = read_file_and_parse_value(config_path, "string_value")
+        actual_value = read_file_and_parse_value(file_path, "string_value")
 
         assert actual_value is not None, "Expected str 'null', got None"
         assert isinstance(actual_value, str), (
@@ -1113,13 +1111,13 @@ class TestAIAgentVersionStringsBug:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - AI agent sends version string with value_type="string"
         mcp_client.call_tool(
             "data",
             {
-                "file_path": str(config_path),
+                "file_path": str(file_path),
                 "operation": "set",
                 "key_path": "string_numeric",
                 "value": version_string,
@@ -1128,7 +1126,7 @@ class TestAIAgentVersionStringsBug:
         )
 
         # Assert - Should be STRING
-        actual_value = read_file_and_parse_value(config_path, "string_numeric")
+        actual_value = read_file_and_parse_value(file_path, "string_numeric")
 
         assert isinstance(actual_value, str), (
             f"Expected str with value_type='string', got {type(actual_value).__name__} ({actual_value!r}) in {file_format}"
@@ -1174,7 +1172,7 @@ class TestAIAgentVersionStringsBug:
             "yaml": yaml_config_with_types,
             "toml": toml_config_with_types,
         }
-        config_path = config_map[file_format]
+        file_path = config_map[file_format]
 
         # Act - Call the tool with an invalid JSON value
         # MCP returns error responses with isError=true in the result
@@ -1184,7 +1182,7 @@ class TestAIAgentVersionStringsBug:
             {
                 "name": "data",
                 "arguments": {
-                    "file_path": str(config_path),
+                    "file_path": str(file_path),
                     "operation": "set",
                     "key_path": "string_value",
                     "value": version_string,  # Not valid JSON

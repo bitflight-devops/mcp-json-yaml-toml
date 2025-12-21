@@ -7,7 +7,9 @@ function via .fn attribute (e.g., server.data_query.fn()).
 """
 
 import json
+import unittest.mock
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from fastmcp.exceptions import ToolError
@@ -226,13 +228,33 @@ class TestData:
         Why: Verify schema lookup
         """
         # Arrange - config with schema
-        config_path = tmp_path / "app.json"
+        file_path = tmp_path / "app.json"
         schema_path = tmp_path / "app.schema.json"
-        config_path.write_text(sample_json_config.read_text(encoding="utf-8"))
+        file_path.write_text(sample_json_config.read_text(encoding="utf-8"))
         schema_path.write_text(sample_json_schema.read_text(encoding="utf-8"))
 
-        # Act - get schema
-        result = data_fn(str(config_path), operation="get", data_type="schema")
+        # Manual registration required now that implicit adjacency is removed
+        from mcp_json_yaml_toml import server
+        from mcp_json_yaml_toml.schemas import FileAssociation
+
+        # Force a fresh config with our association
+        server.schema_manager.config.file_associations[str(file_path.resolve())] = (
+            FileAssociation(schema_url=str(schema_path.resolve()), source="user")
+        )
+
+        # Mock _fetch_schema to handle our local path "URL"
+        original_fetch = server.schema_manager._fetch_schema
+
+        def mock_fetch(url: str) -> dict[str, Any] | None:
+            if url == str(schema_path.resolve()):
+                return cast("dict[str, Any]", json.loads(schema_path.read_text()))
+            return original_fetch(url)
+
+        with unittest.mock.patch.object(
+            server.schema_manager, "_fetch_schema", side_effect=mock_fetch
+        ):
+            # Act - get schema
+            result = data_fn(str(file_path), operation="get", data_type="schema")
 
         # Assert - returns schema
         assert result["success"] is True
@@ -841,7 +863,6 @@ class TestPrompts:
         that return str, it actually returns str at runtime.
         We use cast() to assert the known runtime type.
         """
-        from typing import cast
 
         prompt = cast("str", server.explain_config.fn("config.json"))
         assert "analyze and explain" in prompt
@@ -852,7 +873,6 @@ class TestPrompts:
 
         Note: See test_explain_config docstring for type cast explanation.
         """
-        from typing import cast
 
         prompt = cast("str", server.suggest_improvements.fn("config.yaml"))
         assert "suggest improvements" in prompt
@@ -863,7 +883,6 @@ class TestPrompts:
 
         Note: See test_explain_config docstring for type cast explanation.
         """
-        from typing import cast
 
         prompt = cast("str", server.convert_to_schema.fn("data.toml"))
         assert "generate a JSON schema" in prompt

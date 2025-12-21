@@ -8,44 +8,12 @@ import pytest
 
 from mcp_json_yaml_toml.config import (
     DEFAULT_FORMATS,
-    ConfigFormat,
     get_enabled_formats_str,
     is_format_enabled,
     parse_enabled_formats,
     validate_format,
 )
-
-
-class TestConfigFormat:
-    """Test ConfigFormat enum."""
-
-    def test_config_format_values(self) -> None:
-        """Test ConfigFormat enum has correct string values.
-
-        Tests: ConfigFormat enum values
-        How: Assert each enum member has expected string value
-        Why: Ensure format names match expected lowercase strings
-        """
-        # Arrange - get enum values
-        # Act - access enum members
-        # Assert - verify string values
-        assert ConfigFormat.JSON.value == "json"
-        assert ConfigFormat.YAML.value == "yaml"
-        assert ConfigFormat.TOML.value == "toml"
-        assert ConfigFormat.XML.value == "xml"
-
-    def test_config_format_is_string_enum(self) -> None:
-        """Test ConfigFormat is a StrEnum.
-
-        Tests: ConfigFormat type
-        How: Verify enum inherits from str
-        Why: Ensure ConfigFormat can be used as string
-        """
-        # Arrange - get enum instance
-        # Act - check type
-        # Assert - verify is string
-        assert isinstance(ConfigFormat.JSON, str)
-        assert isinstance(ConfigFormat.YAML, str)
+from mcp_json_yaml_toml.yq_wrapper import FormatType
 
 
 class TestParseEnabledFormats:
@@ -65,9 +33,9 @@ class TestParseEnabledFormats:
         # Assert - returns default formats
         assert result == list(DEFAULT_FORMATS)
         assert len(result) == 3
-        assert ConfigFormat.JSON in result
-        assert ConfigFormat.YAML in result
-        assert ConfigFormat.TOML in result
+        assert FormatType.JSON in result
+        assert FormatType.YAML in result
+        assert FormatType.TOML in result
 
     def test_parse_enabled_formats_from_env(
         self, monkeypatch: pytest.MonkeyPatch
@@ -86,9 +54,9 @@ class TestParseEnabledFormats:
 
         # Assert - returns formats from env
         assert len(result) == 2
-        assert ConfigFormat.JSON in result
-        assert ConfigFormat.TOML in result
-        assert ConfigFormat.YAML not in result
+        assert FormatType.JSON in result
+        assert FormatType.TOML in result
+        assert FormatType.YAML not in result
 
     def test_parse_enabled_formats_single_format(
         self, monkeypatch: pytest.MonkeyPatch
@@ -107,7 +75,7 @@ class TestParseEnabledFormats:
 
         # Assert - returns single format
         assert len(result) == 1
-        assert result[0] == ConfigFormat.YAML
+        assert result[0] == FormatType.YAML
 
     def test_parse_enabled_formats_case_insensitive(
         self, monkeypatch: pytest.MonkeyPatch
@@ -126,9 +94,9 @@ class TestParseEnabledFormats:
 
         # Assert - returns normalized formats
         assert len(result) == 3
-        assert ConfigFormat.JSON in result
-        assert ConfigFormat.YAML in result
-        assert ConfigFormat.TOML in result
+        assert FormatType.JSON in result
+        assert FormatType.YAML in result
+        assert FormatType.TOML in result
 
     def test_parse_enabled_formats_whitespace_handling(
         self, monkeypatch: pytest.MonkeyPatch
@@ -147,9 +115,9 @@ class TestParseEnabledFormats:
 
         # Assert - returns trimmed formats
         assert len(result) == 3
-        assert ConfigFormat.JSON in result
-        assert ConfigFormat.YAML in result
-        assert ConfigFormat.TOML in result
+        assert FormatType.JSON in result
+        assert FormatType.YAML in result
+        assert FormatType.TOML in result
 
     def test_parse_enabled_formats_invalid_falls_back(
         self, monkeypatch: pytest.MonkeyPatch
@@ -204,8 +172,8 @@ class TestParseEnabledFormats:
 
         # Assert - returns only valid formats
         assert len(result) == 2
-        assert ConfigFormat.JSON in result
-        assert ConfigFormat.YAML in result
+        assert FormatType.JSON in result
+        assert FormatType.YAML in result
 
 
 class TestIsFormatEnabled:
@@ -317,9 +285,9 @@ class TestValidateFormat:
         # Act - validate format
         result = validate_format("json")
 
-        # Assert - returns ConfigFormat enum
-        assert result == ConfigFormat.JSON
-        assert isinstance(result, ConfigFormat)
+        # Assert - returns FormatType enum
+        assert result == FormatType.JSON
+        assert isinstance(result, FormatType)
 
     def test_validate_format_valid_yaml(self) -> None:
         """Test validate_format accepts valid YAML format.
@@ -333,7 +301,7 @@ class TestValidateFormat:
         result = validate_format("yaml")
 
         # Assert - returns YAML enum
-        assert result == ConfigFormat.YAML
+        assert result == FormatType.YAML
 
     def test_validate_format_valid_toml(self) -> None:
         """Test validate_format accepts valid TOML format.
@@ -347,7 +315,7 @@ class TestValidateFormat:
         result = validate_format("toml")
 
         # Assert - returns TOML enum
-        assert result == ConfigFormat.TOML
+        assert result == FormatType.TOML
 
     def test_validate_format_valid_xml(self) -> None:
         """Test validate_format accepts valid XML format.
@@ -361,7 +329,7 @@ class TestValidateFormat:
         result = validate_format("xml")
 
         # Assert - returns XML enum
-        assert result == ConfigFormat.XML
+        assert result == FormatType.XML
 
     def test_validate_format_case_insensitive(self) -> None:
         """Test validate_format is case-insensitive.
@@ -373,10 +341,10 @@ class TestValidateFormat:
         # Arrange - mixed case formats
         # Act - validate each
         # Assert - all work
-        assert validate_format("JSON") == ConfigFormat.JSON
-        assert validate_format("Json") == ConfigFormat.JSON
-        assert validate_format("YAML") == ConfigFormat.YAML
-        assert validate_format("Yaml") == ConfigFormat.YAML
+        assert validate_format("JSON") == FormatType.JSON
+        assert validate_format("Json") == FormatType.JSON
+        assert validate_format("YAML") == FormatType.YAML
+        assert validate_format("Yaml") == FormatType.YAML
 
     def test_validate_format_invalid_raises_valueerror(self) -> None:
         """Test validate_format raises ValueError for invalid format.

@@ -7,27 +7,14 @@ This module handles:
 """
 
 import os
-from enum import StrEnum
 
-
-class ConfigFormat(StrEnum):
-    """Supported configuration file formats."""
-
-    JSON = "json"
-    YAML = "yaml"
-    TOML = "toml"
-    XML = "xml"
-
+from mcp_json_yaml_toml.yq_wrapper import FormatType
 
 # Default enabled formats
-DEFAULT_FORMATS: list[ConfigFormat] = [
-    ConfigFormat.JSON,
-    ConfigFormat.YAML,
-    ConfigFormat.TOML,
-]
+DEFAULT_FORMATS: list[FormatType] = [FormatType.JSON, FormatType.YAML, FormatType.TOML]
 
 
-def parse_enabled_formats() -> list[ConfigFormat]:
+def parse_enabled_formats() -> list[FormatType]:
     """Parse enabled formats from environment variable.
 
     Reads the MCP_CONFIG_FORMATS environment variable and parses it as a
@@ -35,16 +22,16 @@ def parse_enabled_formats() -> list[ConfigFormat]:
     the environment variable is not set or is invalid.
 
     Returns:
-        List of enabled ConfigFormat values
+        List of enabled FormatType values
 
     Examples:
         >>> os.environ["MCP_CONFIG_FORMATS"] = "json,yaml"
         >>> parse_enabled_formats()
-        [<ConfigFormat.JSON: 'json'>, <ConfigFormat.YAML: 'yaml'>]
+        [<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>]
 
         >>> os.environ.pop("MCP_CONFIG_FORMATS", None)
         >>> parse_enabled_formats()
-        [<ConfigFormat.JSON: 'json'>, <ConfigFormat.YAML: 'yaml'>, <ConfigFormat.TOML: 'toml'>]
+        [<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>, <FormatType.TOML: 'toml'>]
     """
     env_value = os.environ.get("MCP_CONFIG_FORMATS", "").strip()
 
@@ -54,11 +41,11 @@ def parse_enabled_formats() -> list[ConfigFormat]:
     # Parse comma-separated list
     format_names = [name.strip().lower() for name in env_value.split(",")]
 
-    # Validate and convert to ConfigFormat
-    valid_format_names = {fmt.value for fmt in ConfigFormat}
+    # Validate and convert to FormatType
+    valid_format_names = {fmt.value for fmt in FormatType}
 
-    enabled_formats: list[ConfigFormat] = [
-        ConfigFormat(name) for name in format_names if name in valid_format_names
+    enabled_formats: list[FormatType] = [
+        FormatType(name) for name in format_names if name in valid_format_names
     ]
 
     # Fall back to defaults if no valid formats found
@@ -93,24 +80,24 @@ def is_format_enabled(format_name: str) -> bool:
     return any(fmt.value == normalized_name for fmt in enabled_formats)
 
 
-def validate_format(format_name: str) -> ConfigFormat:
-    """Validate and convert a format name to ConfigFormat.
+def validate_format(format_name: str) -> FormatType:
+    """Validate and convert a format name to FormatType.
 
     Args:
         format_name: Format name to validate (case-insensitive)
 
     Returns:
-        ConfigFormat enum value
+        FormatType enum value
 
     Raises:
         ValueError: If format_name is not a valid format
 
     Examples:
         >>> validate_format("json")
-        <ConfigFormat.JSON: 'json'>
+        <FormatType.JSON: 'json'>
 
         >>> validate_format("YAML")
-        <ConfigFormat.YAML: 'yaml'>
+        <FormatType.YAML: 'yaml'>
 
         >>> validate_format("invalid")
         Traceback (most recent call last):
@@ -120,9 +107,9 @@ def validate_format(format_name: str) -> ConfigFormat:
     normalized_name = format_name.lower()
 
     try:
-        return ConfigFormat(normalized_name)
+        return FormatType(normalized_name)
     except ValueError as e:
-        valid_formats = ", ".join(fmt.value for fmt in ConfigFormat)
+        valid_formats = ", ".join(fmt.value for fmt in FormatType)
         raise ValueError(
             f"Invalid format '{format_name}'. Valid formats: {valid_formats}"
         ) from e
