@@ -6,18 +6,18 @@ MCP_CONFIG_FORMATS environment variable.
 """
 
 import base64
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeGuard, assert_never
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
 import orjson
+import tomlkit
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from jsonschema import validate as jsonschema_validate
 from jsonschema.exceptions import SchemaError, ValidationError
 from pydantic import BaseModel, Field
+from ruamel.yaml import YAML
 from strong_typing.core import JsonType
 
 from mcp_json_yaml_toml.config import (
@@ -40,8 +40,11 @@ from mcp_json_yaml_toml.yq_wrapper import (
     execute_yq,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 # Initialize FastMCP server
-mcp = FastMCP("config-tools", mask_error_details=False)
+mcp = FastMCP("mcp-json-yaml-toml", mask_error_details=False)
 
 # Initialize Schema Manager
 schema_manager = SchemaManager()
@@ -60,12 +63,50 @@ class SchemaResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+def _validate_and_write_content(
+    path: Path, content: str, schema_path: Path | None, input_format: FormatType | str
+) -> None:
+    """Validate content against schema (if present) and write to file.
+
+    Args:
+        path: Target file path
+        content: New file content string
+        schema_path: Path to schema file or None
+        input_format: File format (json, yaml, toml)
+
+    Raises:
+        ToolError: If validation fails
+    """
+    if schema_path:
+        validation_data = None
+        try:
+            if input_format == "json":
+                validation_data = orjson.loads(content)
+            elif input_format in {"yaml", FormatType.YAML}:
+                yaml = YAML(typ="safe", pure=True)
+                validation_data = yaml.load(content)
+            elif input_format in {"toml", FormatType.TOML}:
+                validation_data = tomlkit.parse(content)
+
+            if validation_data is not None:
+                is_valid, msg = _validate_against_schema(validation_data, schema_path)
+                if not is_valid:
+                    raise ToolError(f"Schema validation failed: {msg}")  # noqa: TRY301
+
+        except Exception as e:
+            if isinstance(e, ToolError):
+                raise
+            raise ToolError(f"Validation check failed: {e}") from e
+
+    path.write_text(content, encoding="utf-8")
+
+
 def is_schema(value: Any) -> TypeGuard[JsonType]:
     """Check if value is a valid Schema (dict)."""
     return isinstance(value, dict) and all(
         isinstance(key, str)
-        and isinstance(value, bool | int | float | str | dict | list)
-        for key, value in value.items()
+        and isinstance(item_value, (bool, int, float, str, dict, list))
+        for key, item_value in value.items()
     )
 
 
@@ -474,7 +515,11 @@ def _handle_data_get_value(
 
 
 def _set_toml_value_handler(
-    path: Path, key_path: str, parsed_value: Any, schema_info: dict[str, Any] | None
+    path: Path,
+    key_path: str,
+    parsed_value: Any,
+    schema_info: dict[str, Any] | None,
+    schema_path: Path | None = None,
 ) -> dict[str, Any]:
     """Handle TOML set operation.
 
@@ -483,13 +528,15 @@ def _set_toml_value_handler(
         key_path: Dot-notation key path to set
         parsed_value: Parsed value to set
         schema_info: Optional schema information
+        schema_path: Optional path to schema file for validation
 
     Returns:
         Response dict with operation result
     """
     try:
         modified_toml = set_toml_value(path, key_path, parsed_value)
-        path.write_text(modified_toml, encoding="utf-8")
+        _validate_and_write_content(path, modified_toml, schema_path, "toml")
+
         response = {
             "success": True,
             "result": "File modified successfully",
@@ -498,6 +545,8 @@ def _set_toml_value_handler(
         if schema_info:
             response["schema_info"] = schema_info
     except Exception as e:
+        if isinstance(e, ToolError):
+            raise
         raise ToolError(f"TOML set operation failed: {e}") from e
     else:
         return response
@@ -622,10 +671,17 @@ def _handle_data_set(
     """
     parsed_value = _parse_set_value(value, value_type)
 
-    if input_format == "toml":
-        return _set_toml_value_handler(path, key_path, parsed_value, schema_info)
+    # Validating before write (Phase 9)
+    schema_path: Path | None = None
+    if schema_info:
+        schema_path = schema_manager.get_schema_path_for_file(path)
 
-    # YAML/JSON use yq
+    if input_format == "toml":
+        return _set_toml_value_handler(
+            path, key_path, parsed_value, schema_info, schema_path
+        )
+
+    # YAML/JSON use yq.
     yq_value = orjson.dumps(parsed_value).decode()
     expression = (
         f".{key_path} = {yq_value}"
@@ -634,14 +690,22 @@ def _handle_data_set(
     )
 
     try:
-        execute_yq(
+        # Dry run - get modified content
+        result = execute_yq(
             expression,
             input_file=path,
             input_format=input_format,
             output_format=input_format,
-            in_place=True,
+            in_place=False,
         )
+
+        _validate_and_write_content(path, result.stdout, schema_path, input_format)
+
     except YQExecutionError as e:
+        raise ToolError(f"Set operation failed: {e}") from e
+    except Exception as e:
+        if isinstance(e, ToolError):
+            raise
         raise ToolError(f"Set operation failed: {e}") from e
     else:
         optimized = False
@@ -664,7 +728,7 @@ def _handle_data_set(
         return response
 
 
-def _handle_data_delete(
+def _handle_data_delete(  # noqa: C901
     path: Path,
     key_path: str,
     input_format: FormatType,
@@ -684,11 +748,17 @@ def _handle_data_delete(
     Raises:
         ToolError: If operation fails
     """
+    # Validating before write (Phase 9)
+    schema_path: Path | None = None
+    if schema_info:
+        schema_path = schema_manager.get_schema_path_for_file(path)
+
     # TOML requires special handling since yq cannot write TOML
     if input_format == "toml":
         try:
             modified_toml = delete_toml_key(path, key_path)
-            path.write_text(modified_toml, encoding="utf-8")
+            _validate_and_write_content(path, modified_toml, schema_path, "toml")
+
             response = {
                 "success": True,
                 "result": "File modified successfully",
@@ -700,6 +770,8 @@ def _handle_data_delete(
         except KeyError as e:
             raise ToolError(f"TOML delete operation failed: {e}") from e
         except Exception as e:
+            if isinstance(e, ToolError):
+                raise
             raise ToolError(f"TOML delete operation failed: {e}") from e
         else:
             return response
@@ -710,13 +782,17 @@ def _handle_data_delete(
     )
 
     try:
-        execute_yq(
+        # Dry run
+        result = execute_yq(
             expression,
             input_file=path,
             input_format=input_format,
             output_format=input_format,
-            in_place=True,
+            in_place=False,
         )
+
+        _validate_and_write_content(path, result.stdout, schema_path, input_format)
+
         response = {
             "success": True,
             "result": "File modified successfully",
@@ -725,6 +801,10 @@ def _handle_data_delete(
         if schema_info:
             response["schema_info"] = schema_info
     except YQExecutionError as e:
+        raise ToolError(f"Delete operation failed: {e}") from e
+    except Exception as e:
+        if isinstance(e, ToolError):
+            raise
         raise ToolError(f"Delete operation failed: {e}") from e
     else:
         return response
@@ -1126,6 +1206,7 @@ def data(
             return _dispatch_delete_operation(path, key_path, schema_info)
         case _:
             assert_never(operation)
+    return None
 
 
 def _handle_schema_validate(

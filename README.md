@@ -23,13 +23,13 @@
 
 ---
 
-Stop AI coding tools from breaking your data files. No more grep guesswork, hallucinated fields, or invalid configs. This MCP server gives AI assistants a strict, round-trip safe interface for working with structured data.
+Stop AI coding tools from breaking your data files. No more grep guesswork, hallucinated fields, or non-schema-compliant data added to files. This MCP server gives AI assistants a strict, round-trip safe interface for working with structured data.
 
 ## The Problem
 
 AI coding tools often destroy structured data files:
 
-- They **grep** through huge configs and guess at keys.
+- They **grep** through huge json, yaml, and toml files (like json logs, or AI transcript files) and guess at keys.
 - They **hallucinate** fields that never existed.
 - They use **sed and regex** that leave files in invalid states.
 - They break **YAML indentation** and **TOML syntax**.
@@ -117,7 +117,7 @@ The server provides 7 core tools for data manipulation:
 | `data_query`          | Run advanced yq/jq expressions for transformations    |
 | `data_schema`         | Validate files against JSON schemas (SchemaStore.org) |
 | `data_convert`        | Convert between JSON, YAML, and TOML formats          |
-| `data_merge`          | Deep merge configuration files                        |
+| `data_merge`          | Deep merge structured data files                      |
 | `constraint_validate` | Validate inputs against LMQL constraints              |
 | `constraint_list`     | List available generation constraints                 |
 

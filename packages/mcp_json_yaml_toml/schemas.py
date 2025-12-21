@@ -7,6 +7,7 @@ import datetime
 import fnmatch
 import logging
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -14,9 +15,13 @@ from pathlib import Path
 
 import httpx
 import orjson
+import tomlkit
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 from strong_typing.core import Schema
 from strong_typing.exception import JsonKeyError, JsonTypeError, JsonValueError
 from strong_typing.serialization import json_to_object, object_to_json
+from tomlkit.exceptions import ParseError, TOMLKitError
 
 
 # Dataclasses for known JSON structures - strong_typing handles deserialization
@@ -67,6 +72,99 @@ class DefaultSchemaStores:
 
 SCHEMA_STORE_CATALOG_URL = "https://www.schemastore.org/api/json/catalog.json"
 CACHE_EXPIRY_SECONDS = 24 * 60 * 60  # 24 hours
+
+# Regex to strip C-style comments (/* ... */) and C++-style comments (// ...)
+_COMMENT_RE = re.compile(r"//.*?$|/\*.*?\*/", re.DOTALL | re.MULTILINE)
+
+
+def _strip_json_comments(text: str) -> str:
+    """Strip C-style and C++-style comments from JSON text."""
+    return _COMMENT_RE.sub("", text)
+
+
+def _extract_from_json(content: str) -> str | None:
+    """Extract $schema from JSON/JSONC content."""
+    try:
+        # Try strict JSON first
+        data = orjson.loads(content)
+    except orjson.JSONDecodeError:
+        # Try stripping comments for JSONC
+        try:
+            clean_content = _strip_json_comments(content)
+            data = orjson.loads(clean_content)
+        except orjson.JSONDecodeError:
+            return None
+
+    if isinstance(data, dict):
+        return data.get("$schema")
+    return None
+
+
+def _extract_from_yaml(content: str) -> str | None:
+    """Extract $schema from YAML content."""
+    yaml = YAML(typ="safe", pure=True)
+    try:
+        data = yaml.load(content)
+        if isinstance(data, dict):
+            return data.get("$schema")
+    except YAMLError:
+        return None
+    return None
+
+
+def _extract_from_toml(content: str) -> str | None:
+    """Extract $schema from TOML content."""
+    try:
+        data = tomlkit.parse(content)
+        return data.get("$schema")
+    except (ParseError, TOMLKitError):
+        return None
+    return None
+
+
+def _extract_schema_url_from_content(file_path: Path) -> str | None:
+    """Attempt to extract $schema URL from file content.
+
+    Supports:
+    - JSON/JSONC (top-level "$schema" key)
+    - YAML (top-level "$schema" key)
+    - TOML (top-level "$schema" key)
+
+    Args:
+        file_path: Path to the file.
+
+    Returns:
+        Schema URL if found, None otherwise.
+    """
+    if not file_path.exists():
+        return None
+
+    try:
+        # Read content (assuming utf-8)
+        content = file_path.read_text(encoding="utf-8")
+        suffix = file_path.suffix.lower()
+
+        url = None
+        match suffix:
+            case ".json" | ".jsonc":
+                url = _extract_from_json(content)
+            case ".yaml" | ".yml":
+                url = _extract_from_yaml(content)
+                if not url:
+                    # Also try JSON extraction for YAML files as they might be JSON
+                    url = _extract_from_json(content)
+            case ".toml":
+                url = _extract_from_toml(content)
+            case _:
+                # Fallback for filenames like ".markdownlint-cli2.jsonc"
+                if file_path.name.endswith(".jsonc"):
+                    url = _extract_from_json(content)
+    except (OSError, UnicodeDecodeError):
+        return None
+    else:
+        return url
+
+    return None
 
 
 def _match_glob_pattern(file_path: Path, pattern: str) -> bool:
@@ -290,7 +388,12 @@ class SchemaManager:
             assoc = self.config.file_associations[file_str]
             return self._fetch_schema_to_cache(assoc.schema_url)
 
-        # 2. Check catalog patterns
+        # 2. Check for $schema in content
+        content_schema_url = _extract_schema_url_from_content(file_path)
+        if content_schema_url:
+            return self._fetch_schema_to_cache(content_schema_url)
+
+        # 3. Check catalog patterns
         catalog = self.get_catalog()
         if not catalog:
             return None
@@ -324,7 +427,12 @@ class SchemaManager:
             assoc = self.config.file_associations[file_str]
             return self._fetch_schema(assoc.schema_url)
 
-        # 2. Check catalog patterns
+        # 2. Check for $schema in content
+        content_schema_url = _extract_schema_url_from_content(file_path)
+        if content_schema_url:
+            return self._fetch_schema(content_schema_url)
+
+        # 3. Check catalog patterns
         catalog = self.get_catalog()
         if not catalog:
             return None
@@ -362,7 +470,16 @@ class SchemaManager:
                 "source": assoc.source,
             }
 
-        # 2. Check catalog
+        # 2. Check for $schema in content
+        content_schema_url = _extract_schema_url_from_content(file_path)
+        if content_schema_url:
+            return {
+                "name": "in-file-schema",
+                "url": content_schema_url,
+                "source": "content",
+            }
+
+        # 3. Check catalog
         catalog = self.get_catalog()
         if not catalog:
             return None

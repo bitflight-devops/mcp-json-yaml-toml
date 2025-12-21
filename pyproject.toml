@@ -1,6 +1,6 @@
 [project]
 name = "mcp-json-yaml-toml"
-description = "MCP server for querying and modifying JSON, YAML, and TOML configuration files using yq"
+description = "MCP server for querying and modifying JSON, YAML, and TOML files using yq"
 readme = "README.md"
 dynamic = ["version"]
 authors = [{ name = "Jamie Nelson", email = "jamie@bitflight.io" }]
@@ -19,7 +19,7 @@ classifiers = [
 keywords = [
 	"mcp",
 	"model-context-protocol",
-	"config",
+	"mcp-server",
 	"json",
 	"yaml",
 	"toml",
