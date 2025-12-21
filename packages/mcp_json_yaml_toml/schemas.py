@@ -11,7 +11,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypeGuard
 
 import httpx
 import orjson
@@ -109,22 +108,6 @@ def _match_glob_pattern(file_path: Path, pattern: str) -> bool:
     return fnmatch.fnmatch(path_str, pattern)
 
 
-# TypeGuards for type-safe JSON value narrowing
-def is_str_list(obj: object) -> TypeGuard[list[str]]:
-    """Check if object is a list of strings."""
-    return isinstance(obj, list) and all(isinstance(item, str) for item in obj)
-
-
-def is_schema(obj: object) -> TypeGuard[Schema]:
-    """Check if object is a JSON schema (dict[str, JsonType])."""
-    return isinstance(obj, dict) and all(isinstance(k, str) for k in obj)
-
-
-def is_schema_list(obj: object) -> TypeGuard[list[Schema]]:
-    """Check if object is a list of schemas."""
-    return isinstance(obj, list) and all(is_schema(item) for item in obj)
-
-
 def _load_default_ide_patterns() -> list[str]:
     """Load default IDE schema patterns from bundled JSON file.
 
@@ -134,11 +117,16 @@ def _load_default_ide_patterns() -> list[str]:
     try:
         default_stores_path = Path(__file__).parent / "default_schema_stores.json"
         if default_stores_path.exists():
-            data: Schema = orjson.loads(default_stores_path.read_bytes())
-            ide_patterns = data.get("ide_patterns")
-
-            return ide_patterns if is_str_list(ide_patterns) else []
-    except (OSError, orjson.JSONDecodeError) as e:
+            raw_data = orjson.loads(default_stores_path.read_bytes())
+            stores = json_to_object(DefaultSchemaStores, raw_data)
+            return stores.ide_patterns
+    except (
+        OSError,
+        orjson.JSONDecodeError,
+        JsonKeyError,
+        JsonTypeError,
+        JsonValueError,
+    ) as e:
         logging.debug(f"Failed to load default IDE patterns: {e}")
     return []
 
@@ -269,13 +257,13 @@ class SchemaManager:
             orjson.dumps(object_to_json(self.config), option=orjson.OPT_INDENT_2)
         )
 
-    def get_typed_catalog(self) -> SchemaCatalog | None:
+    def get_catalog(self) -> SchemaCatalog | None:
         """Get the Schema Store catalog as a typed SchemaCatalog dataclass.
 
         Returns:
             SchemaCatalog dataclass if available, None if fetch fails and no cache exists.
         """
-        raw_catalog = self.get_catalog()
+        raw_catalog = self._get_raw_catalog()
         if raw_catalog is None:
             return None
         try:
@@ -303,7 +291,7 @@ class SchemaManager:
             return self._fetch_schema_to_cache(assoc.schema_url)
 
         # 2. Check catalog patterns
-        catalog = self.get_typed_catalog()
+        catalog = self.get_catalog()
         if not catalog:
             return None
 
@@ -337,7 +325,7 @@ class SchemaManager:
             return self._fetch_schema(assoc.schema_url)
 
         # 2. Check catalog patterns
-        catalog = self.get_typed_catalog()
+        catalog = self.get_catalog()
         if not catalog:
             return None
 
@@ -375,7 +363,7 @@ class SchemaManager:
             }
 
         # 2. Check catalog
-        catalog = self.get_typed_catalog()
+        catalog = self.get_catalog()
         if not catalog:
             return None
 
@@ -424,7 +412,7 @@ class SchemaManager:
             return True
         return False
 
-    def get_catalog(self) -> Schema | None:
+    def _get_raw_catalog(self) -> Schema | None:
         """Get the Schema Store catalog, using cache if available.
 
         Returns:

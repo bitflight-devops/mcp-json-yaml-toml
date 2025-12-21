@@ -1281,7 +1281,7 @@ def _handle_schema_associate(
     name = schema_name
 
     if not url and schema_name:
-        catalog = schema_manager.get_typed_catalog()
+        catalog = schema_manager.get_catalog()
         if catalog:
             for schema_entry in catalog.schemas:
                 if schema_entry.name == schema_name:
