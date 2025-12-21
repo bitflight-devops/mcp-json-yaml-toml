@@ -315,3 +315,199 @@ class TestSchemaManagerFetchFromIdeCache:
 
         assert result is not None
         assert result["type"] == "boolean"
+
+
+class TestParseExtensionSchemas:
+    """Tests for _parse_extension_schemas function."""
+
+    def test_parses_json_validation(self, tmp_path: Path) -> None:
+        """Verify jsonValidation entries are parsed correctly."""
+        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
+
+        ext_dir = tmp_path / "my.extension-1.0.0"
+        ext_dir.mkdir()
+
+        # Create a schema file
+        schema_file = ext_dir / "my-schema.json"
+        schema_file.write_text('{"type": "object"}')
+
+        # Create package.json with jsonValidation
+        package_json = ext_dir / "package.json"
+        package_json.write_text(
+            json.dumps({
+                "name": "my-extension",
+                "publisher": "testpub",
+                "contributes": {
+                    "jsonValidation": [
+                        {"fileMatch": ".myconfig.json", "url": "./my-schema.json"}
+                    ]
+                },
+            })
+        )
+
+        mappings = _parse_extension_schemas(ext_dir)
+
+        assert len(mappings) == 1
+        assert mappings[0].file_match == [".myconfig.json"]
+        assert mappings[0].schema_path == str(schema_file.resolve())
+        assert mappings[0].extension_id == "testpub.my-extension"
+
+    def test_handles_array_file_match(self, tmp_path: Path) -> None:
+        """Verify fileMatch arrays are preserved."""
+        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
+
+        ext_dir = tmp_path / "ext"
+        ext_dir.mkdir()
+        (ext_dir / "schema.json").write_text("{}")
+        (ext_dir / "package.json").write_text(
+            json.dumps({
+                "name": "ext",
+                "publisher": "pub",
+                "contributes": {
+                    "jsonValidation": [
+                        {
+                            "fileMatch": [".config1.json", ".config2.json"],
+                            "url": "./schema.json",
+                        }
+                    ]
+                },
+            })
+        )
+
+        mappings = _parse_extension_schemas(ext_dir)
+
+        assert len(mappings) == 1
+        assert mappings[0].file_match == [".config1.json", ".config2.json"]
+
+    def test_skips_missing_schema_file(self, tmp_path: Path) -> None:
+        """Verify mappings to non-existent schema files are skipped."""
+        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
+
+        ext_dir = tmp_path / "ext"
+        ext_dir.mkdir()
+        # No schema file created
+        (ext_dir / "package.json").write_text(
+            json.dumps({
+                "name": "ext",
+                "publisher": "pub",
+                "contributes": {
+                    "jsonValidation": [
+                        {"fileMatch": ".config.json", "url": "./missing-schema.json"}
+                    ]
+                },
+            })
+        )
+
+        mappings = _parse_extension_schemas(ext_dir)
+
+        assert len(mappings) == 0
+
+    def test_handles_yaml_validation(self, tmp_path: Path) -> None:
+        """Verify yamlValidation entries are also parsed."""
+        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
+
+        ext_dir = tmp_path / "ext"
+        ext_dir.mkdir()
+        (ext_dir / "schema.json").write_text("{}")
+        (ext_dir / "package.json").write_text(
+            json.dumps({
+                "name": "ext",
+                "publisher": "pub",
+                "contributes": {
+                    "yamlValidation": [
+                        {"fileMatch": ".myconfig.yaml", "url": "./schema.json"}
+                    ]
+                },
+            })
+        )
+
+        mappings = _parse_extension_schemas(ext_dir)
+
+        assert len(mappings) == 1
+        assert mappings[0].file_match == [".myconfig.yaml"]
+
+
+class TestLookupIdeSchema:
+    """Tests for IDESchemaProvider.lookup_schema method."""
+
+    def test_exact_filename_match(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify exact filename matching works."""
+        from mcp_json_yaml_toml.schemas import (
+            ExtensionSchemaMapping,
+            IDESchemaIndex,
+            IDESchemaProvider,
+        )
+
+        # Mock the index
+        mock_index = IDESchemaIndex(
+            mappings=[
+                ExtensionSchemaMapping(
+                    file_match=[".myconfig.json"],
+                    schema_path="/path/to/schema.json",
+                    extension_id="test.extension",
+                )
+            ]
+        )
+        monkeypatch.setattr(IDESchemaProvider, "get_index", lambda self: mock_index)
+
+        provider = IDESchemaProvider()
+        result = provider.lookup_schema(".myconfig.json", tmp_path / ".myconfig.json")
+
+        assert result is not None
+        assert result.name == "test.extension"
+        assert result.url == "file:///path/to/schema.json"
+        assert result.source == "ide"
+
+    def test_no_match_returns_none(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify None is returned when no patterns match."""
+        from mcp_json_yaml_toml.schemas import IDESchemaIndex, IDESchemaProvider
+
+        mock_index = IDESchemaIndex(mappings=[])
+        monkeypatch.setattr(IDESchemaProvider, "get_index", lambda self: mock_index)
+
+        provider = IDESchemaProvider()
+        result = provider.lookup_schema("unknown.json", tmp_path / "unknown.json")
+
+        assert result is None
+
+
+class TestIdeSchemaIntegration:
+    """Integration tests for IDE schema discovery with SchemaManager."""
+
+    def test_ide_schema_in_lookup_chain(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify IDE schema is found in get_schema_info_for_file lookup chain."""
+        from mcp_json_yaml_toml.schemas import (
+            ExtensionSchemaMapping,
+            IDESchemaIndex,
+            IDESchemaProvider,
+        )
+
+        # Create a test file without $schema in content
+        test_file = tmp_path / ".myconfig.json"
+        test_file.write_text('{"key": "value"}')
+
+        # Mock IDE schema index
+        mock_index = IDESchemaIndex(
+            mappings=[
+                ExtensionSchemaMapping(
+                    file_match=[".myconfig.json"],
+                    schema_path="/path/to/schema.json",
+                    extension_id="test.ext",
+                )
+            ]
+        )
+        monkeypatch.setattr(IDESchemaProvider, "get_index", lambda self: mock_index)
+
+        manager = SchemaManager(cache_dir=tmp_path / "cache")
+        result = manager.get_schema_info_for_file(test_file)
+
+        assert result is not None
+        assert result.source == "ide"
+        assert result.name == "test.ext"
+        assert "file://" in result.url

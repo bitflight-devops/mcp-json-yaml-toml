@@ -3,16 +3,18 @@
 Handles automatic schema discovery via Schema Store and local caching.
 """
 
+import contextlib
 import datetime
 import fnmatch
 import logging
 import os
 import re
 import time
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 import orjson
@@ -24,6 +26,15 @@ from strong_typing.core import Schema
 from strong_typing.exception import JsonKeyError, JsonTypeError, JsonValueError
 from strong_typing.serialization import json_to_object, object_to_json
 from tomlkit.exceptions import ParseError, TOMLKitError
+
+
+@dataclass
+class SchemaInfo:
+    """Schema metadata information."""
+
+    name: str
+    url: str
+    source: str
 
 
 # Dataclasses for known JSON structures - strong_typing handles deserialization
@@ -71,6 +82,24 @@ class DefaultSchemaStores:
     """Default schema stores configuration."""
 
     ide_patterns: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ExtensionSchemaMapping:
+    """A file match pattern → local schema path mapping from an IDE extension."""
+
+    file_match: list[str]
+    schema_path: str  # Absolute path to local schema file
+    extension_id: str  # e.g., "davidanson.vscode-markdownlint"
+
+
+@dataclass
+class IDESchemaIndex:
+    """Cached index of schemas discovered from IDE extensions."""
+
+    mappings: list[ExtensionSchemaMapping] = field(default_factory=list)
+    extension_mtimes: dict[str, float] = field(default_factory=dict)
+    last_built: str | None = None
 
 
 SCHEMA_STORE_CATALOG_URL = "https://www.schemastore.org/api/json/catalog.json"
@@ -335,10 +364,271 @@ def _get_ide_schema_locations() -> list[Path]:
     return locations
 
 
+def _get_ide_schema_index_path() -> Path:
+    """Get the path to the IDE schema index cache file.
+
+    Returns:
+        Path to ide_schema_index.json in the cache directory.
+    """
+    return (
+        Path.home()
+        / ".cache"
+        / "mcp-json-yaml-toml"
+        / "schemas"
+        / "ide_schema_index.json"
+    )
+
+
+def _extract_validation_mapping(
+    validation: dict[str, Any], extension_dir: Path, extension_id: str
+) -> ExtensionSchemaMapping | None:
+    """Extract schema mapping from a validation entry."""
+    file_match = validation.get("fileMatch")
+    url = validation.get("url")
+
+    if not file_match or not url:
+        return None
+
+    # Normalize fileMatch to always be a list
+    if isinstance(file_match, str):
+        file_match = [file_match]
+    elif not isinstance(file_match, list):
+        return None
+
+    # Resolve relative url to absolute path
+    if url.startswith("./"):
+        schema_path = extension_dir / url[2:]
+    elif url.startswith("/"):
+        schema_path = Path(url)
+    else:
+        schema_path = extension_dir / url
+
+    # Only include if the schema file actually exists
+    if schema_path.exists():
+        return ExtensionSchemaMapping(
+            file_match=file_match,
+            schema_path=str(schema_path.resolve()),
+            extension_id=extension_id,
+        )
+    return None
+
+
+def _parse_extension_schemas(extension_dir: Path) -> list[ExtensionSchemaMapping]:
+    """Parse a VS Code extension's package.json for schema mappings.
+
+    Extracts `contributes.jsonValidation` and `contributes.yamlValidation`
+    entries that map file patterns to bundled schema files.
+
+    Args:
+        extension_dir: Path to the extension directory (contains package.json).
+
+    Returns:
+        List of ExtensionSchemaMapping objects for discovered schemas.
+    """
+    mappings: list[ExtensionSchemaMapping] = []
+    package_json = extension_dir / "package.json"
+
+    if not package_json.exists():
+        return mappings
+
+    try:
+        data = orjson.loads(package_json.read_bytes())
+    except (OSError, orjson.JSONDecodeError):
+        return mappings
+
+    if not isinstance(data, dict):
+        return mappings
+
+    # Extract extension ID from directory name or package.json
+    extension_id = data.get("publisher", "")
+    extension_name = data.get("name", "")
+    if extension_id and extension_name:
+        extension_id = f"{extension_id}.{extension_name}"
+    else:
+        # Fallback to directory name (e.g., "davidanson.vscode-markdownlint-0.60.0")
+        extension_id = (
+            extension_dir.name.rsplit("-", 2)[0]
+            if "-" in extension_dir.name
+            else extension_dir.name
+        )
+
+    contributes = data.get("contributes", {})
+    if not isinstance(contributes, dict):
+        return mappings
+
+    # Process both jsonValidation and yamlValidation
+    for validation_key in ("jsonValidation", "yamlValidation"):
+        validations = contributes.get(validation_key, [])
+        if not isinstance(validations, list):
+            continue
+
+        for validation in validations:
+            if not isinstance(validation, dict):
+                continue
+
+            mapping = _extract_validation_mapping(
+                validation, extension_dir, extension_id
+            )
+            if mapping:
+                mappings.append(mapping)
+
+    return mappings
+
+
+def _find_potential_extension_dirs(extension_dirs: list[Path]) -> Iterator[Path]:
+    """Yield potential extension directories from a list of roots."""
+    for ext_parent in extension_dirs:
+        if not ext_parent.exists() or not ext_parent.is_dir():
+            continue
+
+        # Check if this is an extension directory itself (has package.json)
+        if (ext_parent / "package.json").exists():
+            yield ext_parent
+        else:
+            # Scan subdirectories for extensions
+            try:
+                for subdir in ext_parent.iterdir():
+                    if subdir.is_dir() and (subdir / "package.json").exists():
+                        yield subdir
+            except OSError:
+                pass
+
+
+def _build_ide_schema_index(extension_dirs: list[Path]) -> IDESchemaIndex:
+    """Build index of schemas from IDE extensions.
+
+    Scans provided directories for extensions with package.json that define
+    jsonValidation or yamlValidation.
+
+    Args:
+        extension_dirs: List of IDE extension parent directories to scan
+                       (e.g., ~/.antigravity/extensions/).
+
+    Returns:
+        IDESchemaIndex containing all discovered schema mappings.
+    """
+    all_mappings: list[ExtensionSchemaMapping] = []
+    extension_mtimes: dict[str, float] = {}
+
+    for ext_dir in _find_potential_extension_dirs(extension_dirs):
+        mappings = _parse_extension_schemas(ext_dir)
+        all_mappings.extend(mappings)
+        with contextlib.suppress(OSError):
+            extension_mtimes[str(ext_dir)] = ext_dir.stat().st_mtime
+
+    return IDESchemaIndex(
+        mappings=all_mappings,
+        extension_mtimes=extension_mtimes,
+        last_built=datetime.datetime.now(datetime.UTC).isoformat(),
+    )
+
+
+class IDESchemaProvider:
+    """Manages discovery and caching of IDE extension schemas."""
+
+    def __init__(self) -> None:
+        """Initialize the IDE schema provider."""
+        self._cache: IDESchemaIndex | None = None
+
+    def get_index(self) -> IDESchemaIndex:
+        """Get the IDE schema index, building and caching as needed."""
+        # Try to use in-memory cache first
+        if self._cache is not None:
+            return self._cache
+
+        # Try to load from disk cache
+        index = self._load_index()
+        if index is not None:
+            self._cache = index
+            return index
+
+        # Build fresh index from IDE extension directories
+        extension_dirs = _expand_ide_patterns()
+        index = _build_ide_schema_index(extension_dirs)
+
+        # Save to disk cache
+        self._save_index(index)
+        self._cache = index
+
+        return index
+
+    def lookup_schema(self, filename: str, file_path: Path) -> SchemaInfo | None:
+        """Look up schema info from IDE extension index.
+
+        Args:
+            filename: Base filename to match against patterns.
+            file_path: Full path for glob pattern matching.
+
+        Returns:
+            SchemaInfo with name, url (file://), and source if found.
+        """
+        index = self.get_index()
+
+        for mapping in index.mappings:
+            for pattern in mapping.file_match:
+                # Check exact filename match first (fast path)
+                if filename == pattern:
+                    return SchemaInfo(
+                        name=mapping.extension_id,
+                        url=f"file://{mapping.schema_path}",
+                        source="ide",
+                    )
+                # Check glob pattern match
+                if _match_glob_pattern(file_path, pattern):
+                    return SchemaInfo(
+                        name=mapping.extension_id,
+                        url=f"file://{mapping.schema_path}",
+                        source="ide",
+                    )
+
+        return None
+
+    def _load_index(self) -> IDESchemaIndex | None:
+        """Load IDE schema index from cache if valid."""
+        index_path = _get_ide_schema_index_path()
+        if not index_path.exists():
+            return None
+
+        try:
+            raw_data = orjson.loads(index_path.read_bytes())
+            index = json_to_object(IDESchemaIndex, raw_data)
+        except (
+            OSError,
+            orjson.JSONDecodeError,
+            JsonKeyError,
+            JsonTypeError,
+            JsonValueError,
+        ):
+            return None
+
+        # Check if any extension directories have changed
+        for ext_dir_str, cached_mtime in index.extension_mtimes.items():
+            ext_dir = Path(ext_dir_str)
+            if not ext_dir.exists():
+                return None  # Directory removed, rebuild
+            try:
+                current_mtime = ext_dir.stat().st_mtime
+                if current_mtime != cached_mtime:
+                    return None  # Directory changed, rebuild
+            except OSError:
+                return None
+
+        return index
+
+    def _save_index(self, index: IDESchemaIndex) -> None:
+        """Save IDE schema index to cache file."""
+        index_path = _get_ide_schema_index_path()
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_bytes(
+            orjson.dumps(object_to_json(index), option=orjson.OPT_INDENT_2)
+        )
+
+
 class SchemaManager:
     """Manages JSON schemas with local caching and Schema Store integration."""
 
     config: SchemaConfig
+    _ide_provider: IDESchemaProvider
 
     def __init__(self, cache_dir: Path | None = None) -> None:
         """Initialize schema manager.
@@ -355,6 +645,7 @@ class SchemaManager:
         self.catalog_path = self.cache_dir / "catalog.json"
         self.config_path = self.cache_dir / "schema_config.json"
         self.config = self._load_config()
+        self._ide_provider = IDESchemaProvider()
 
     def _load_config(self) -> SchemaConfig:
         """Load schema configuration from file.
@@ -398,6 +689,29 @@ class SchemaManager:
             logging.debug(f"Failed to parse catalog as SchemaCatalog: {e}")
             return None
 
+    def get_ide_provider(self) -> IDESchemaProvider:
+        """Get the IDE schema provider instance."""
+        return self._ide_provider
+
+    def _try_load_local_schema(self, schema_path: Path) -> Schema | None:
+        """Attempt to load a local JSON schema file."""
+        if not schema_path.exists():
+            return None
+        try:
+            bytes_data = schema_path.read_bytes()
+            if not bytes_data:
+                return None
+            data = orjson.loads(bytes_data)
+        except (OSError, orjson.JSONDecodeError):
+            return None
+
+        # Properly narrow the type of the loaded JSON to match Schema
+        # We check if it's a dict; for full validation against Schema (dict[str, JsonType])
+        # we'd need a recursive check, but proving string keys is a good start.
+        if isinstance(data, dict) and all(isinstance(k, str) for k in data):
+            return data
+        return None
+
     def get_schema_path_for_file(self, file_path: Path) -> Path | None:
         """Find and return the cached schema file path for a given file.
 
@@ -410,35 +724,15 @@ class SchemaManager:
         Returns:
             Path to the cached schema file if found, None otherwise.
         """
-        # 1. Check file associations first (highest priority)
-        file_str = str(file_path.resolve())
-        if file_str in self.config.file_associations:
-            assoc = self.config.file_associations[file_str]
-            return self._fetch_schema_to_cache(assoc.schema_url)
-
-        # 2. Check for $schema in content
-        content_schema_url = _extract_schema_url_from_content(file_path)
-        if content_schema_url:
-            return self._fetch_schema_to_cache(content_schema_url)
-
-        # 3. Check catalog patterns
-        catalog = self.get_catalog()
-        if not catalog:
+        info = self.get_schema_info_for_file(file_path)
+        if not info:
             return None
 
-        filename = file_path.name
+        url = info.url
+        if url.startswith("file://"):
+            return Path(url[7:])
 
-        for schema_entry in catalog.schemas:
-            for pattern in schema_entry.fileMatch:
-                # Check exact filename match first (fast path)
-                if filename == pattern:
-                    return self._fetch_schema_to_cache(schema_entry.url)
-
-                # Check glob pattern match
-                if _match_glob_pattern(file_path, pattern):
-                    return self._fetch_schema_to_cache(schema_entry.url)
-
-        return None
+        return self._fetch_schema_to_cache(url)
 
     def get_schema_for_file(self, file_path: Path) -> Schema | None:
         """Find and return the schema for a given file.
@@ -449,81 +743,75 @@ class SchemaManager:
         Returns:
             Parsed schema dict if found, None otherwise.
         """
-        # 1. Check file associations first (highest priority)
-        file_str = str(file_path.resolve())
-        if file_str in self.config.file_associations:
-            assoc = self.config.file_associations[file_str]
-            return self._fetch_schema(assoc.schema_url)
+        info = self.get_schema_info_for_file(file_path)
+        if not info:
+            return None
 
-        # 2. Check for $schema in content
-        content_schema_url = _extract_schema_url_from_content(file_path)
-        if content_schema_url:
-            return self._fetch_schema(content_schema_url)
+        url = info.url
+        if url.startswith("file://"):
+            schema_path = Path(url[7:])
+            loaded = self._try_load_local_schema(schema_path)
+            if loaded is not None:
+                return loaded
 
-        # 3. Check catalog patterns
+        return self._fetch_schema(url)
+
+    def _lookup_catalog_schema(self, file_path: Path) -> SchemaInfo | None:
+        """Look up schema in the Schema Store catalog."""
         catalog = self.get_catalog()
         if not catalog:
             return None
 
         filename = file_path.name
-
         for schema_entry in catalog.schemas:
             for pattern in schema_entry.fileMatch:
                 # Check exact filename match first (fast path)
                 if filename == pattern:
-                    return self._fetch_schema(schema_entry.url)
+                    return SchemaInfo(
+                        name=schema_entry.name, url=schema_entry.url, source="catalog"
+                    )
 
                 # Check glob pattern match
                 if _match_glob_pattern(file_path, pattern):
-                    return self._fetch_schema(schema_entry.url)
-
+                    return SchemaInfo(
+                        name=schema_entry.name, url=schema_entry.url, source="catalog"
+                    )
         return None
 
-    def get_schema_info_for_file(self, file_path: Path) -> Schema | None:
-        """Get schema metadata (name, URL, source) without fetching full schema.
+    def get_schema_info_for_file(self, file_path: Path) -> SchemaInfo | None:
+        """Find and return schema information for a given file.
 
         Args:
-            file_path: Path to the file.
+            file_path: Path to the file to find a schema for.
 
         Returns:
-            Dict with schema metadata or None if no schema found.
+            Dict with schema name, url, and source if found, None otherwise.
         """
-        # 1. Check file associations
+        # 1. Check file associations first
         file_str = str(file_path.resolve())
         if file_str in self.config.file_associations:
             assoc = self.config.file_associations[file_str]
-            return {
-                "name": "user_association",
-                "url": assoc.schema_url,
-                "source": assoc.source,
-            }
+            return SchemaInfo(
+                name="User Association", url=assoc.schema_url, source="user"
+            )
 
         # 2. Check for $schema in content
         content_schema_url = _extract_schema_url_from_content(file_path)
         if content_schema_url:
-            return {
-                "name": "in-file-schema",
-                "url": content_schema_url,
-                "source": "content",
-            }
+            return SchemaInfo(
+                name="In-file $schema", url=content_schema_url, source="content"
+            )
 
-        # 3. Check catalog
-        catalog = self.get_catalog()
-        if not catalog:
-            return None
-
+        # 3. Check local IDE schema index
         filename = file_path.name
-        for schema_entry in catalog.schemas:
-            for pattern in schema_entry.fileMatch:
-                # Check exact filename match first (fast path)
-                if filename == pattern or _match_glob_pattern(file_path, pattern):
-                    return {
-                        "name": schema_entry.name,
-                        "url": schema_entry.url,
-                        "source": "catalog",
-                    }
+        ide_result = self._ide_provider.lookup_schema(filename, file_path)
+        if ide_result:
+            return SchemaInfo(
+                name=ide_result.name, url=ide_result.url, source=ide_result.source
+            )
 
-        return None
+        # 4. Check catalog
+        return self._lookup_catalog_schema(file_path)
 
     def add_file_association(
         self, file_path: Path, schema_url: str, schema_name: str | None = None
@@ -769,7 +1057,7 @@ class SchemaManager:
 
         Args:
             schema_filename: Name of the schema file to look for.
-            schema_url: Optional URL to match against schema $id field.
+            schema_url: Optional URL to look for in hash-based caches.
 
         Returns:
             Parsed schema dict if found, None otherwise.
@@ -802,6 +1090,7 @@ class SchemaManager:
             for future in as_completed(futures):
                 result = future.result()
                 if result is not None:
+                    # Cancel other futures if possible
                     for f in futures:
                         f.cancel()
                     return result

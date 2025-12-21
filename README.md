@@ -47,6 +47,10 @@ AI coding tools often destroy structured data files:
 - **Local-First**: All processing happens locally. No data ever leaves your machine.
 - **Transparent JIT Assets**: The server **will** auto-download the `yq` binary if missing. When an AI agent uses validation tools, the server automatically fetches and caches missing JSON schemas from SchemaStore.org.
 
+> [!NOTE]
+>
+> **JSONC Support**: Files with `.jsonc` extension (JSON with Comments) are fully supported for **reading**, **querying**, and **schema validation**. However, **write operations will strip comments** due to JSON library limitations.
+
 ---
 
 ## Getting Started

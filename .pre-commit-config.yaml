@@ -34,7 +34,7 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: (\.lock$|^libraries/)
+        exclude: (\.lock$)
       - id: check-yaml
         args: [--unsafe] # Allow Python tags in mkdocs.yml
       - id: check-json
@@ -63,7 +63,6 @@ repos:
     rev: v0.20.0
     hooks:
       - id: markdownlint-cli2
-        exclude: ^libraries/miot-(cose|provisioning-object)-py/
 
   # YAML/JSON formatting
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -73,7 +72,7 @@ repos:
         name: Format YAML, JSON, and Markdown files
         types_or: [yaml, json, markdown]
         args: [--ignore-path, .prettierignore]
-        exclude: (\.lock$|mkdocs\.yml|docs/generated/|^libraries/miot-(cose|provisioning-object)-py/)
+        exclude: (\.lock$|mkdocs\.yml|docs/generated/)
 
   - repo: https://github.com/DetachHead/basedpyright-prek-mirror
     rev: 1.36.1

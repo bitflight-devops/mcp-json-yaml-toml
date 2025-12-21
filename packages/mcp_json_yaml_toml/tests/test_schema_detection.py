@@ -20,7 +20,7 @@ def test_detect_schema_json(tmp_path: Path, schema_manager: SchemaManager) -> No
 
     detected = schema_manager.get_schema_info_for_file(file_path)
     assert detected is not None
-    assert detected["url"] == schema_url
+    assert detected.url == schema_url
 
 
 def test_detect_schema_yaml(tmp_path: Path, schema_manager: SchemaManager) -> None:
@@ -34,7 +34,7 @@ foo: bar
 
     detected = schema_manager.get_schema_info_for_file(file_path)
     assert detected is not None
-    assert detected["url"] == schema_url
+    assert detected.url == schema_url
 
 
 def test_detect_schema_yaml_key(tmp_path: Path, schema_manager: SchemaManager) -> None:
@@ -48,7 +48,7 @@ foo: bar
 
     detected = schema_manager.get_schema_info_for_file(file_path)
     assert detected is not None
-    assert detected["url"] == schema_url
+    assert detected.url == schema_url
 
 
 def test_detect_schema_toml(tmp_path: Path, schema_manager: SchemaManager) -> None:
@@ -62,7 +62,7 @@ foo = "bar"
 
     detected = schema_manager.get_schema_info_for_file(file_path)
     assert detected is not None
-    assert detected["url"] == schema_url
+    assert detected.url == schema_url
 
 
 def test_detect_schema_toml_key(tmp_path: Path, schema_manager: SchemaManager) -> None:
@@ -79,4 +79,4 @@ foo = "bar"
 
     detected = schema_manager.get_schema_info_for_file(file_path)
     assert detected is not None
-    assert detected["url"] == schema_url
+    assert detected.url == schema_url

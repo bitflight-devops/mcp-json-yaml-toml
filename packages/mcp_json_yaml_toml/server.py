@@ -33,7 +33,7 @@ from mcp_json_yaml_toml.lmql_constraints import (
     get_constraint_hint,
     validate_tool_input,
 )
-from mcp_json_yaml_toml.schemas import SchemaManager
+from mcp_json_yaml_toml.schemas import SchemaInfo, SchemaManager
 from mcp_json_yaml_toml.toml_utils import delete_toml_key, set_toml_value
 from mcp_json_yaml_toml.yaml_optimizer import optimize_yaml_file
 from mcp_json_yaml_toml.yq_wrapper import (
@@ -60,7 +60,7 @@ class SchemaResponse(BaseModel):
     file: str
     message: str
     schema_: dict[str, Any] | None = Field(default=None, alias="schema")
-    schema_info: dict[str, Any] | None = None
+    schema_info: SchemaInfo | None = None
     schema_file: str | None = None
 
     model_config = {"populate_by_name": True}
@@ -368,7 +368,7 @@ def _handle_data_get_structure(
     key_path: str | None,
     input_format: FormatType,
     cursor: str | None,
-    schema_info: dict[str, Any] | None,
+    schema_info: SchemaInfo | None,
 ) -> dict[str, Any]:
     """Handle GET operation with return_type='keys'.
 
@@ -445,7 +445,7 @@ def _handle_data_get_value(
     input_format: FormatType,
     output_fmt: FormatType,
     cursor: str | None,
-    schema_info: dict[str, Any] | None,
+    schema_info: SchemaInfo | None,
     output_format_explicit: bool = True,
 ) -> dict[str, Any]:
     """Handle GET operation with return_type='all' for data values.
@@ -535,7 +535,7 @@ def _set_toml_value_handler(
     path: Path,
     key_path: str,
     parsed_value: Any,
-    schema_info: dict[str, Any] | None,
+    schema_info: SchemaInfo | None,
     schema_path: Path | None = None,
 ) -> dict[str, Any]:
     """Handle TOML set operation.
@@ -668,7 +668,7 @@ def _handle_data_set(
     value: str | None,
     value_type: Literal["string", "number", "boolean", "null", "json"] | None,
     input_format: FormatType,
-    schema_info: dict[str, Any] | None,
+    schema_info: SchemaInfo | None,
 ) -> dict[str, Any]:
     """Handle SET operation.
 
@@ -746,10 +746,7 @@ def _handle_data_set(
 
 
 def _delete_toml_key_handler(
-    path: Path,
-    key_path: str,
-    schema_path: Path | None,
-    schema_info: dict[str, Any] | None,
+    path: Path, key_path: str, schema_path: Path | None, schema_info: SchemaInfo | None
 ) -> dict[str, Any]:
     """Handle TOML delete operation.
 
@@ -790,7 +787,7 @@ def _delete_yq_key_handler(
     key_path: str,
     input_format: FormatType,
     schema_path: Path | None,
-    schema_info: dict[str, Any] | None,
+    schema_info: SchemaInfo | None,
 ) -> dict[str, Any]:
     """Handle YAML/JSON delete operation using yq.
 
@@ -838,10 +835,7 @@ def _delete_yq_key_handler(
 
 
 def _handle_data_delete(
-    path: Path,
-    key_path: str,
-    input_format: FormatType,
-    schema_info: dict[str, Any] | None,
+    path: Path, key_path: str, input_format: FormatType, schema_info: SchemaInfo | None
 ) -> dict[str, Any]:
     """Handle DELETE operation.
 
@@ -937,7 +931,7 @@ def _dispatch_get_operation(
     key_path: str | None,
     output_format: Literal["json", "yaml", "toml"] | None,
     cursor: str | None,
-    schema_info: dict[str, Any] | None,
+    schema_info: SchemaInfo | None,
 ) -> dict[str, Any]:
     """Dispatch GET operation to appropriate handler.
 
@@ -1003,7 +997,7 @@ def _dispatch_set_operation(
     key_path: str | None,
     value: str | None,
     value_type: Literal["string", "number", "boolean", "null", "json"] | None,
-    schema_info: dict[str, Any] | None,
+    schema_info: SchemaInfo | None,
 ) -> dict[str, Any]:
     """Dispatch SET operation to handler.
 
@@ -1040,7 +1034,7 @@ def _dispatch_set_operation(
 
 
 def _dispatch_delete_operation(
-    path: Path, key_path: str | None, schema_info: dict[str, Any] | None
+    path: Path, key_path: str | None, schema_info: SchemaInfo | None
 ) -> dict[str, Any]:
     """Dispatch DELETE operation to handler.
 

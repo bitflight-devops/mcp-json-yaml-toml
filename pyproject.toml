@@ -184,7 +184,6 @@ max-complexity = 12
 
 [tool.mypy]
 python_version = "3.11"
-cache_dir = "/dev/null"
 strict = true
 extra_checks = true
 warn_unused_configs = true
@@ -196,6 +195,7 @@ pretty = true
 disable_error_code = ["call-arg", "misc"]
 mypy_path = ["packages", "scripts"]
 explicit_package_bases = true
+
 
 [[tool.mypy.overrides]]
 module = [
