@@ -63,6 +63,34 @@ class SchemaResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+def _parse_content_for_validation(
+    content: str, input_format: FormatType | str
+) -> Any | None:
+    """Parse content string into data structure for schema validation.
+
+    Args:
+        content: Raw file content string
+        input_format: File format (json, yaml, toml)
+
+    Returns:
+        Parsed data structure or None if format not recognized
+
+    Raises:
+        ToolError: If parsing fails
+    """
+    try:
+        if input_format == "json":
+            return orjson.loads(content)
+        if input_format in {"yaml", FormatType.YAML}:
+            yaml = YAML(typ="safe", pure=True)
+            return yaml.load(content)
+        if input_format in {"toml", FormatType.TOML}:
+            return tomlkit.parse(content)
+    except Exception as e:
+        raise ToolError(f"Failed to parse content for validation: {e}") from e
+    return None
+
+
 def _validate_and_write_content(
     path: Path, content: str, schema_path: Path | None, input_format: FormatType | str
 ) -> None:
@@ -78,25 +106,11 @@ def _validate_and_write_content(
         ToolError: If validation fails
     """
     if schema_path:
-        validation_data = None
-        try:
-            if input_format == "json":
-                validation_data = orjson.loads(content)
-            elif input_format in {"yaml", FormatType.YAML}:
-                yaml = YAML(typ="safe", pure=True)
-                validation_data = yaml.load(content)
-            elif input_format in {"toml", FormatType.TOML}:
-                validation_data = tomlkit.parse(content)
-
-            if validation_data is not None:
-                is_valid, msg = _validate_against_schema(validation_data, schema_path)
-                if not is_valid:
-                    raise ToolError(f"Schema validation failed: {msg}")  # noqa: TRY301
-
-        except Exception as e:
-            if isinstance(e, ToolError):
-                raise
-            raise ToolError(f"Validation check failed: {e}") from e
+        validation_data = _parse_content_for_validation(content, input_format)
+        if validation_data is not None:
+            is_valid, msg = _validate_against_schema(validation_data, schema_path)
+            if not is_valid:
+                raise ToolError(f"Schema validation failed: {msg}")
 
     path.write_text(content, encoding="utf-8")
 
@@ -728,7 +742,99 @@ def _handle_data_set(
         return response
 
 
-def _handle_data_delete(  # noqa: C901
+def _delete_toml_key_handler(
+    path: Path,
+    key_path: str,
+    schema_path: Path | None,
+    schema_info: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Handle TOML delete operation.
+
+    Args:
+        path: Path to file
+        key_path: Key path to delete
+        schema_path: Optional path to schema file
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict with operation result
+
+    Raises:
+        ToolError: If operation fails
+    """
+    try:
+        modified_toml = delete_toml_key(path, key_path)
+        _validate_and_write_content(path, modified_toml, schema_path, "toml")
+    except KeyError as e:
+        raise ToolError(f"TOML delete operation failed: {e}") from e
+    except ToolError:
+        raise
+    except Exception as e:
+        raise ToolError(f"TOML delete operation failed: {e}") from e
+
+    response: dict[str, Any] = {
+        "success": True,
+        "result": "File modified successfully",
+        "file": str(path),
+    }
+    if schema_info:
+        response["schema_info"] = schema_info
+    return response
+
+
+def _delete_yq_key_handler(
+    path: Path,
+    key_path: str,
+    input_format: FormatType,
+    schema_path: Path | None,
+    schema_info: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Handle YAML/JSON delete operation using yq.
+
+    Args:
+        path: Path to file
+        key_path: Key path to delete
+        input_format: File format type
+        schema_path: Optional path to schema file
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict with operation result
+
+    Raises:
+        ToolError: If operation fails
+    """
+    expression = (
+        f"del(.{key_path})" if not key_path.startswith(".") else f"del({key_path})"
+    )
+
+    try:
+        result = execute_yq(
+            expression,
+            input_file=path,
+            input_format=input_format,
+            output_format=input_format,
+            in_place=False,
+        )
+        _validate_and_write_content(path, result.stdout, schema_path, input_format)
+    except YQExecutionError as e:
+        raise ToolError(f"Delete operation failed: {e}") from e
+    except ToolError:
+        raise
+    except Exception as e:
+        raise ToolError(f"Delete operation failed: {e}") from e
+
+    response: dict[str, Any] = {
+        "success": True,
+        "result": "File modified successfully",
+        "file": str(path),
+    }
+    if schema_info:
+        response["schema_info"] = schema_info
+    return response
+
+
+def _handle_data_delete(
     path: Path,
     key_path: str,
     input_format: FormatType,
@@ -748,66 +854,16 @@ def _handle_data_delete(  # noqa: C901
     Raises:
         ToolError: If operation fails
     """
-    # Validating before write (Phase 9)
     schema_path: Path | None = None
     if schema_info:
         schema_path = schema_manager.get_schema_path_for_file(path)
 
-    # TOML requires special handling since yq cannot write TOML
     if input_format == "toml":
-        try:
-            modified_toml = delete_toml_key(path, key_path)
-            _validate_and_write_content(path, modified_toml, schema_path, "toml")
+        return _delete_toml_key_handler(path, key_path, schema_path, schema_info)
 
-            response = {
-                "success": True,
-                "result": "File modified successfully",
-                "file": str(path),
-            }
-
-            if schema_info:
-                response["schema_info"] = schema_info
-        except KeyError as e:
-            raise ToolError(f"TOML delete operation failed: {e}") from e
-        except Exception as e:
-            if isinstance(e, ToolError):
-                raise
-            raise ToolError(f"TOML delete operation failed: {e}") from e
-        else:
-            return response
-
-    # YAML/JSON use yq
-    expression = (
-        f"del(.{key_path})" if not key_path.startswith(".") else f"del({key_path})"
+    return _delete_yq_key_handler(
+        path, key_path, input_format, schema_path, schema_info
     )
-
-    try:
-        # Dry run
-        result = execute_yq(
-            expression,
-            input_file=path,
-            input_format=input_format,
-            output_format=input_format,
-            in_place=False,
-        )
-
-        _validate_and_write_content(path, result.stdout, schema_path, input_format)
-
-        response = {
-            "success": True,
-            "result": "File modified successfully",
-            "file": str(path),
-        }
-        if schema_info:
-            response["schema_info"] = schema_info
-    except YQExecutionError as e:
-        raise ToolError(f"Delete operation failed: {e}") from e
-    except Exception as e:
-        if isinstance(e, ToolError):
-            raise
-        raise ToolError(f"Delete operation failed: {e}") from e
-    else:
-        return response
 
 
 def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
