@@ -10,13 +10,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeGuard, assert_never
 
+import httpx
 import orjson
 import tomlkit
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
-from jsonschema import validate as jsonschema_validate
+from jsonschema import Draft7Validator, Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 from pydantic import BaseModel, Field
+from referencing import Registry, Resource
+from referencing.exceptions import NoSuchResource
 from ruamel.yaml import YAML
 from strong_typing.core import JsonType
 
@@ -869,6 +872,8 @@ def _handle_data_delete(
 def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
     """Validate data against JSON schema.
 
+    Uses referencing.Registry to handle $ref resolution without deprecated auto-fetch.
+
     Args:
         data: Data to validate (parsed from JSON/YAML)
         schema_path: Path to schema file
@@ -876,6 +881,17 @@ def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
     Returns:
         Tuple of (is_valid, message)
     """
+
+    def retrieve_via_httpx(uri: str) -> Resource:
+        """Retrieve schema from HTTP(S) URI using httpx."""
+        try:
+            response = httpx.get(uri, follow_redirects=True, timeout=10.0)
+            response.raise_for_status()
+            contents = response.json()
+            return Resource.from_contents(contents)
+        except (httpx.HTTPError, httpx.TimeoutException) as e:
+            raise NoSuchResource(ref=uri) from e
+
     try:
         # Load schema
         schema_format = _detect_file_format(schema_path)
@@ -891,8 +907,17 @@ def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
 
         schema = schema_result.data
 
-        # Validate
-        jsonschema_validate(instance=data, schema=schema)
+        # Create registry with httpx retrieval for remote $refs
+        registry: Registry = Registry(retrieve=retrieve_via_httpx)
+
+        # Choose validator based on schema's $schema field or default to Draft 7
+        schema_dialect = schema.get("$schema", "")
+        if "draft/2020-12" in schema_dialect or "draft-2020-12" in schema_dialect:
+            Draft202012Validator(schema, registry=registry).validate(data)
+        else:
+            # Default to Draft 7 which is most common
+            Draft7Validator(schema, registry=registry).validate(data)
+
     except ValidationError as e:
         return False, f"Schema validation failed: {e.message}"
     except SchemaError as e:
