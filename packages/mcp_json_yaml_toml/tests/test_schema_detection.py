@@ -66,10 +66,13 @@ foo = "bar"
 
 
 def test_detect_schema_toml_key(tmp_path: Path, schema_manager: SchemaManager) -> None:
-    """Verify schema detection in TOML files using $schema key."""
+    """Verify schema detection in TOML files using $schema key.
+
+    Note: In TOML, $schema must be a quoted key since bare keys cannot contain $.
+    """
     schema_url = "http://example.com/schema.json"
     file_path = tmp_path / "test_key.toml"
-    content = f"""$schema = "{schema_url}"
+    content = f""""$schema" = "{schema_url}"
 foo = "bar"
 """
     file_path.write_text(content)

@@ -101,24 +101,49 @@ def _extract_from_json(content: str) -> str | None:
 
 
 def _extract_from_yaml(content: str) -> str | None:
-    """Extract $schema from YAML content."""
+    """Extract $schema from YAML content.
+
+    Supports:
+    - yaml-language-server modeline: # yaml-language-server: $schema=URL
+    - Top-level $schema key
+    """
+    # Check for yaml-language-server modeline first
+
+    modeline_match = re.search(
+        r"#\s*yaml-language-server:\s*\$schema=(\S+)", content, re.IGNORECASE
+    )
+    if modeline_match:
+        return modeline_match.group(1)
+
+    # Check for top-level $schema key
     yaml = YAML(typ="safe", pure=True)
     try:
         data = yaml.load(content)
         if isinstance(data, dict):
             return data.get("$schema")
     except YAMLError:
-        return None
+        pass
     return None
 
 
 def _extract_from_toml(content: str) -> str | None:
-    """Extract $schema from TOML content."""
+    """Extract schema URL from TOML content.
+
+    Supports:
+    - Taplo directive: #:schema URL
+    - Top-level $schema key
+    """
+    # Check for Taplo-style schema directive first
+    directive_match = re.search(r"#:schema\s+(\S+)", content)
+    if directive_match:
+        return directive_match.group(1)
+
+    # Check for top-level $schema key
     try:
         data = tomlkit.parse(content)
         return data.get("$schema")
     except (ParseError, TOMLKitError):
-        return None
+        pass
     return None
 
 
