@@ -152,11 +152,8 @@ uv sync
 ### Testing
 
 ```bash
-# Run all tests
+# Run all tests (coverage included)
 uv run pytest
-
-# Run with coverage
-uv run pytest --cov=packages/mcp_json_yaml_toml
 ```
 
 ### Code Quality
