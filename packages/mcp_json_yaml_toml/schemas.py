@@ -12,12 +12,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Annotated
 
 import httpx
 import orjson
 import tomlkit
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
+from strong_typing.auxiliary import Alias
 from strong_typing.core import Schema
 from strong_typing.exception import JsonKeyError, JsonTypeError, JsonValueError
 from strong_typing.serialization import json_to_object, object_to_json
@@ -42,6 +44,7 @@ class SchemaCatalog:
 
     schemas: list[SchemaEntry] = field(default_factory=list)
     version: int = 1
+    schema_ref: Annotated[str, Alias("$schema")] = ""
 
 
 @dataclass

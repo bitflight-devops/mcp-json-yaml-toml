@@ -113,4 +113,4 @@ repos:
 default_language_version:
   python: python3
 
-exclude: (\.pem$|\.cer$|\.crt$|\.key$|\.lock$|mkdocs\.yml|docs/generated/|^libraries/miot-(cose|provisioning-object)-py/|^libraries/keytable.*|^libraries/suitManifestBuilder)
+exclude: (node_modules/|.venv/|__pycache__/|\.ruff_cache/|\.mypy_cache/|\.pytest_cache/|\.pem$|\.cer$|\.crt$|\.key$|\.lock$|mkdocs\.yml|docs/generated/)
