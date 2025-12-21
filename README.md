@@ -151,6 +151,41 @@ uv sync
 
 ### Testing
 
+ash
+
+# Run all tests (coverage included)
+
+uv run pytest
+
+````
+
+### Code Quality
+
+The project uses `prek` (a Rust-based pre-commit tool) for unified linting and formatting. AI Agents MUST use the scoped verification command:
+
+```bash
+# Recommended: Verify only touched files
+uv run prek run --files <file edited>
+````
+
+> [!IMPORTANT]
+> Avoid `--all-files` during feature development to keep PR diffs clean and preserve git history.
+
+---
+
+## Project Structure
+
+```text
+mcp-json-yaml-toml/
+├── packages/mcp_json_yaml_toml/  # Core logic
+│   ├── server.py                 # MCP implementation
+│   ├── yq_wrapper.py             # Binary management
+│   ├── schemas.py                # Schema validation
+├── .github/                      # CI/CD and assets
+├── docs/                         # Documentation
+└── pyproject.toml                # Project config
+```
+
 ```bash
 # Run all tests (coverage included)
 uv run pytest
@@ -175,9 +210,13 @@ uv run prek run --files <file edited>
 ```text
 mcp-json-yaml-toml/
 ├── packages/mcp_json_yaml_toml/  # Core logic
-│   ├── server.py                 # MCP implementation
-│   ├── yq_wrapper.py             # Binary management
-│   ├── schemas.py                # Schema validation
+│   ├── server.py                 # MCP server & tool definitions
+│   ├── schemas.py                # Schema validation & management
+│   ├── lmql_constraints.py       # LMQL constraint logic
+│   ├── yq_wrapper.py             # Binary management & wrapping
+│   ├── yaml_optimizer.py         # YAML anchor/alias optimization
+│   ├── toml_utils.py             # TOML preservation utilities
+│   └── config.py                 # Configuration management
 ├── .github/                      # CI/CD and assets
 ├── docs/                         # Documentation
 └── pyproject.toml                # Project config
