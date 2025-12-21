@@ -10,13 +10,16 @@ This module provides a Python interface to the bundled yq binary, handling:
 """
 
 import contextlib
+import fcntl
 import hashlib
 import os
 import platform
 import subprocess
 import sys
+import uuid
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import httpx
 import orjson
@@ -56,7 +59,17 @@ class YQResult(BaseModel):
     data: Any = Field(default=None, description="Parsed output data (if JSON output)")
 
 
-FormatType = Literal["json", "yaml", "toml", "xml", "csv", "tsv", "props"]
+class FormatType(StrEnum):
+    """Supported file format types for yq operations."""
+
+    JSON = "json"
+    YAML = "yaml"
+    TOML = "toml"
+    XML = "xml"
+    CSV = "csv"
+    TSV = "tsv"
+    PROPS = "props"
+
 
 # GitHub repository for yq
 GITHUB_REPO = "mikefarah/yq"
@@ -220,9 +233,6 @@ def _download_yq_binary(
     Raises:
         YQError: If download or verification fails
     """
-    import fcntl
-    import uuid
-
     # Use a lock file to coordinate between parallel processes
     lock_path = dest_path.with_suffix(".lock")
 
@@ -546,8 +556,8 @@ def execute_yq(
     expression: str,
     input_data: str | None = None,
     input_file: Path | str | None = None,
-    input_format: FormatType = "yaml",
-    output_format: FormatType = "json",
+    input_format: FormatType = FormatType.YAML,
+    output_format: FormatType = FormatType.JSON,
     in_place: bool = False,
     null_input: bool = False,
 ) -> YQResult:

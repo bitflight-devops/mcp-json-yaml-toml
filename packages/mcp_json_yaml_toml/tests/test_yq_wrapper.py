@@ -12,6 +12,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from mcp_json_yaml_toml.yq_wrapper import (
+    FormatType,
     YQBinaryNotFoundError,
     YQError,
     YQExecutionError,
@@ -220,7 +221,10 @@ class TestExecuteYQ:
 
         # Act - execute yq with input data
         result = execute_yq(
-            ".", input_data='{"name":"test"}', input_format="json", output_format="json"
+            ".",
+            input_data='{"name":"test"}',
+            input_format=FormatType.JSON,
+            output_format=FormatType.JSON,
         )
 
         # Assert - subprocess called with correct args
@@ -336,7 +340,9 @@ class TestExecuteYQ:
         mocker.patch("subprocess.run", return_value=mock_result)
 
         # Act - execute yq
-        result = execute_yq(".", input_data='{"test": "data"}', output_format="json")
+        result = execute_yq(
+            ".", input_data='{"test": "data"}', output_format=FormatType.JSON
+        )
 
         # Assert - data is None, warning in stderr
         assert result.data is None
@@ -355,8 +361,8 @@ class TestExecuteYQ:
         result = execute_yq(
             ".name",
             input_file=sample_json_config,
-            input_format="json",
-            output_format="json",
+            input_format=FormatType.JSON,
+            output_format=FormatType.JSON,
         )
 
         # Assert - successful execution
@@ -378,8 +384,8 @@ class TestExecuteYQ:
         result = execute_yq(
             ".",
             input_file=sample_yaml_config,
-            input_format="yaml",
-            output_format="json",
+            input_format=FormatType.YAML,
+            output_format=FormatType.JSON,
         )
 
         # Assert - successful conversion

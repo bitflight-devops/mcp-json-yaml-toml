@@ -9,11 +9,62 @@ import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TypeGuard
 
 import httpx
 import orjson
+from strong_typing.core import Schema
+from strong_typing.exception import JsonKeyError, JsonTypeError, JsonValueError
+from strong_typing.serialization import json_to_object, object_to_json
+
+
+# Dataclasses for known JSON structures - strong_typing handles deserialization
+@dataclass
+class SchemaEntry:
+    """A single schema entry from Schema Store catalog."""
+
+    name: str = ""
+    url: str = ""
+    description: str = ""
+    fileMatch: list[str] = field(default_factory=list)
+    versions: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class SchemaCatalog:
+    """Schema Store catalog structure."""
+
+    schemas: list[SchemaEntry] = field(default_factory=list)
+    version: int = 1
+
+
+@dataclass
+class FileAssociation:
+    """Association between a file and a schema URL."""
+
+    schema_url: str = ""
+    source: str = "user"
+
+
+@dataclass
+class SchemaConfig:
+    """Local schema configuration structure."""
+
+    file_associations: dict[str, FileAssociation] = field(default_factory=dict)
+    custom_cache_dirs: list[str] = field(default_factory=list)
+    custom_catalogs: dict[str, str] = field(default_factory=dict)
+    discovered_dirs: list[str] = field(default_factory=list)
+    last_scan: str | None = None
+
+
+@dataclass
+class DefaultSchemaStores:
+    """Default schema stores configuration."""
+
+    ide_patterns: list[str] = field(default_factory=list)
+
 
 SCHEMA_STORE_CATALOG_URL = "https://www.schemastore.org/api/json/catalog.json"
 CACHE_EXPIRY_SECONDS = 24 * 60 * 60  # 24 hours
@@ -58,6 +109,22 @@ def _match_glob_pattern(file_path: Path, pattern: str) -> bool:
     return fnmatch.fnmatch(path_str, pattern)
 
 
+# TypeGuards for type-safe JSON value narrowing
+def is_str_list(obj: object) -> TypeGuard[list[str]]:
+    """Check if object is a list of strings."""
+    return isinstance(obj, list) and all(isinstance(item, str) for item in obj)
+
+
+def is_schema(obj: object) -> TypeGuard[Schema]:
+    """Check if object is a JSON schema (dict[str, JsonType])."""
+    return isinstance(obj, dict) and all(isinstance(k, str) for k in obj)
+
+
+def is_schema_list(obj: object) -> TypeGuard[list[Schema]]:
+    """Check if object is a list of schemas."""
+    return isinstance(obj, list) and all(is_schema(item) for item in obj)
+
+
 def _load_default_ide_patterns() -> list[str]:
     """Load default IDE schema patterns from bundled JSON file.
 
@@ -67,9 +134,10 @@ def _load_default_ide_patterns() -> list[str]:
     try:
         default_stores_path = Path(__file__).parent / "default_schema_stores.json"
         if default_stores_path.exists():
-            data: dict[str, Any] = orjson.loads(default_stores_path.read_bytes())
-            result: list[str] = data.get("ide_patterns", [])
-            return result
+            data: Schema = orjson.loads(default_stores_path.read_bytes())
+            ide_patterns = data.get("ide_patterns")
+
+            return ide_patterns if is_str_list(ide_patterns) else []
     except (OSError, orjson.JSONDecodeError) as e:
         logging.debug(f"Failed to load default IDE patterns: {e}")
     return []
@@ -156,6 +224,8 @@ def _get_ide_schema_locations() -> list[Path]:
 class SchemaManager:
     """Manages JSON schemas with local caching and Schema Store integration."""
 
+    config: SchemaConfig
+
     def __init__(self, cache_dir: Path | None = None) -> None:
         """Initialize schema manager.
 
@@ -172,33 +242,47 @@ class SchemaManager:
         self.config_path = self.cache_dir / "schema_config.json"
         self.config = self._load_config()
 
-    def _load_config(self) -> dict[str, Any]:
+    def _load_config(self) -> SchemaConfig:
         """Load schema configuration from file.
 
         Returns:
-            Configuration dict with custom_cache_dirs, custom_catalogs, etc.
+            Typed SchemaConfig dataclass.
         """
         if self.config_path.exists():
             try:
-                config: dict[str, Any] = orjson.loads(self.config_path.read_bytes())
-            except orjson.JSONDecodeError:
-                pass
-            else:
-                return config
+                raw_data = orjson.loads(self.config_path.read_bytes())
+                return json_to_object(SchemaConfig, raw_data)
+            except (
+                orjson.JSONDecodeError,
+                JsonKeyError,
+                JsonTypeError,
+                JsonValueError,
+            ) as e:
+                logging.debug(f"Failed to load schema config: {e}")
 
         # Return default empty config
-        return {
-            "custom_cache_dirs": [],
-            "custom_catalogs": {},
-            "discovered_dirs": [],
-            "last_scan": None,
-        }
+        return SchemaConfig()
 
     def _save_config(self) -> None:
         """Save schema configuration to file."""
         self.config_path.write_bytes(
-            orjson.dumps(self.config, option=orjson.OPT_INDENT_2)
+            orjson.dumps(object_to_json(self.config), option=orjson.OPT_INDENT_2)
         )
+
+    def get_typed_catalog(self) -> SchemaCatalog | None:
+        """Get the Schema Store catalog as a typed SchemaCatalog dataclass.
+
+        Returns:
+            SchemaCatalog dataclass if available, None if fetch fails and no cache exists.
+        """
+        raw_catalog = self.get_catalog()
+        if raw_catalog is None:
+            return None
+        try:
+            return json_to_object(SchemaCatalog, raw_catalog)
+        except (JsonKeyError, JsonTypeError, JsonValueError) as e:
+            logging.debug(f"Failed to parse catalog as SchemaCatalog: {e}")
+            return None
 
     def get_schema_path_for_file(self, file_path: Path) -> Path | None:
         """Find and return the cached schema file path for a given file.
@@ -214,36 +298,30 @@ class SchemaManager:
         """
         # 1. Check file associations first (highest priority)
         file_str = str(file_path.resolve())
-        file_associations = self.config.get("file_associations", {})
-        if file_str in file_associations:
-            assoc = file_associations[file_str]
-            schema_url = assoc.get("schema_url") if isinstance(assoc, dict) else assoc
-            if isinstance(schema_url, str):
-                return self._fetch_schema_to_cache(schema_url)
+        if file_str in self.config.file_associations:
+            assoc = self.config.file_associations[file_str]
+            return self._fetch_schema_to_cache(assoc.schema_url)
 
         # 2. Check catalog patterns
-        catalog = self._get_catalog()
+        catalog = self.get_typed_catalog()
         if not catalog:
             return None
 
         filename = file_path.name
 
-        for schema_info in catalog.get("schemas", []):
-            if "fileMatch" not in schema_info:
-                continue
-
-            for pattern in schema_info["fileMatch"]:
+        for schema_entry in catalog.schemas:
+            for pattern in schema_entry.fileMatch:
                 # Check exact filename match first (fast path)
                 if filename == pattern:
-                    return self._fetch_schema_to_cache(schema_info["url"])
+                    return self._fetch_schema_to_cache(schema_entry.url)
 
                 # Check glob pattern match
                 if _match_glob_pattern(file_path, pattern):
-                    return self._fetch_schema_to_cache(schema_info["url"])
+                    return self._fetch_schema_to_cache(schema_entry.url)
 
         return None
 
-    def get_schema_for_file(self, file_path: Path) -> dict[str, Any] | None:
+    def get_schema_for_file(self, file_path: Path) -> Schema | None:
         """Find and return the schema for a given file.
 
         Args:
@@ -254,36 +332,30 @@ class SchemaManager:
         """
         # 1. Check file associations first (highest priority)
         file_str = str(file_path.resolve())
-        file_associations = self.config.get("file_associations", {})
-        if file_str in file_associations:
-            assoc = file_associations[file_str]
-            schema_url = assoc.get("schema_url") if isinstance(assoc, dict) else assoc
-            if isinstance(schema_url, str):
-                return self._fetch_schema(schema_url)
+        if file_str in self.config.file_associations:
+            assoc = self.config.file_associations[file_str]
+            return self._fetch_schema(assoc.schema_url)
 
         # 2. Check catalog patterns
-        catalog = self._get_catalog()
+        catalog = self.get_typed_catalog()
         if not catalog:
             return None
 
         filename = file_path.name
 
-        for schema_info in catalog.get("schemas", []):
-            if "fileMatch" not in schema_info:
-                continue
-
-            for pattern in schema_info["fileMatch"]:
+        for schema_entry in catalog.schemas:
+            for pattern in schema_entry.fileMatch:
                 # Check exact filename match first (fast path)
                 if filename == pattern:
-                    return self._fetch_schema(schema_info["url"])
+                    return self._fetch_schema(schema_entry.url)
 
                 # Check glob pattern match
                 if _match_glob_pattern(file_path, pattern):
-                    return self._fetch_schema(schema_info["url"])
+                    return self._fetch_schema(schema_entry.url)
 
         return None
 
-    def get_schema_info_for_file(self, file_path: Path) -> dict[str, Any] | None:
+    def get_schema_info_for_file(self, file_path: Path) -> Schema | None:
         """Get schema metadata (name, URL, source) without fetching full schema.
 
         Args:
@@ -294,34 +366,27 @@ class SchemaManager:
         """
         # 1. Check file associations
         file_str = str(file_path.resolve())
-        file_associations = self.config.get("file_associations", {})
-        if file_str in file_associations:
-            assoc = file_associations[file_str]
-            if isinstance(assoc, dict):
-                return {
-                    "name": assoc.get("schema_name", "unknown"),
-                    "url": assoc.get("schema_url"),
-                    "source": "file_association",
-                }
-            # Legacy format: just URL string
-            return {"name": "unknown", "url": assoc, "source": "file_association"}
+        if file_str in self.config.file_associations:
+            assoc = self.config.file_associations[file_str]
+            return {
+                "name": "user_association",
+                "url": assoc.schema_url,
+                "source": assoc.source,
+            }
 
         # 2. Check catalog
-        catalog = self._get_catalog()
+        catalog = self.get_typed_catalog()
         if not catalog:
             return None
 
         filename = file_path.name
-        for schema_info in catalog.get("schemas", []):
-            if "fileMatch" not in schema_info:
-                continue
-
-            for pattern in schema_info["fileMatch"]:
+        for schema_entry in catalog.schemas:
+            for pattern in schema_entry.fileMatch:
                 # Check exact filename match first (fast path)
                 if filename == pattern or _match_glob_pattern(file_path, pattern):
                     return {
-                        "name": schema_info.get("name", "unknown"),
-                        "url": schema_info.get("url"),
+                        "name": schema_entry.name,
+                        "url": schema_entry.url,
                         "source": "catalog",
                     }
 
@@ -335,16 +400,12 @@ class SchemaManager:
         Args:
             file_path: Path to the file.
             schema_url: URL of the schema.
-            schema_name: Optional name of the schema.
+            schema_name: Optional name of the schema (stored in source field).
         """
         file_str = str(file_path.resolve())
-        if "file_associations" not in self.config:
-            self.config["file_associations"] = {}
-
-        self.config["file_associations"][file_str] = {
-            "schema_url": schema_url,
-            "schema_name": schema_name or "unknown",
-        }
+        self.config.file_associations[file_str] = FileAssociation(
+            schema_url=schema_url, source=schema_name or "user"
+        )
         self._save_config()
 
     def remove_file_association(self, file_path: Path) -> bool:
@@ -357,14 +418,13 @@ class SchemaManager:
             True if association was removed, False if it didn't exist.
         """
         file_str = str(file_path.resolve())
-        file_associations = self.config.get("file_associations", {})
-        if file_str in file_associations:
-            del file_associations[file_str]
+        if file_str in self.config.file_associations:
+            del self.config.file_associations[file_str]
             self._save_config()
             return True
         return False
 
-    def _get_catalog(self) -> dict[str, Any] | None:
+    def get_catalog(self) -> Schema | None:
         """Get the Schema Store catalog, using cache if available.
 
         Returns:
@@ -372,13 +432,13 @@ class SchemaManager:
         """
         if self._is_cache_valid(self.catalog_path):
             try:
-                cached: dict[str, Any] = orjson.loads(self.catalog_path.read_bytes())
+                cached: Schema = orjson.loads(self.catalog_path.read_bytes())
             except orjson.JSONDecodeError:
                 pass  # Invalid cache, re-fetch
             else:
                 return cached
 
-        catalog: dict[str, Any] | None = None
+        catalog: Schema | None = None
         try:
             response = httpx.get(SCHEMA_STORE_CATALOG_URL, timeout=10.0)
             response.raise_for_status()
@@ -393,7 +453,7 @@ class SchemaManager:
             # If fetch fails and we have a stale cache, use it
             if self.catalog_path.exists():
                 try:
-                    stale: dict[str, Any] = orjson.loads(self.catalog_path.read_bytes())
+                    stale: Schema = orjson.loads(self.catalog_path.read_bytes())
                 except orjson.JSONDecodeError:
                     pass
                 else:
@@ -443,7 +503,7 @@ class SchemaManager:
 
         return None
 
-    def _fetch_schema(self, url: str) -> dict[str, Any] | None:
+    def _fetch_schema(self, url: str) -> Schema | None:
         """Fetch a schema from a URL, using cache if available.
 
         Args:
@@ -457,7 +517,7 @@ class SchemaManager:
 
         if self._is_cache_valid(cache_path):
             try:
-                cached: dict[str, Any] = orjson.loads(cache_path.read_bytes())
+                cached: Schema = orjson.loads(cache_path.read_bytes())
             except orjson.JSONDecodeError:
                 pass
             else:
@@ -470,7 +530,7 @@ class SchemaManager:
             cache_path.write_bytes(orjson.dumps(ide_schema))
             return ide_schema
 
-        schema: dict[str, Any] | None = None
+        schema: Schema | None = None
         try:
             response = httpx.get(url, timeout=10.0)
             response.raise_for_status()
@@ -485,7 +545,7 @@ class SchemaManager:
             # If fetch fails and we have a stale cache, use it
             if cache_path.exists():
                 try:
-                    stale: dict[str, Any] = orjson.loads(cache_path.read_bytes())
+                    stale: Schema = orjson.loads(cache_path.read_bytes())
                 except orjson.JSONDecodeError:
                     pass
                 else:
@@ -537,7 +597,7 @@ class SchemaManager:
 
     def _search_hash_based_cache(
         self, cache_dir: Path, schema_url: str
-    ) -> dict[str, Any] | None:
+    ) -> Schema | None:
         """Search hash-based cache (vscode-yaml style) by checking $id in content.
 
         Args:
@@ -567,7 +627,7 @@ class SchemaManager:
 
     def _fetch_from_ide_cache(
         self, schema_filename: str, schema_url: str | None = None
-    ) -> dict[str, Any] | None:
+    ) -> Schema | None:
         """Try to find schema in IDE cache locations using concurrent checking.
 
         Searches for schemas by:
@@ -583,12 +643,12 @@ class SchemaManager:
         """
         cache_dirs = _get_ide_schema_locations()
 
-        def try_load_schema(cache_dir: Path) -> dict[str, Any] | None:
+        def try_load_schema(cache_dir: Path) -> Schema | None:
             # Try exact filename match first
             schema_path = cache_dir / schema_filename
             if schema_path.exists():
                 try:
-                    loaded: dict[str, Any] = orjson.loads(schema_path.read_bytes())
+                    loaded: Schema = orjson.loads(schema_path.read_bytes())
                 except orjson.JSONDecodeError:
                     pass
                 else:
@@ -676,8 +736,8 @@ class SchemaManager:
                     discovered.append(dir_path)
 
         # Update config
-        self.config["discovered_dirs"] = [str(p) for p in discovered]
-        self.config["last_scan"] = datetime.datetime.now(datetime.UTC).isoformat()
+        self.config.discovered_dirs = [str(p) for p in discovered]
+        self.config.last_scan = datetime.datetime.now(datetime.UTC).isoformat()
         self._save_config()
 
         return discovered
@@ -689,8 +749,8 @@ class SchemaManager:
             directory: Path to schema directory.
         """
         dir_str = str(directory.expanduser().resolve())
-        if dir_str not in self.config["custom_cache_dirs"]:
-            self.config["custom_cache_dirs"].append(dir_str)
+        if dir_str not in self.config.custom_cache_dirs:
+            self.config.custom_cache_dirs.append(dir_str)
             self._save_config()
 
     def add_custom_catalog(self, name: str, uri: str) -> None:
@@ -700,13 +760,13 @@ class SchemaManager:
             name: Friendly name for the catalog.
             uri: URL or file path to catalog.json.
         """
-        self.config["custom_catalogs"][name] = uri
+        self.config.custom_catalogs[name] = uri
         self._save_config()
 
-    def get_config(self) -> dict[str, Any]:
+    def get_config(self) -> SchemaConfig:
         """Get current schema configuration.
 
         Returns:
-            Copy of current config dict.
+            Current config dataclass.
         """
-        return self.config.copy()
+        return self.config

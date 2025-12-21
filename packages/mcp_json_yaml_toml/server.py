@@ -7,11 +7,16 @@ MCP_CONFIG_FORMATS environment variable.
 
 import base64
 from pathlib import Path
-from typing import Annotated, Any, Literal, assert_never
+from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_never
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import orjson
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from jsonschema import validate as jsonschema_validate
+from jsonschema.exceptions import SchemaError, ValidationError
 from pydantic import Field
 
 from mcp_json_yaml_toml.config import (
@@ -25,6 +30,8 @@ from mcp_json_yaml_toml.lmql_constraints import (
     validate_tool_input,
 )
 from mcp_json_yaml_toml.schemas import SchemaManager
+from mcp_json_yaml_toml.toml_utils import delete_toml_key, set_toml_value
+from mcp_json_yaml_toml.yaml_optimizer import optimize_yaml_file
 from mcp_json_yaml_toml.yq_wrapper import (
     FormatType,
     YQError,
@@ -157,6 +164,40 @@ def _summarize_list_structure(
     return {"__summary__": summary, "first_item_sample": sample}
 
 
+def _summarize_depth_exceeded(data: Any) -> Any:
+    """Return summary showing keys for dicts (recursively) when max depth is exceeded.
+
+    Args:
+        data: The data to summarize
+
+    Returns:
+        Dict with keys mapped to summaries, or type string for primitives
+    """
+    if isinstance(data, dict):
+        return {k: _summarize_depth_exceeded(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return f"<list with {len(data)} items>"
+    return type(data).__name__
+
+
+def _summarize_primitive(data: Any, full_keys_mode: bool) -> Any:
+    """Summarize a primitive value.
+
+    Args:
+        data: The primitive value
+        full_keys_mode: If True, return type name only
+
+    Returns:
+        Type name or truncated string value
+    """
+    if full_keys_mode:
+        return type(data).__name__
+    s = str(data)
+    if len(s) <= MAX_PRIMITIVE_DISPLAY_LENGTH:
+        return s
+    return s[: MAX_PRIMITIVE_DISPLAY_LENGTH - 3] + "..."
+
+
 def _summarize_structure(
     data: Any, depth: int = 0, max_depth: int = 1, full_keys_mode: bool = False
 ) -> Any:
@@ -173,27 +214,16 @@ def _summarize_structure(
     """
     # In full_keys_mode, ignore max_depth and show complete structure
     if not full_keys_mode and depth > max_depth:
-        if isinstance(data, dict):
-            return f"<dict with {len(data)} keys>"
-        if isinstance(data, list):
-            return f"<list with {len(data)} items>"
-        return type(data).__name__
+        return _summarize_depth_exceeded(data)
 
     if isinstance(data, dict):
-        # Return keys with their types/summaries recursively
         return {
             k: _summarize_structure(v, depth + 1, max_depth, full_keys_mode)
             for k, v in data.items()
         }
     if isinstance(data, list):
         return _summarize_list_structure(data, depth, max_depth, full_keys_mode)
-    # Primitive - show type name in full_keys_mode, otherwise show value
-    if full_keys_mode:
-        return type(data).__name__
-    s = str(data)
-    if len(s) <= MAX_PRIMITIVE_DISPLAY_LENGTH:
-        return s
-    return s[: MAX_PRIMITIVE_DISPLAY_LENGTH - 3] + "..."
+    return _summarize_primitive(data, full_keys_mode)
 
 
 def _detect_file_format(file_path: Path) -> FormatType:
@@ -208,21 +238,18 @@ def _detect_file_format(file_path: Path) -> FormatType:
     Raises:
         ToolError: If format cannot be detected
     """
-    suffix = file_path.suffix.lower()
-    format_map = {
-        ".json": "json",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".toml": "toml",
-        ".xml": "xml",
-    }
+    suffix = file_path.suffix.lower().lstrip(".")
+    # Handle yml -> yaml alias
+    if suffix == "yml":
+        suffix = "yaml"
 
-    if suffix not in format_map:
+    try:
+        return FormatType(suffix)
+    except ValueError:
+        valid_formats = [f.value for f in FormatType]
         raise ToolError(
-            f"Cannot detect format from extension '{suffix}'. Supported extensions: {', '.join(format_map.keys())}"
-        )
-
-    return format_map[suffix]  # type: ignore[return-value]
+            f"Cannot detect format from extension '.{suffix}'. Supported formats: {', '.join(valid_formats)}"
+        ) from None
 
 
 def _find_schema_file(config_path: Path) -> Path | None:
@@ -278,6 +305,26 @@ def _handle_data_get_schema(
         if schema_info:
             response["schema_info"] = schema_info
         return response
+
+    # Fall back to local adjacent schema file search
+    local_schema_file = _find_schema_file(path)
+    if local_schema_file:
+        try:
+            schema_content = orjson.loads(local_schema_file.read_bytes())
+            return {
+                "success": True,
+                "file": str(path),
+                "schema": schema_content,
+                "schema_file": str(local_schema_file),
+                "message": "Schema found via adjacent file",
+            }
+        except (OSError, orjson.JSONDecodeError) as e:
+            return {
+                "success": False,
+                "file": str(path),
+                "message": f"Found schema file but failed to parse: {e}",
+            }
+
     return {
         "success": False,
         "file": str(path),
@@ -314,7 +361,10 @@ def _handle_data_get_structure(
     )
     try:
         result = execute_yq(
-            expression, input_file=path, input_format=input_format, output_format="json"
+            expression,
+            input_file=path,
+            input_format=input_format,
+            output_format=FormatType.JSON,
         )
         response: dict[str, Any]
         if result.data is None:
@@ -352,9 +402,10 @@ def _handle_data_get_structure(
         }
         if schema_info:
             response["schema_info"] = schema_info
-        return response
     except YQExecutionError as e:
         raise ToolError(f"Query failed: {e}") from e
+    else:
+        return response
 
 
 def _handle_data_get_value(
@@ -426,13 +477,12 @@ def _handle_data_get_value(
         }
         if schema_info:
             response["schema_info"] = schema_info
-        return response
     except YQExecutionError as e:
         # Auto-fallback to JSON if TOML output was auto-selected and yq can't encode nested structures
         if (
             not output_format_explicit
-            and output_fmt == "toml"
-            and input_format == "toml"
+            and output_fmt == FormatType.TOML
+            and input_format == FormatType.TOML
             and "only scalars" in str(e.stderr)
         ):
             # Retry with JSON output format
@@ -440,20 +490,30 @@ def _handle_data_get_value(
                 path,
                 key_path,
                 input_format,
-                "json",
+                FormatType.JSON,
                 cursor,
                 schema_info,
                 output_format_explicit=True,
             )
         raise ToolError(f"Query failed: {e}") from e
+    else:
+        return response
 
 
 def _set_toml_value_handler(
     path: Path, key_path: str, parsed_value: Any, schema_info: dict[str, Any] | None
 ) -> dict[str, Any]:
-    """Handle TOML set operation."""
-    from mcp_json_yaml_toml.toml_utils import set_toml_value
+    """Handle TOML set operation.
 
+    Args:
+        path: Path to configuration file
+        key_path: Dot-notation key path to set
+        parsed_value: Parsed value to set
+        schema_info: Optional schema information
+
+    Returns:
+        Response dict with operation result
+    """
     try:
         modified_toml = set_toml_value(path, key_path, parsed_value)
         path.write_text(modified_toml, encoding="utf-8")
@@ -471,15 +531,23 @@ def _set_toml_value_handler(
 
 
 def _optimize_yaml_if_needed(path: Path) -> bool:
-    """Optimize YAML file with anchors if applicable."""
+    """Optimize YAML file with anchors if applicable.
+
+    Args:
+        path: Path to YAML file
+
+    Returns:
+        True if optimization was applied, False otherwise
+    """
     original_content = path.read_text(encoding="utf-8")
     if "&" not in original_content and "*" not in original_content:
         return False
 
-    from mcp_json_yaml_toml.yaml_optimizer import optimize_yaml_file
-
     reparse_result = execute_yq(
-        ".", input_file=path, input_format="yaml", output_format="json"
+        ".",
+        input_file=path,
+        input_format=FormatType.YAML,
+        output_format=FormatType.JSON,
     )
     if reparse_result.data is None:
         return False
@@ -491,7 +559,34 @@ def _optimize_yaml_if_needed(path: Path) -> bool:
     return False
 
 
-def _parse_set_value(  # noqa: C901
+def _parse_typed_json(
+    value: str, expected_type: type | tuple[type, ...], type_name: str
+) -> Any:
+    """Parse JSON value and validate type.
+
+    Args:
+        value: JSON string to parse
+        expected_type: Expected Python type or tuple of types
+        type_name: Human-readable type name for error messages
+
+    Returns:
+        Parsed value
+
+    Raises:
+        ToolError: If parsing fails or type doesn't match
+    """
+    try:
+        parsed = orjson.loads(value)
+    except orjson.JSONDecodeError as e:
+        raise ToolError(f"Invalid {type_name} value: {e}") from e
+    if not isinstance(parsed, expected_type):
+        raise ToolError(
+            f"value_type='{type_name}' but value parses to {type(parsed).__name__}: {value}"
+        )
+    return parsed
+
+
+def _parse_set_value(
     value: str | None,
     value_type: Literal["string", "number", "boolean", "null", "json"] | None,
 ) -> Any:
@@ -507,46 +602,24 @@ def _parse_set_value(  # noqa: C901
     Raises:
         ToolError: If value is invalid for the specified type
     """
+    if value_type == "null":
+        return None
+    if value is None:
+        raise ToolError(f"value is required when value_type='{value_type or 'json'}'")
+
     match value_type:
-        case "null":
-            return None
         case "string":
-            if value is None:
-                raise ToolError("value is required when value_type='string'")
             return value
         case "number":
-            if value is None:
-                raise ToolError("value is required when value_type='number'")
-            try:
-                parsed = orjson.loads(value)
-            except orjson.JSONDecodeError as e:
-                raise ToolError(f"Invalid number value: {e}") from e
-            else:
-                if not isinstance(parsed, (int, float)):
-                    raise ToolError(
-                        f"value_type='number' but value parses to {type(parsed).__name__}: {value}"
-                    )
-                return parsed
+            return _parse_typed_json(value, (int, float), "number")
         case "boolean":
-            if value is None:
-                raise ToolError("value is required when value_type='boolean'")
-            try:
-                parsed = orjson.loads(value)
-            except orjson.JSONDecodeError as e:
-                raise ToolError(f"Invalid boolean value: {e}") from e
-            else:
-                if not isinstance(parsed, bool):
-                    raise ToolError(
-                        f"value_type='boolean' but value parses to {type(parsed).__name__}: {value}"
-                    )
-                return parsed
+            return _parse_typed_json(value, bool, "boolean")
         case _:
-            # value_type is None or "json" - parse as JSON (current/default behavior)
-            if value is None:
-                raise ToolError("value is required for SET operation")
+            # value_type is None or "json" - parse as JSON
             try:
                 return orjson.loads(value)
             except orjson.JSONDecodeError as e:
+                raise ToolError(f"Invalid JSON value: {e}") from e
                 raise ToolError(f"Invalid JSON value: {e}") from e
 
 
@@ -640,8 +713,6 @@ def _handle_data_delete(
     """
     # TOML requires special handling since yq cannot write TOML
     if input_format == "toml":
-        from mcp_json_yaml_toml.toml_utils import delete_toml_key
-
         try:
             modified_toml = delete_toml_key(path, key_path)
             path.write_text(modified_toml, encoding="utf-8")
@@ -697,18 +768,13 @@ def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
         Tuple of (is_valid, message)
     """
     try:
-        import jsonschema
-    except ImportError:
-        return True, "Schema validation skipped (jsonschema not installed)"
-
-    try:
         # Load schema
         schema_format = _detect_file_format(schema_path)
         schema_result = execute_yq(
             ".",
             input_file=schema_path,
             input_format=schema_format,
-            output_format="json",
+            output_format=FormatType.JSON,
         )
 
         if schema_result.data is None:
@@ -717,10 +783,10 @@ def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
         schema = schema_result.data
 
         # Validate
-        jsonschema.validate(instance=data, schema=schema)
-    except jsonschema.ValidationError as e:
+        jsonschema_validate(instance=data, schema=schema)
+    except ValidationError as e:
         return False, f"Schema validation failed: {e.message}"
-    except jsonschema.SchemaError as e:
+    except SchemaError as e:
         return False, f"Invalid schema: {e.message}"
     except YQError as e:
         return False, f"Failed to load schema: {e}"
@@ -773,7 +839,7 @@ def _dispatch_get_operation(
         output_fmt: FormatType = input_format
     else:
         validated = validate_format(output_format)
-        output_fmt = validated.value
+        output_fmt = FormatType(validated.value)
 
     if return_type == "keys":
         return _handle_data_get_structure(
@@ -867,7 +933,7 @@ def _dispatch_delete_operation(
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
-def data_query(  # noqa: C901
+def data_query(
     file_path: Annotated[str, Field(description="Path to configuration file")],
     expression: Annotated[
         str,
@@ -912,7 +978,9 @@ def data_query(  # noqa: C901
 
     # Use input format as output if not specified
     output_format_value: FormatType = (
-        input_format if output_format is None else validate_format(output_format).value
+        input_format
+        if output_format is None
+        else FormatType(validate_format(output_format).value)
     )
 
     try:
@@ -922,90 +990,85 @@ def data_query(  # noqa: C901
             input_format=input_format,
             output_format=output_format_value,
         )
-
-        # Prepare result string for pagination
-        result_str = (
-            result.stdout
-            if output_format_value != "json"
-            else orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
-        )
-
-        # Apply pagination if result is large
-        if len(result_str) > PAGE_SIZE_CHARS or cursor is not None:
-            # Generate hint
-            hint = None
-            if isinstance(result.data, list):
-                hint = "Result is a list. Use '.[start:end]' to slice or '. | length' to count."
-            elif isinstance(result.data, dict):
-                hint = "Result is an object. Use '.key' to select or '. | keys' to list keys."
-
-            pagination = _paginate_result(result_str, cursor, advisory_hint=hint)
-            response = {
-                "success": True,
-                "result": pagination["data"],
-                "format": output_format_value,
-                "file": str(path),
-                "paginated": True,
-            }
-            if "nextCursor" in pagination:
-                response["nextCursor"] = pagination["nextCursor"]
-            if "advisory" in pagination:
-                response["advisory"] = pagination["advisory"]
-            return response
-        # Small result - no pagination needed
-        return {
-            "success": True,
-            "result": result_str if output_format_value != "json" else result.data,
-            "format": output_format_value,
-            "file": str(path),
-        }
+        return _build_query_response(result, output_format_value, path, cursor)
 
     except YQExecutionError as e:
         # Auto-fallback to JSON if TOML output was auto-selected and yq can't encode nested structures
         if (
             not output_format_explicit
-            and output_format_value == "toml"
-            and input_format == "toml"
+            and output_format_value == FormatType.TOML
+            and input_format == FormatType.TOML
             and "only scalars" in str(e.stderr)
         ):
             # Retry with JSON output format
-            output_format_value = "json"
             result = execute_yq(
                 expression,
                 input_file=path,
                 input_format=input_format,
-                output_format=output_format_value,
+                output_format=FormatType.JSON,
             )
-            result_str = orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
-
-            if len(result_str) > PAGE_SIZE_CHARS or cursor is not None:
-                hint = None
-                if isinstance(result.data, list):
-                    hint = "Result is a list. Use '.[start:end]' to slice or '. | length' to count."
-                elif isinstance(result.data, dict):
-                    hint = "Result is an object. Use '.key' to select or '. | keys' to list keys."
-
-                pagination = _paginate_result(result_str, cursor, advisory_hint=hint)
-                response = {
-                    "success": True,
-                    "result": pagination["data"],
-                    "format": output_format_value,
-                    "file": str(path),
-                    "paginated": True,
-                }
-                if "nextCursor" in pagination:
-                    response["nextCursor"] = pagination["nextCursor"]
-                if "advisory" in pagination:
-                    response["advisory"] = pagination["advisory"]
-                return response
-
-            return {
-                "success": True,
-                "result": result.data,
-                "format": output_format_value,
-                "file": str(path),
-            }
+            return _build_query_response(result, FormatType.JSON, path, cursor)
         raise ToolError(f"Query failed: {e}") from e
+
+
+def _build_query_response(
+    result: Any, output_format: FormatType, path: Path, cursor: str | None
+) -> dict[str, Any]:
+    """Build response dict for data_query.
+
+    Args:
+        result: YQ execution result
+        output_format: Output format
+        path: File path
+        cursor: Pagination cursor
+
+    Returns:
+        Response dict
+    """
+    result_str = (
+        result.stdout
+        if output_format != "json"
+        else orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
+    )
+
+    if len(result_str) > PAGE_SIZE_CHARS or cursor is not None:
+        hint = _get_pagination_hint(result.data)
+        pagination = _paginate_result(result_str, cursor, advisory_hint=hint)
+        response = {
+            "success": True,
+            "result": pagination["data"],
+            "format": output_format,
+            "file": str(path),
+            "paginated": True,
+        }
+        if "nextCursor" in pagination:
+            response["nextCursor"] = pagination["nextCursor"]
+        if "advisory" in pagination:
+            response["advisory"] = pagination["advisory"]
+        return response
+
+    return {
+        "success": True,
+        "result": result_str if output_format != "json" else result.data,
+        "format": output_format,
+        "file": str(path),
+    }
+
+
+def _get_pagination_hint(data: Any) -> str | None:
+    """Get advisory hint for paginated data.
+
+    Args:
+        data: The result data
+
+    Returns:
+        Hint string or None
+    """
+    if isinstance(data, list):
+        return "Result is a list. Use '.[start:end]' to slice or '. | length' to count."
+    if isinstance(data, dict):
+        return "Result is an object. Use '.key' to select or '. | keys' to list keys."
+    return None
 
 
 @mcp.tool()
@@ -1120,7 +1183,7 @@ def _handle_schema_validate(
             ".",
             input_file=file_path_obj,
             input_format=input_format,
-            output_format="json",
+            output_format=FormatType.JSON,
         )
         validation_results["syntax_valid"] = True
         validation_results["syntax_message"] = "Syntax is valid"
@@ -1218,11 +1281,11 @@ def _handle_schema_associate(
     name = schema_name
 
     if not url and schema_name:
-        catalog = schema_manager._get_catalog()
+        catalog = schema_manager.get_typed_catalog()
         if catalog:
-            for schema_info in catalog.get("schemas", []):
-                if schema_info.get("name") == schema_name:
-                    url = schema_info.get("url")
+            for schema_entry in catalog.schemas:
+                if schema_entry.name == schema_name:
+                    url = schema_entry.url
                     break
         if not url:
             raise ToolError(f"Schema '{schema_name}' not found in catalog")
@@ -1324,23 +1387,18 @@ def data_schema(
       - action="disassociate", file_path=".gitlab-ci.yml"
       - action="list"
     """
-    match action:
-        case "validate":
-            return _handle_schema_validate(file_path, schema_path)
-        case "scan":
-            return _handle_schema_scan(search_paths, max_depth)
-        case "add_dir":
-            return _handle_schema_add_dir(path)
-        case "add_catalog":
-            return _handle_schema_add_catalog(name, uri)
-        case "associate":
-            return _handle_schema_associate(file_path, schema_url, schema_name)
-        case "disassociate":
-            return _handle_schema_disassociate(file_path)
-        case "list":
-            return _handle_schema_list()
-        case _:
-            assert_never(action)
+    handlers: dict[str, Callable[[], dict[str, Any]]] = {
+        "validate": lambda: _handle_schema_validate(file_path, schema_path),
+        "scan": lambda: _handle_schema_scan(search_paths, max_depth),
+        "add_dir": lambda: _handle_schema_add_dir(path),
+        "add_catalog": lambda: _handle_schema_add_catalog(name, uri),
+        "associate": lambda: _handle_schema_associate(
+            file_path, schema_url, schema_name
+        ),
+        "disassociate": lambda: _handle_schema_disassociate(file_path),
+        "list": _handle_schema_list,
+    }
+    return handlers[action]()
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -1380,14 +1438,17 @@ def data_convert(
 
     # Validate output format
     validated = validate_format(output_format)
-    output_fmt: FormatType = validated.value
+    output_fmt: FormatType = FormatType(validated.value)
 
     if input_format == output_fmt:
         raise ToolError(f"Input and output formats are the same: {input_format}")
 
     # JSON/YAML to TOML conversion is not supported due to yq limitations
     # yq's TOML encoder only supports scalar values, not complex nested structures
-    if output_fmt == "toml" and input_format in {"json", "yaml"}:
+    if output_fmt == FormatType.TOML and input_format in {
+        FormatType.JSON,
+        FormatType.YAML,
+    }:
         raise ToolError(
             f"Conversion from {input_format.upper()} to TOML is not supported. "
             "The underlying yq tool cannot encode complex nested structures to TOML format. "
@@ -1486,16 +1547,15 @@ def data_merge(
         )
 
     # Determine output format
-    output_fmt = output_format or format1
-    output_fmt = validate_format(output_fmt).value
+    output_fmt = FormatType(validate_format(output_format or format1.value).value)
 
     try:
         # Read both files into JSON for merging
         result1 = execute_yq(
-            ".", input_file=path1, input_format=format1, output_format="json"
+            ".", input_file=path1, input_format=format1, output_format=FormatType.JSON
         )
         result2 = execute_yq(
-            ".", input_file=path2, input_format=format2, output_format="json"
+            ".", input_file=path2, input_format=format2, output_format=FormatType.JSON
         )
 
         # Merge using yq's multiply operator (*)
@@ -1508,7 +1568,7 @@ def data_merge(
         merge_result = execute_yq(
             merge_expression,
             input_data=merged_json,
-            input_format="json",
+            input_format=FormatType.JSON,
             output_format=output_fmt,
         )
 

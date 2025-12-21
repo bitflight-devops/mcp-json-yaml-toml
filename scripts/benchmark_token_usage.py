@@ -12,13 +12,15 @@ for reading and editing JSON configuration files, including:
 
 import json
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
 import tiktoken
 
-from mcp_json_yaml_toml.yq_wrapper import execute_yq
+sys.path.append(str(Path(__file__).parent.parent / "packages"))
+from mcp_json_yaml_toml.yq_wrapper import FormatType, execute_yq
 
 # Setup
 TEST_FILE = Path("benchmark_test.json")
@@ -56,8 +58,7 @@ def count_tokens(text: str) -> int:
 def benchmark_raw_read() -> tuple[int, float]:
     """Benchmark reading an entire file and counting its tokens."""
     start = time.time()
-    with Path(TEST_FILE).open(encoding="utf-8") as f:
-        content = f.read()
+    content = Path(TEST_FILE).read_text(encoding="utf-8")
     duration = time.time() - start
     tokens = count_tokens(content)
     return tokens, duration
@@ -117,8 +118,7 @@ def benchmark_raw_edit() -> tuple[int, float]:
 
     start = time.time()
     new_content = json.dumps(data, indent=2)
-    with Path(TEST_FILE).open("w", encoding="utf-8") as f:
-        f.write(new_content)
+    Path(TEST_FILE).write_text(new_content, encoding="utf-8")
     duration = time.time() - start
 
     tokens_write = count_tokens(new_content)
@@ -160,8 +160,8 @@ def benchmark_mcp_read_specific() -> tuple[int, float]:
     result = execute_yq(
         ".settings.version",
         input_file=TEST_FILE,
-        input_format="json",
-        output_format="json",
+        input_format=FormatType.JSON,
+        output_format=FormatType.JSON,
     )
     duration = time.time() - start
 
@@ -174,7 +174,7 @@ def benchmark_mcp_read_specific() -> tuple[int, float]:
     output_data = {
         "success": True,
         "result": result.data,
-        "format": "json",
+        "format": FormatType.JSON,
         "file": str(TEST_FILE),
     }
     output_str = json.dumps(output_data)
@@ -191,8 +191,8 @@ def benchmark_mcp_edit_specific() -> tuple[int, float]:
     execute_yq(
         ".settings.maintenance = true",
         input_file=TEST_FILE,
-        input_format="json",
-        output_format="json",
+        input_format=FormatType.JSON,
+        output_format=FormatType.JSON,
         in_place=True,
     )
     duration = time.time() - start
