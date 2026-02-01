@@ -231,14 +231,12 @@ The model, when running inline python scripts will use `uv run python -c "..."`
 The model must use context-appropriate ruff invocation patterns:
 
 1. **Within a project directory (pyproject.toml present):**
-
    - Format the file first to reemove fixable linting errors, never manually adjust formatting if you can use a tool.
    - Use: `uv run ruff format <file>`
    - Use: `uv run ruff check --fix <file>`
    - These commands respect project configuration from pyproject.toml
 
 2. **Standalone scripts without project config i.e. if uv run ruff throws a error about not being in a project:**
-
    - Use: `uvx ruff check --isolated --select "E,F,UP,B,SIM,I,C90,N,W,PL,PT,RUF" <file>`
    - The `--isolated` flag ignores any config files and should ONLY be used when no pyproject.toml/ruff.toml exists
 

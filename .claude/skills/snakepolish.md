@@ -1,6 +1,6 @@
 ---
 description: Implementation phase for stinkysnake workflow. Use when tests are written and plan is ready. Implements functions following the modernization plan, runs tests until passing.
-argument-hint: '[file-paths-or-module]'
+argument-hint: "[file-paths-or-module]"
 context: fork
 agent: python-cli-architect
 user-invocable: true
