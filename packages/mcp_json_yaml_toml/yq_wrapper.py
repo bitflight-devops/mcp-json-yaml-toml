@@ -13,6 +13,7 @@ import contextlib
 import hashlib
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -392,6 +393,35 @@ def _download_yq_binary(
         lock_path.unlink()
 
 
+def _get_yq_version_string(yq_path: Path) -> str | None:
+    """Get the version string from a yq binary.
+
+    Args:
+        yq_path: Path to the yq binary
+
+    Returns:
+        Version string (e.g., "v4.52.2") if mikefarah/yq, None otherwise
+    """
+    try:
+        result = subprocess.run(
+            [str(yq_path), "--version"], capture_output=True, check=False, timeout=5
+        )
+    except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError):
+        return None
+    else:
+        if result.returncode != 0:
+            return None
+        version_output = result.stdout.decode("utf-8", errors="replace")
+        # mikefarah/yq outputs: "yq (https://github.com/mikefarah/yq/) version v4.x.x"
+        if "mikefarah/yq" not in version_output:
+            return None
+        # Extract version from the output
+        match = re.search(r"version\s+(v[\d.]+)", version_output)
+        if match:
+            return match.group(1)
+        return None
+
+
 def _is_mikefarah_yq(yq_path: Path) -> bool:
     """Check if a yq binary is the mikefarah/yq (Go-based) version.
 
@@ -407,39 +437,85 @@ def _is_mikefarah_yq(yq_path: Path) -> bool:
     Returns:
         True if this is mikefarah/yq, False otherwise
     """
+    return _get_yq_version_string(yq_path) is not None
+
+
+def _parse_version(version_str: str) -> tuple[int, ...]:
+    """Parse a version string like 'v4.52.2' into comparable tuple.
+
+    Args:
+        version_str: Version string (with or without 'v' prefix)
+
+    Returns:
+        Tuple of integers for comparison (e.g., (4, 52, 2))
+    """
+    # Strip 'v' prefix if present
+    version = version_str.lstrip("v")
+    # Split by '.' and convert to integers
+    parts = []
+    for part in version.split("."):
+        # Handle pre-release suffixes like "4.52.2-rc1"
+        num_part = part.split("-")[0]
+        if num_part.isdigit():
+            parts.append(int(num_part))
+    return tuple(parts)
+
+
+def _version_meets_minimum(system_version: str, minimum_version: str) -> bool:
+    """Check if system version meets the minimum required version.
+
+    Args:
+        system_version: Version string of system yq (e.g., "v4.53.0")
+        minimum_version: Minimum required version (e.g., "v4.52.2")
+
+    Returns:
+        True if system_version >= minimum_version
+    """
     try:
-        result = subprocess.run(
-            [str(yq_path), "--version"], capture_output=True, check=False, timeout=5
-        )
-    except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError):
+        system_parts = _parse_version(system_version)
+        minimum_parts = _parse_version(minimum_version)
+    except (ValueError, IndexError):
+        # If parsing fails, reject the version
         return False
     else:
-        if result.returncode != 0:
-            return False
-        version_output = result.stdout.decode("utf-8", errors="replace")
-        # mikefarah/yq includes the GitHub URL in its version output
-        return "mikefarah/yq" in version_output
+        return system_parts >= minimum_parts
 
 
 def _find_system_yq() -> Path | None:
-    """Find yq binary installed via system package manager.
+    """Find yq binary installed via system package manager with compatible version.
 
     Checks if yq is available in the system PATH (e.g., installed via
-    homebrew, apt, chocolatey, or go install). Only returns the path if
-    it's the mikefarah/yq (Go-based) version, not the Python yq wrapper.
+    homebrew, apt, chocolatey, or go install). Only returns the path if:
+    1. It's the mikefarah/yq (Go-based) version, not the Python yq wrapper
+    2. Its version is >= our pinned DEFAULT_YQ_VERSION (minimum required version)
+
+    This ensures the system yq has all required features (like nested TOML output
+    support added in v4.52.2) while allowing newer compatible versions.
 
     Returns:
-        Path to system yq binary if found and it's the correct version, None otherwise
+        Path to system yq binary if found with compatible version, None otherwise
     """
     yq_path = shutil.which("yq")
     if yq_path:
         path = Path(yq_path)
-        if _is_mikefarah_yq(path):
+        system_version = _get_yq_version_string(path)
+        if system_version is None:
+            # Found yq but it's Python yq or unrecognized
+            print(
+                f"Found yq at {yq_path} but it's not mikefarah/yq (Go version). "
+                "Install the correct yq: brew install yq | choco install yq | snap install yq",
+                file=sys.stderr,
+            )
+            return None
+
+        pinned_version = get_yq_version()
+        if _version_meets_minimum(system_version, pinned_version):
             return path
-        # Found yq but it's the wrong version (probably Python yq)
+
+        # Found mikefarah/yq but version is too old
         print(
-            f"Found yq at {yq_path} but it's not mikefarah/yq (Go version). "
-            "Install the correct yq: brew install yq | choco install yq | snap install yq",
+            f"Found yq {system_version} at {yq_path} but need >= {pinned_version}. "
+            f"Will download minimum required version.",
             file=sys.stderr,
         )
     return None

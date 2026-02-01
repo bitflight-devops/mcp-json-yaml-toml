@@ -66,14 +66,32 @@ The fallback ONLY triggers when:
 3. `input_format == FormatType.TOML` (input file is TOML)
 4. `"only scalars" in str(e.stderr)` (yq returned the specific scalar limitation error)
 
-## Binary Detection
+## Binary Detection and Version Requirements
 
-This project uses the Go-based mikefarah/yq, NOT the Python kislyuk/yq. The `_is_mikefarah_yq()` function validates system-installed yq by checking for "mikefarah/yq" in the version output.
+This project uses the Go-based mikefarah/yq, NOT the Python kislyuk/yq.
+
+**System yq selection logic** (`_find_system_yq()`):
+
+1. Check if yq is in PATH
+2. Verify it's mikefarah/yq (contains "mikefarah/yq" in version output)
+3. Check version is >= `DEFAULT_YQ_VERSION` (minimum required)
+4. If version is older, download the pinned version instead
+
+This ensures reproducible behavior - older system yq versions may lack required
+features (e.g., nested TOML output support added in v4.52.2).
+
+Key functions:
+
+- `_get_yq_version_string()`: Extract version from yq binary
+- `_version_meets_minimum()`: Compare versions using tuple comparison
+- `_find_system_yq()`: Find compatible system yq or return None
 
 ## Weekly Update Workflow
 
 The `.github/workflows/yq-update.yml` workflow:
 
 1. Checks for new yq releases weekly
-2. Updates both `DEFAULT_YQ_VERSION` and `DEFAULT_YQ_CHECKSUMS`
-3. Uses `.github/scripts/update_yq_checksums.py` for reliable updates
+2. Fetches checksums using robust 64-hex extraction (not positional field)
+3. Updates both `DEFAULT_YQ_VERSION` and `DEFAULT_YQ_CHECKSUMS`
+4. Uses `.github/scripts/update_yq_checksums.py` for reliable updates
+5. Script handles CRLF line endings for Windows compatibility

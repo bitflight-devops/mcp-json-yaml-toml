@@ -77,9 +77,8 @@ def update_checksums(file_path: Path, checksums: dict[str, str]) -> bool:
     content = file_path.read_text(encoding="utf-8")
 
     # Pattern to match the entire DEFAULT_YQ_CHECKSUMS dict
-    pattern = (
-        r"# fmt: off\nDEFAULT_YQ_CHECKSUMS: dict\[str, str\] = \{[^}]+\}\n# fmt: on"
-    )
+    # Use \r?\n to handle both LF (Unix) and CRLF (Windows) line endings
+    pattern = r"# fmt: off\r?\nDEFAULT_YQ_CHECKSUMS: dict\[str, str\] = \{[^}]+\}\r?\n# fmt: on"
 
     replacement = build_replacement(checksums)
     new_content = re.sub(pattern, replacement, content)
