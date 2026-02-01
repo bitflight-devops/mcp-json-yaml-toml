@@ -240,8 +240,12 @@ def _download_yq_binary(
     # Use a lock file to coordinate between processes
     lock_path = dest_path.with_suffix(".lock")
 
+    # Timeout calculation: 14MB binary @ 500 Kbps = ~224s, plus overhead for checksums/redirects
+    # Using 300s (5 min) to accommodate slow connections while not blocking indefinitely
+    lock_timeout = 300
+
     # Acquire exclusive lock - blocks until available (cross-platform via portalocker)
-    with portalocker.Lock(lock_path, timeout=120) as _lock:
+    with portalocker.Lock(lock_path, timeout=lock_timeout) as _lock:
         # Re-check if another process completed the download while we waited
         if dest_path.exists():
             print(
