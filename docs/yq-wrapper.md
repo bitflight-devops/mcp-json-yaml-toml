@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `yq_wrapper` module provides a Python interface to the yq binary for querying and manipulating YAML, JSON, TOML, and other configuration formats. It automatically detects and uses the latest yq version from GitHub releases, with fallback to bundled binaries.
+The `yq_wrapper` module provides a Python interface to the yq binary for querying and manipulating YAML, JSON, TOML, and other configuration formats. It uses a pinned, tested version of yq by default (configurable via environment variable) and automatically downloads the binary on first use.
 
 ## Features
 
@@ -16,9 +16,12 @@ The `yq_wrapper` module provides a Python interface to the yq binary for queryin
 
 The yq wrapper includes intelligent binary management:
 
-- **Primary source**: Automatically downloads the latest yq release from GitHub
-- **Fallback**: Uses bundled binaries if download fails or is disabled
+- **Pinned version**: Uses a tested, pinned yq version by default (currently v4.52.2)
+- **User override**: Set `YQ_VERSION` environment variable to use a different version
+- **Auto-download**: Automatically downloads the binary from GitHub on first use
+- **Checksum verification**: All downloads are verified against SHA256 checksums
 - **Storage**: Downloaded binaries are cached at `~/.local/bin/` (with fallback to package directory)
+- **Cross-platform**: Supports Linux (amd64/arm64), macOS (amd64/arm64), and Windows (amd64)
 - **No external dependencies** required beyond Python 3.11+
 
 The wrapper will automatically handle binary discovery, downloading, and verification on first use.
@@ -316,10 +319,16 @@ The wrapper automatically detects your platform and uses the appropriate binary:
 
 The wrapper automatically manages yq binaries with these features:
 
+**Version Selection:**
+
+- Uses a pinned, tested version by default (e.g., `v4.52.2`)
+- Override with `YQ_VERSION` environment variable (e.g., `YQ_VERSION=v4.50.0`)
+- No GitHub API calls required—downloads directly from release CDN
+
 **Binary Discovery Priority:**
 
-1. Check for latest release on GitHub API
-2. Download to `~/.local/bin/` (standard user binary location)
+1. Check if binary already exists in storage location
+2. If missing, download the pinned version from GitHub releases
 3. Verify SHA256 checksums from GitHub releases
 4. Fall back to package-bundled binaries if download fails
 
@@ -333,26 +342,38 @@ The wrapper automatically manages yq binaries with these features:
 On first execution, the wrapper will:
 
 1. Detect your platform and architecture
-2. Query GitHub API for the latest yq release
-3. Download the binary if not already present
-4. Verify checksums for security
-5. Cache the binary for future use
+2. Download the pinned yq version (or version from `YQ_VERSION` env var)
+3. Verify checksums for security
+4. Cache the binary for future use
 
 No manual setup required—everything happens automatically on first use.
 
 ### Version Management
 
-To check which yq version is in use:
+**Check current configuration:**
 
 ```python
-from mcp_json_yaml_toml.yq_wrapper import get_yq_binary_path
+from mcp_json_yaml_toml.yq_wrapper import get_yq_version, get_yq_binary_path
 
+# Get the version that will be downloaded
+print(f"Configured version: {get_yq_version()}")
+# Output: v4.52.2
+
+# Get the binary path
 binary_path = get_yq_binary_path()
 print(f"yq binary: {binary_path}")
 # Output: /home/user/.local/bin/yq-linux-amd64
 ```
 
-The actual version can be checked by running the binary with `--version`.
+**Override the version:**
+
+```bash
+# Use a specific yq version
+export YQ_VERSION=v4.50.0
+uvx mcp-json-yaml-toml
+```
+
+**Note:** The pinned version is updated weekly via automated CI when new yq releases pass our test suite.
 
 ## Performance Notes
 
@@ -370,9 +391,10 @@ If you get `YQBinaryNotFoundError`:
 
 **Auto-download issues:**
 
-1. Check network connectivity (GitHub API must be reachable)
+1. Check network connectivity (GitHub releases must be reachable)
 2. Verify `~/.local/bin/` is writable (or package binaries/ directory)
 3. Check that your platform is supported (Linux amd64/arm64, macOS amd64/arm64, Windows amd64)
+4. If using `YQ_VERSION` override, ensure the version exists on GitHub
 
 **Manual fallback:**
 
