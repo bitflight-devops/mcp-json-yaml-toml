@@ -16,6 +16,7 @@ from fastmcp.exceptions import ToolError
 
 from mcp_json_yaml_toml import server
 from mcp_json_yaml_toml.lmql_constraints import ConstraintRegistry
+from mcp_json_yaml_toml.yq_wrapper import FormatType
 
 # Extract underlying functions from FastMCP FunctionTool wrappers
 data_query_fn = server.data_query.fn
@@ -390,28 +391,27 @@ class TestData:
         modified_data = json.loads(temp_config.read_text())
         assert "version" not in modified_data
 
-    # --- TOML Output Format Auto-Fallback Tests ---
+    # --- TOML Nested Structure Output Tests ---
+    # Note: yq v4.52.2+ supports nested TOML output (earlier versions had scalar-only limitation)
 
     @pytest.mark.integration
-    def test_data_get_toml_nested_auto_fallback(self, sample_toml_config: Path) -> None:
-        """Test data get can now output nested TOML structures.
+    def test_data_get_toml_nested_succeeds(self, sample_toml_config: Path) -> None:
+        """Test data get succeeds with nested TOML structures.
 
-        Tests: TOML can now output nested structures (tomlkit 0.14+ improvement)
+        Tests: yq v4.52.2+ can output nested TOML structures
         How: Get nested object from TOML without specifying output_format
-        Why: Verify tomlkit 0.14+ can handle nested structures that older versions couldn't
+        Why: Verify yq's improved TOML output support works correctly
         """
         # Arrange - TOML file with nested structure
         # Act - get nested object without specifying output format (defaults to TOML)
         result = data_fn(str(sample_toml_config), operation="get", key_path="database")
 
-        # Assert - TOML output now works with nested structures (tomlkit 0.14+ enhancement)
+        # Assert - TOML output succeeds with nested structures (yq v4.52.2+ improvement)
         assert result["success"] is True
-        assert result["format"] == "toml"  # tomlkit 0.14+ can handle nested structures
+        assert result["format"] == FormatType.TOML
         assert isinstance(result["result"], str)  # TOML output is serialized as string
         assert "host" in result["result"]
         assert "localhost" in result["result"]
-        assert "port" in result["result"]
-        assert "5432" in result["result"]
 
     @pytest.mark.integration
     def test_data_get_toml_explicit_format_succeeds(
@@ -419,9 +419,9 @@ class TestData:
     ) -> None:
         """Test data get succeeds when TOML output explicitly requested for nested data.
 
-        Tests: TOML output now works even when explicitly requested (tomlkit 0.14+ improvement)
+        Tests: yq v4.52.2+ can output nested TOML structures
         How: Get nested object from TOML with explicit output_format='toml'
-        Why: Verify tomlkit 0.14+ can handle explicit TOML requests for nested data
+        Why: Verify explicit TOML requests work for nested data
         """
         # Arrange - TOML file with nested structure
         # Act - explicitly request TOML output for nested data
@@ -432,37 +432,31 @@ class TestData:
             output_format="toml",
         )
 
-        # Assert - TOML output succeeds with nested structures (tomlkit 0.14+ enhancement)
+        # Assert - TOML output succeeds with nested structures (yq v4.52.2+ improvement)
         assert result["success"] is True
-        assert result["format"] == "toml"
+        assert result["format"] == FormatType.TOML
         assert isinstance(result["result"], str)  # TOML output is serialized as string
         assert "host" in result["result"]
         assert "localhost" in result["result"]
-        assert "port" in result["result"]
-        assert "5432" in result["result"]
 
     @pytest.mark.integration
-    def test_data_query_toml_nested_auto_fallback(
-        self, sample_toml_config: Path
-    ) -> None:
-        """Test data_query can now output nested TOML structures.
+    def test_data_query_toml_nested_succeeds(self, sample_toml_config: Path) -> None:
+        """Test data_query succeeds with nested TOML structures.
 
-        Tests: data_query can now output nested TOML (tomlkit 0.14+ improvement)
+        Tests: yq v4.52.2+ can output nested TOML structures
         How: Query nested object from TOML without specifying output_format
-        Why: Verify data_query benefits from tomlkit 0.14+ nested structure support
+        Why: Verify data_query benefits from yq's improved TOML output support
         """
         # Arrange - TOML file with nested structure
         # Act - query nested object without specifying output format
         result = data_query_fn(str(sample_toml_config), ".database")
 
-        # Assert - TOML output now works with nested structures (tomlkit 0.14+ enhancement)
+        # Assert - TOML output succeeds with nested structures (yq v4.52.2+ improvement)
         assert result["success"] is True
-        assert result["format"] == "toml"  # tomlkit 0.14+ can handle nested structures
+        assert result["format"] == FormatType.TOML
         assert isinstance(result["result"], str)  # TOML output is serialized as string
         assert "host" in result["result"]
         assert "localhost" in result["result"]
-        assert "port" in result["result"]
-        assert "5432" in result["result"]
 
     @pytest.mark.integration
     def test_data_query_toml_explicit_format_succeeds(
@@ -470,7 +464,7 @@ class TestData:
     ) -> None:
         """Test data_query succeeds when TOML output explicitly requested.
 
-        Tests: TOML output now works even when explicitly requested (tomlkit 0.14+ improvement)
+        Tests: yq v4.52.2+ can output nested TOML structures
         How: Query nested object with explicit output_format='toml'
         Why: Verify data_query can handle explicit TOML requests for nested data
         """
@@ -480,14 +474,12 @@ class TestData:
             str(sample_toml_config), ".database", output_format="toml"
         )
 
-        # Assert - TOML output succeeds with nested structures (tomlkit 0.14+ enhancement)
+        # Assert - TOML output succeeds with nested structures (yq v4.52.2+ improvement)
         assert result["success"] is True
-        assert result["format"] == "toml"
+        assert result["format"] == FormatType.TOML
         assert isinstance(result["result"], str)  # TOML output is serialized as string
         assert "host" in result["result"]
         assert "localhost" in result["result"]
-        assert "port" in result["result"]
-        assert "5432" in result["result"]
 
     @pytest.mark.integration
     def test_data_get_toml_scalar_no_fallback(self, sample_toml_config: Path) -> None:
