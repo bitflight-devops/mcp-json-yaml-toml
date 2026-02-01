@@ -14,6 +14,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from mcp_json_yaml_toml.yq_wrapper import (
+    DEFAULT_YQ_CHECKSUMS,
     DEFAULT_YQ_VERSION,
     FormatType,
     YQBinaryNotFoundError,
@@ -21,6 +22,7 @@ from mcp_json_yaml_toml.yq_wrapper import (
     YQExecutionError,
     YQResult,
     _cleanup_old_versions,
+    _get_checksums,
     _verify_checksum,
     execute_yq,
     get_yq_binary_path,
@@ -541,6 +543,67 @@ class TestVerifyChecksum:
         result = _verify_checksum(test_file, expected_hash)
 
         assert result is True
+
+
+class TestBundledChecksums:
+    """Tests for bundled checksum functionality."""
+
+    def test_bundled_checksums_exist_for_all_platforms(self) -> None:
+        """Test that bundled checksums include all supported platforms.
+
+        Tests: Completeness of bundled checksums
+        How: Verify all platform binaries have checksums
+        Why: Ensure no platform is missing checksums
+        """
+        required_binaries = [
+            "yq_linux_amd64",
+            "yq_linux_arm64",
+            "yq_darwin_amd64",
+            "yq_darwin_arm64",
+            "yq_windows_amd64.exe",
+        ]
+
+        for binary in required_binaries:
+            assert binary in DEFAULT_YQ_CHECKSUMS, f"Missing checksum for {binary}"
+
+    def test_bundled_checksums_are_valid_sha256(self) -> None:
+        """Test that bundled checksums are valid SHA256 format.
+
+        Tests: Checksum format validation
+        How: Verify each checksum is 64 hex characters
+        Why: Ensure checksums are valid SHA256 hashes
+        """
+        for binary, checksum in DEFAULT_YQ_CHECKSUMS.items():
+            assert len(checksum) == 64, f"Checksum for {binary} is not 64 characters"
+            assert all(c in "0123456789abcdef" for c in checksum), (
+                f"Checksum for {binary} contains invalid hex characters"
+            )
+
+    def test_get_checksums_returns_bundled_for_default_version(self) -> None:
+        """Test that _get_checksums returns bundled checksums for default version.
+
+        Tests: Bundled checksum usage
+        How: Call _get_checksums with DEFAULT_YQ_VERSION
+        Why: Verify no network request is made for default version
+        """
+        checksums = _get_checksums(DEFAULT_YQ_VERSION)
+
+        # Should return the bundled checksums
+        assert checksums == DEFAULT_YQ_CHECKSUMS
+
+    def test_bundled_checksums_match_version(self) -> None:
+        """Test that bundled checksums are for the current default version.
+
+        Tests: Version consistency
+        How: Verify DEFAULT_YQ_VERSION is correctly referenced
+        Why: Ensure checksums match the pinned version
+        """
+        # This test documents the relationship between version and checksums
+        assert DEFAULT_YQ_VERSION == "v4.52.2", (
+            "DEFAULT_YQ_VERSION changed but test not updated"
+        )
+        # If version changes, checksums must also be updated
+        assert len(DEFAULT_YQ_CHECKSUMS) == 5, "Expected 5 platform checksums"
 
 
 class TestGetYQVersion:

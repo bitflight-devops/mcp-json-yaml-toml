@@ -82,6 +82,18 @@ CHECKSUM_SHA256_INDEX = 18  # SHA-256 hash position (0-indexed)
 # Override with YQ_VERSION environment variable if needed
 DEFAULT_YQ_VERSION = "v4.52.2"
 
+# Bundled SHA256 checksums for the default version - avoids network request
+# These are verified during the weekly yq update workflow
+# fmt: off
+DEFAULT_YQ_CHECKSUMS: dict[str, str] = {
+    "yq_darwin_amd64": "54a63555210e73abed09108097072e28bf82a6bb20439a72b55509c4dd42378d",
+    "yq_darwin_arm64": "34613ea97c4c77e1894a8978dbf72588d187a69a6292c10dab396c767a1ecde7",
+    "yq_linux_amd64": "a74bd266990339e0c48a2103534aef692abf99f19390d12c2b0ce6830385c459",
+    "yq_linux_arm64": "c82856ac30da522f50dcdd4f53065487b5a2927e9b87ff637956900986f1f7c2",
+    "yq_windows_amd64.exe": "2b6cd8974004fa0511f6b6b359d2698214fadeb4599f0b00e8d85ae62b3922d4",
+}
+# fmt: on
+
 
 def get_yq_version() -> str:
     """Get the yq version to use for downloads.
@@ -177,11 +189,37 @@ def _download_file(url: str, dest_path: Path) -> None:  # pragma: no cover
         raise YQError(f"Network error downloading {url}: {e}") from e
 
 
-def _get_checksums(version: str) -> dict[str, str]:  # pragma: no cover
-    """Download and parse the checksums file for a given version.
+def _get_checksums(version: str) -> dict[str, str]:
+    """Get SHA256 checksums for yq binaries.
+
+    For the default pinned version, returns bundled checksums (no network request).
+    For custom versions (via YQ_VERSION env var), downloads checksums from GitHub.
 
     Args:
-        version: The release version tag (e.g., "v4.48.2")
+        version: The release version tag (e.g., "v4.52.2")
+
+    Returns:
+        Dictionary mapping binary names to their SHA256 checksums
+
+    Raises:
+        YQError: If checksums cannot be obtained (network error for custom versions)
+    """
+    # Use bundled checksums for the default version - no network request needed
+    if version == DEFAULT_YQ_VERSION:
+        return DEFAULT_YQ_CHECKSUMS
+
+    # For custom versions, download checksums from GitHub
+    return _fetch_checksums_from_github(version)  # pragma: no cover
+
+
+def _fetch_checksums_from_github(version: str) -> dict[str, str]:  # pragma: no cover
+    """Download and parse checksums file from GitHub releases.
+
+    This is only called for custom versions (YQ_VERSION env var).
+    The default pinned version uses bundled checksums instead.
+
+    Args:
+        version: The release version tag (e.g., "v4.50.0")
 
     Returns:
         Dictionary mapping binary names to their SHA256 checksums
@@ -199,10 +237,10 @@ def _get_checksums(version: str) -> dict[str, str]:  # pragma: no cover
             content = response.text
     except httpx.HTTPStatusError as e:
         raise YQError(
-            f"Failed to download checksums: HTTP {e.response.status_code}"
+            f"Failed to download checksums for {version}: HTTP {e.response.status_code}"
         ) from e
     except httpx.RequestError as e:
-        raise YQError(f"Network error downloading checksums: {e}") from e
+        raise YQError(f"Network error downloading checksums for {version}: {e}") from e
 
     # Parse checksums file - format is space-separated with SHA256 at specific index
     checksums: dict[str, str] = {}

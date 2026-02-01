@@ -17,12 +17,13 @@ The `yq_wrapper` module provides a Python interface to the yq binary for queryin
 The yq wrapper includes intelligent binary management:
 
 - **Pinned version**: Uses a tested, pinned yq version by default (currently v4.52.2)
-- **User override**: Set `YQ_VERSION` environment variable to use a different version
-- **Auto-download**: Automatically downloads the binary from GitHub on first use
+- **Bundled checksums**: SHA256 checksums for the pinned version are bundled—no network request needed for verification
+- **User override**: Set `YQ_VERSION` environment variable to use a different version (requires network for checksums)
+- **Auto-download**: Automatically downloads the binary from GitHub CDN on first use
 - **Checksum verification**: All downloads are verified against SHA256 checksums
 - **Storage**: Downloaded binaries are cached at `~/.local/bin/` (with fallback to package directory)
 - **Cross-platform**: Supports Linux (amd64/arm64), macOS (amd64/arm64), and Windows (amd64)
-- **No external dependencies** required beyond Python 3.11+
+- **Zero GitHub API calls**: Binary download goes directly to CDN, checksums are bundled
 
 The wrapper will automatically handle binary discovery, downloading, and verification on first use.
 
@@ -323,13 +324,13 @@ The wrapper automatically manages yq binaries with these features:
 
 - Uses a pinned, tested version by default (e.g., `v4.52.2`)
 - Override with `YQ_VERSION` environment variable (e.g., `YQ_VERSION=v4.50.0`)
-- No GitHub API calls required—downloads directly from release CDN
+- Zero GitHub API calls—checksums are bundled, only CDN download needed
 
 **Binary Discovery Priority:**
 
 1. Check if binary already exists in storage location
-2. If missing, download the pinned version from GitHub releases
-3. Verify SHA256 checksums from GitHub releases
+2. If missing, download the pinned version from GitHub releases CDN
+3. Verify SHA256 checksums (bundled for default version, fetched for custom versions)
 4. Fall back to package-bundled binaries if download fails
 
 **Storage Locations (in order of preference):**
@@ -350,11 +351,13 @@ Binary filenames include the version (e.g., `yq-linux-amd64-v4.52.2`), which mea
 On first execution, the wrapper will:
 
 1. Detect your platform and architecture
-2. Download the pinned yq version (or version from `YQ_VERSION` env var)
-3. Verify checksums for security
-4. Cache the binary for future use
+2. Use bundled SHA256 checksum (for pinned version) or fetch from GitHub (for custom version)
+3. Download the binary from GitHub releases CDN (~12MB)
+4. Verify the downloaded binary against checksum
+5. Cache the binary for future use
 
 No manual setup required—everything happens automatically on first use.
+For the default pinned version, only one network request is made (the binary download).
 
 ### Version Management
 
