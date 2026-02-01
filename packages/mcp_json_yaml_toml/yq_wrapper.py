@@ -131,21 +131,22 @@ def _get_storage_location() -> Path:
     return pkg_binaries  # pragma: no cover
 
 
-def _get_github_headers() -> dict[str, str]:
-    """Get HTTP headers for GitHub API requests with optional authentication.
+def _get_download_headers() -> dict[str, str]:
+    """Get HTTP headers for GitHub release downloads.
 
-    Uses GITHUB_TOKEN environment variable if available for authenticated requests.
-    Authenticated requests have a 5000/hour rate limit vs 60/hour unauthenticated.
+    Returns minimal headers needed for downloading release assets from GitHub CDN.
+    Note: Since we download from the releases CDN (not the API), authentication
+    is generally not required. However, we include the token if available for:
+    - GitHub Enterprise environments that require auth
+    - Private repository forks
+    - Corporate proxy/firewall environments
 
     Returns:
         Dictionary of HTTP headers
     """
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "mcp-json-yaml-toml/1.0",
-    }
+    headers = {"User-Agent": "mcp-json-yaml-toml/1.0"}
 
-    # Use GITHUB_TOKEN for authenticated requests (5000/hour vs 60/hour rate limit)
+    # Include auth token if available (may help in enterprise/private repo scenarios)
     github_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if github_token:
         headers["Authorization"] = f"Bearer {github_token}"
@@ -163,7 +164,7 @@ def _download_file(url: str, dest_path: Path) -> None:  # pragma: no cover
     Raises:
         YQError: If download fails
     """
-    headers = _get_github_headers()
+    headers = _get_download_headers()
 
     try:
         with httpx.Client(timeout=60.0) as client:
@@ -189,7 +190,7 @@ def _get_checksums(version: str) -> dict[str, str]:  # pragma: no cover
         YQError: If checksums file cannot be downloaded or parsed
     """
     url = f"https://github.com/{GITHUB_REPO}/releases/download/{version}/checksums"
-    headers = _get_github_headers()
+    headers = _get_download_headers()
 
     try:
         with httpx.Client(timeout=30.0) as client:
