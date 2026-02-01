@@ -73,11 +73,33 @@ class FormatType(StrEnum):
 
 # GitHub repository for yq
 GITHUB_REPO = "mikefarah/yq"
-GITHUB_API_BASE = "https://api.github.com"
 
 # Checksum file parsing constants
 CHECKSUM_MIN_FIELDS = 19  # Minimum fields in checksum line
 CHECKSUM_SHA256_INDEX = 18  # SHA-256 hash position (0-indexed)
+
+# Default yq version - pinned to a tested release for reproducibility
+# Override with YQ_VERSION environment variable if needed
+DEFAULT_YQ_VERSION = "v4.52.2"
+
+
+def get_yq_version() -> str:
+    """Get the yq version to use for downloads.
+
+    Reads the YQ_VERSION environment variable if set, otherwise returns
+    the pinned DEFAULT_YQ_VERSION. This ensures reproducible builds by
+    defaulting to a tested version rather than always fetching "latest".
+
+    Returns:
+        Version string (e.g., "v4.52.2")
+    """
+    version = os.environ.get("YQ_VERSION", "").strip()
+    if version:
+        # Ensure version starts with 'v' for consistency with GitHub tags
+        if not version.startswith("v"):
+            version = f"v{version}"
+        return version
+    return DEFAULT_YQ_VERSION
 
 
 def _get_storage_location() -> Path:
@@ -129,34 +151,6 @@ def _get_github_headers() -> dict[str, str]:
         headers["Authorization"] = f"Bearer {github_token}"
 
     return headers
-
-
-def _get_latest_release_tag() -> str:  # pragma: no cover
-    """Query GitHub API for the latest yq release tag.
-
-    Returns:
-        The tag name of the latest release (e.g., "v4.48.2")
-
-    Raises:
-        YQError: If API request fails or response is invalid
-    """
-    url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/releases/latest"
-    headers = _get_github_headers()
-
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(url, headers=headers, follow_redirects=True)
-            response.raise_for_status()
-            data = response.json()
-            return str(data["tag_name"])
-    except httpx.HTTPStatusError as e:
-        raise YQError(
-            f"GitHub API request failed: HTTP {e.response.status_code}"
-        ) from e
-    except httpx.RequestError as e:
-        raise YQError(f"Network error accessing GitHub API: {e}") from e
-    except (KeyError, ValueError) as e:
-        raise YQError(f"Invalid GitHub API response: {e}") from e
 
 
 def _download_file(url: str, dest_path: Path) -> None:  # pragma: no cover
@@ -380,8 +374,8 @@ def get_yq_binary_path() -> Path:
     )  # pragma: no cover
 
     try:  # pragma: no cover
-        # Get latest release version
-        version = _get_latest_release_tag()
+        # Get pinned version (or override from YQ_VERSION env var)
+        version = get_yq_version()
 
         # Download to storage directory
         _download_yq_binary(binary_name, github_name, storage_binary, version)
