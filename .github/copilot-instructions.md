@@ -7,6 +7,7 @@
 - **Size**: ~2.4MB, 28 Python files
 - **Stack**: Python 3.11-3.14, FastMCP, uv package manager, hatchling build backend
 - **Architecture**: 100% local processing, no API keys required
+- **Cross-Platform**: Works seamlessly on Windows, Linux, and macOS (any system where yq binary is supported)
 - **Key Features**: yq-based transformations, SchemaStore.org integration, LMQL constraint validation
 
 ## Prerequisites & Setup
@@ -36,9 +37,20 @@ This command:
 
 ## Validation Commands (CI Enforcement)
 
-All commands below must pass before merge. Run them in this exact order:
+**Recommended Approach**: Use `prek` to run all validation checks in one command:
 
-### 1. Code Formatting (5 seconds)
+```bash
+uv run prek run --files <file1> <file2>  # For specific files
+uv run prek run --all-files               # For all files (use sparingly)
+```
+
+The `prek` tool automatically runs all the checks below in parallel. For debugging or CI reference, individual commands are listed:
+
+### Individual Validation Commands
+
+These are automatically run by `prek` but can be executed separately if needed:
+
+### 1. Code Formatting
 
 ```bash
 uv run ruff format --check
@@ -46,7 +58,7 @@ uv run ruff format --check
 
 **If it fails**: Run `uv run ruff format` to auto-fix, then commit.
 
-### 2. Code Linting (8 seconds)
+### 2. Code Linting
 
 ```bash
 uv run ruff check
@@ -54,7 +66,7 @@ uv run ruff check
 
 **If it fails**: Run `uv run ruff check --fix` to auto-fix. Some issues require manual fixes.
 
-### 3. Type Checking - Mypy (16 seconds)
+### 3. Type Checking - Mypy
 
 ```bash
 uv run mypy packages/ --show-error-codes
@@ -62,13 +74,13 @@ uv run mypy packages/ --show-error-codes
 
 **Critical**: NEVER suppress type errors with `# type: ignore` for structural issues. Fix the root cause.
 
-### 4. Type Checking - Basedpyright (4 seconds)
+### 4. Type Checking - Basedpyright
 
 ```bash
 uv run basedpyright packages/
 ```
 
-### 5. Markdown Linting (5 seconds)
+### 5. Markdown Linting
 
 ```bash
 npx -y markdownlint-cli2
@@ -76,7 +88,7 @@ npx -y markdownlint-cli2
 
 Uses `.markdownlint-cli2.jsonc` for configuration.
 
-### 6. YAML/JSON/Markdown Formatting (5 seconds)
+### 6. YAML/JSON/Markdown Formatting
 
 ```bash
 npx -y prettier --check "**/*.{md,json,yaml,yml}" --ignore-path .gitignore
@@ -84,7 +96,7 @@ npx -y prettier --check "**/*.{md,json,yaml,yml}" --ignore-path .gitignore
 
 **If it fails**: Run `npx -y prettier --write "**/*.{md,json,yaml,yml}" --ignore-path .gitignore` to auto-fix.
 
-### 7. Tests (77 seconds, parallel execution)
+### 7. Tests
 
 ```bash
 uv run pytest
@@ -94,11 +106,10 @@ uv run pytest
 - **Coverage**: Minimum 60% required (current: ~79%)
 - **Location**: `packages/mcp_json_yaml_toml/tests/`
 - **Run specific tests**: `uv run pytest -k <pattern>`
-- **Note**: 4 pre-existing test failures exist (not your responsibility to fix)
 
 ## Quick Validation Workflow
 
-**After editing files, use prek for scoped verification:**
+**After editing files, use prek for comprehensive validation:**
 
 ```bash
 uv run prek run --files <file1> <file2>
@@ -208,9 +219,15 @@ uv run pytest -n 0
 **Problem**: Ruff or prettier complains about formatting
 **Solution**: Run auto-fixers (`ruff format`, `prettier --write`), then commit.
 
-### 4. Pre-existing Test Failures
+### 4. Test Failures
 
-**Note**: 4 tests currently fail (TOML-related assertions). This is a known issue. Focus on ensuring your changes don't introduce NEW failures.
+**Problem**: Tests fail after making changes
+**Solution**:
+
+- Investigate the failure and fix the root cause
+- If the failure is unrelated to your changes, document it in a GitHub issue
+- NEVER ignore test failures or assume they are "pre-existing" without verification
+- Run tests before and after your changes to identify what you broke
 
 ## Architecture Patterns
 
