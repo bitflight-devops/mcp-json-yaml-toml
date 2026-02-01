@@ -109,6 +109,28 @@ def _get_storage_location() -> Path:
     return pkg_binaries  # pragma: no cover
 
 
+def _get_github_headers() -> dict[str, str]:
+    """Get HTTP headers for GitHub API requests with optional authentication.
+
+    Uses GITHUB_TOKEN environment variable if available for authenticated requests.
+    Authenticated requests have a 5000/hour rate limit vs 60/hour unauthenticated.
+
+    Returns:
+        Dictionary of HTTP headers
+    """
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "mcp-json-yaml-toml/1.0",
+    }
+
+    # Use GITHUB_TOKEN for authenticated requests (5000/hour vs 60/hour rate limit)
+    github_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+
+    return headers
+
+
 def _get_latest_release_tag() -> str:  # pragma: no cover
     """Query GitHub API for the latest yq release tag.
 
@@ -119,7 +141,7 @@ def _get_latest_release_tag() -> str:  # pragma: no cover
         YQError: If API request fails or response is invalid
     """
     url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/releases/latest"
-    headers = {"Accept": "application/vnd.github+json"}
+    headers = _get_github_headers()
 
     try:
         with httpx.Client(timeout=30.0) as client:
@@ -147,7 +169,7 @@ def _download_file(url: str, dest_path: Path) -> None:  # pragma: no cover
     Raises:
         YQError: If download fails
     """
-    headers = {"User-Agent": "mcp-json-yaml-toml/1.0"}
+    headers = _get_github_headers()
 
     try:
         with httpx.Client(timeout=60.0) as client:
@@ -173,7 +195,7 @@ def _get_checksums(version: str) -> dict[str, str]:  # pragma: no cover
         YQError: If checksums file cannot be downloaded or parsed
     """
     url = f"https://github.com/{GITHUB_REPO}/releases/download/{version}/checksums"
-    headers = {"User-Agent": "mcp-json-yaml-toml/1.0"}
+    headers = _get_github_headers()
 
     try:
         with httpx.Client(timeout=30.0) as client:
