@@ -50,11 +50,11 @@ jobs:
             echo "Update available: ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
           fi
 
-      - name: Fetch and update version and checksums
+      - name: Fetch checksums for new version
         if: steps.check.outputs.needs_update == 'true'
+        id: checksums
         env:
           NEW_VERSION: ${{ steps.latest.outputs.version }}
-          OLD_VERSION: ${{ steps.current.outputs.version }}
         run: |
           # Download checksums file for the new version
           CHECKSUMS_URL="https://github.com/mikefarah/yq/releases/download/${NEW_VERSION}/checksums"
@@ -63,64 +63,36 @@ jobs:
 
           # Extract SHA256 hashes for the platforms we support
           # Checksum file format: filename followed by multiple hash fields, SHA256 is field 19 (1-indexed)
-          declare -A CHECKSUMS
           for binary in yq_linux_amd64 yq_linux_arm64 yq_darwin_amd64 yq_darwin_arm64 yq_windows_amd64.exe; do
-            # Get the line for this binary and extract SHA256 (field 19)
             sha256=$(grep "^${binary}\s" /tmp/checksums.txt | awk '{print $19}')
             if [ -z "$sha256" ]; then
               echo "ERROR: Could not find checksum for $binary"
               exit 1
             fi
             echo "Found checksum for $binary: $sha256"
-            CHECKSUMS[$binary]=$sha256
+
+            # Export as environment variable for Python script
+            case "$binary" in
+              yq_darwin_amd64) echo "CS_DARWIN_AMD64=$sha256" >> "$GITHUB_ENV" ;;
+              yq_darwin_arm64) echo "CS_DARWIN_ARM64=$sha256" >> "$GITHUB_ENV" ;;
+              yq_linux_amd64) echo "CS_LINUX_AMD64=$sha256" >> "$GITHUB_ENV" ;;
+              yq_linux_arm64) echo "CS_LINUX_ARM64=$sha256" >> "$GITHUB_ENV" ;;
+              yq_windows_amd64.exe) echo "CS_WINDOWS_AMD64=$sha256" >> "$GITHUB_ENV" ;;
+            esac
           done
 
-          # Export checksums as environment variables for Python script
-          export CS_DARWIN_AMD64="${CHECKSUMS[yq_darwin_amd64]}"
-          export CS_DARWIN_ARM64="${CHECKSUMS[yq_darwin_arm64]}"
-          export CS_LINUX_AMD64="${CHECKSUMS[yq_linux_amd64]}"
-          export CS_LINUX_ARM64="${CHECKSUMS[yq_linux_arm64]}"
-          export CS_WINDOWS_AMD64="${CHECKSUMS[yq_windows_amd64.exe]}"
-
-          # Update the version
+      - name: Update version and checksums
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          NEW_VERSION: ${{ steps.latest.outputs.version }}
+          OLD_VERSION: ${{ steps.current.outputs.version }}
+        run: |
+          # Update the version constant
           sed -i "s/DEFAULT_YQ_VERSION = \"${OLD_VERSION}\"/DEFAULT_YQ_VERSION = \"${NEW_VERSION}\"/" \
             packages/mcp_json_yaml_toml/yq_wrapper.py
 
-          # Update the checksums dict using Python for reliable multiline replacement
-          python3 << 'PYTHON_SCRIPT'
-          import os
-          import re
-
-          with open('packages/mcp_json_yaml_toml/yq_wrapper.py', 'r') as f:
-              content = f.read()
-
-          # Pattern to match the entire DEFAULT_YQ_CHECKSUMS dict
-          pattern = r'# fmt: off\nDEFAULT_YQ_CHECKSUMS: dict\[str, str\] = \{[^}]+\}\n# fmt: on'
-
-          # Read checksums from environment variables
-          checksums = {
-              "yq_darwin_amd64": os.environ["CS_DARWIN_AMD64"],
-              "yq_darwin_arm64": os.environ["CS_DARWIN_ARM64"],
-              "yq_linux_amd64": os.environ["CS_LINUX_AMD64"],
-              "yq_linux_arm64": os.environ["CS_LINUX_ARM64"],
-              "yq_windows_amd64.exe": os.environ["CS_WINDOWS_AMD64"],
-          }
-
-          replacement = f'''# fmt: off
-          DEFAULT_YQ_CHECKSUMS: dict[str, str] = {{
-              "yq_darwin_amd64": "{checksums["yq_darwin_amd64"]}",
-              "yq_darwin_arm64": "{checksums["yq_darwin_arm64"]}",
-              "yq_linux_amd64": "{checksums["yq_linux_amd64"]}",
-              "yq_linux_arm64": "{checksums["yq_linux_arm64"]}",
-              "yq_windows_amd64.exe": "{checksums["yq_windows_amd64.exe"]}",
-          }}
-          # fmt: on'''
-
-          new_content = re.sub(pattern, replacement, content)
-
-          with open('packages/mcp_json_yaml_toml/yq_wrapper.py', 'w') as f:
-              f.write(new_content)
-          PYTHON_SCRIPT
+          # Update the checksums dict using the helper script
+          python3 .github/scripts/update_yq_checksums.py
 
           echo "Updated version to ${NEW_VERSION} and checksums"
 
