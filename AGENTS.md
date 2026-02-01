@@ -58,6 +58,18 @@ uv run prek run --files <file_path1> <file_path2>
 uv sync  # Install all dependencies and dev-tools
 ```
 
+### Dependency Management
+
+Always use `uv add` and `uv remove` to manage dependencies:
+
+```bash
+uv add <package>          # Add a runtime dependency
+uv add --dev <package>    # Add a dev dependency
+uv remove <package>       # Remove a dependency
+```
+
+**NEVER** manually edit `pyproject.toml` to add/remove dependencies - `uv add/remove` handles version resolution, lockfile updates, and installation in one command.
+
 ### Testing Requirements
 
 - **Creating Tests**: Place all tests in `packages/mcp_json_yaml_toml/tests/` using the `test_*.py` naming convention. Use `conftest.py` for shared fixtures.
@@ -88,5 +100,6 @@ Format: `<type>(<scope>): <description>`
 
 - Do **NOT** modify lint rule configurations in `pyproject.toml`.
 - Do **NOT** use `pip install` or bare `python` commands.
+- Do **NOT** manually edit `pyproject.toml` for dependencies - use `uv add/remove`.
 - Do **NOT** skip type checking.
 - Do **NOT** commit without running the "One-Shot" verification.

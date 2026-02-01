@@ -10,7 +10,6 @@ This module provides a Python interface to the bundled yq binary, handling:
 """
 
 import contextlib
-import fcntl
 import hashlib
 import os
 import platform
@@ -23,6 +22,7 @@ from typing import Any
 
 import httpx
 import orjson
+import portalocker
 from pydantic import BaseModel, Field
 
 
@@ -218,11 +218,10 @@ def _verify_checksum(file_path: Path, expected_hash: str) -> bool:
 def _download_yq_binary(
     binary_name: str, github_name: str, dest_path: Path, version: str
 ) -> None:  # pragma: no cover
-    """Download and verify a single yq binary with file locking.
+    """Download and verify a single yq binary with cross-platform file locking.
 
-    Uses file locking to ensure only one process downloads the binary when
-    multiple processes attempt simultaneously. Other processes wait for the
-    lock holder to complete the download.
+    Uses portalocker for cross-platform file locking to ensure only one process
+    downloads the binary. Other processes block until the lock is released.
 
     Args:
         binary_name: Local filename (e.g., "yq-linux-amd64")
@@ -233,66 +232,62 @@ def _download_yq_binary(
     Raises:
         YQError: If download or verification fails
     """
-    # Use a lock file to coordinate between parallel processes
+    # Fast path: check if already exists (no lock needed)
+    if dest_path.exists():
+        print(f"Binary already exists at {dest_path}", file=sys.stderr)
+        return
+
+    # Use a lock file to coordinate between processes
     lock_path = dest_path.with_suffix(".lock")
 
-    # Open lock file (create if doesn't exist)
-    with Path(lock_path).open("w", encoding="utf-8") as lock_file:
-        # Acquire exclusive lock - blocks until available
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+    # Acquire exclusive lock - blocks until available (cross-platform via portalocker)
+    with portalocker.Lock(lock_path, timeout=120) as _lock:
+        # Re-check if another process completed the download while we waited
+        if dest_path.exists():
+            print(
+                f"Binary already downloaded by another process at {dest_path}",
+                file=sys.stderr,
+            )
+            return
+
+        print(f"Downloading yq {version} for your platform...", file=sys.stderr)
+
+        # Get checksums for this version
+        print("Fetching checksums...", file=sys.stderr)
+        checksums = _get_checksums(version)
+
+        if github_name not in checksums:
+            raise YQError(f"No checksum found for {github_name}")
+
+        # Use unique temp file in case of failure
+        temp_path = dest_path.with_suffix(f".tmp.{uuid.uuid4().hex[:8]}")
 
         try:
-            # Re-check if another process completed the download while we waited
-            if dest_path.exists():
-                print(
-                    f"Binary already downloaded by another process at {dest_path}",
-                    file=sys.stderr,
-                )
-                return
+            # Download binary to temp file
+            url = f"https://github.com/{GITHUB_REPO}/releases/download/{version}/{github_name}"
+            print(f"Downloading {github_name}...", file=sys.stderr)
+            _download_file(url, temp_path)
 
-            print(f"Downloading yq {version} for your platform...", file=sys.stderr)
+            # Verify checksum on temp file
+            print("Verifying checksum...", file=sys.stderr)
+            if not _verify_checksum(temp_path, checksums[github_name]):
+                raise YQError(f"Checksum verification failed for {github_name}")
 
-            # Get checksums for this version
-            print("Fetching checksums...", file=sys.stderr)
-            checksums = _get_checksums(version)
+            # Set executable permissions on Unix binaries before rename
+            if os.name != "nt":
+                temp_path.chmod(0o755)
 
-            if github_name not in checksums:
-                raise YQError(f"No checksum found for {github_name}")
-
-            # Use unique temp file in case of failure
-            temp_path = dest_path.with_suffix(f".tmp.{uuid.uuid4().hex[:8]}")
-
-            try:
-                # Download binary to temp file
-                url = f"https://github.com/{GITHUB_REPO}/releases/download/{version}/{github_name}"
-                print(f"Downloading {github_name}...", file=sys.stderr)
-                _download_file(url, temp_path)
-
-                # Verify checksum on temp file
-                print("Verifying checksum...", file=sys.stderr)
-                if not _verify_checksum(temp_path, checksums[github_name]):
-                    raise YQError(f"Checksum verification failed for {github_name}")
-
-                # Set executable permissions on Unix binaries before rename
-                if os.name != "nt":
-                    temp_path.chmod(0o755)
-
-                # Atomic rename to final destination
-                temp_path.rename(dest_path)
-
-                print(
-                    f"Successfully downloaded and verified {binary_name}",
-                    file=sys.stderr,
-                )
-
-            finally:
-                # Clean up temp file if it still exists (e.g., if verification failed)
-                if temp_path.exists():
-                    temp_path.unlink()
+            # Atomic rename to final destination
+            temp_path.rename(dest_path)
+            print(
+                f"Successfully downloaded and verified {binary_name}", file=sys.stderr
+            )
 
         finally:
-            # Release lock (implicit when file closes, but be explicit)
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            # Clean up temp file if it still exists (e.g., if verification failed)
+            with contextlib.suppress(OSError):
+                if temp_path.exists():
+                    temp_path.unlink()
 
     # Clean up lock file (best effort - may fail if another process is using it)
     with contextlib.suppress(OSError):
