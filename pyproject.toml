@@ -27,32 +27,31 @@ keywords = [
 ]
 requires-python = ">=3.11,<3.15"
 dependencies = [
-	"fastmcp>=0.3.0",
-	"orjson>=3.10.0",
-	"ruamel.yaml>=0.18.0",
-	"tomlkit>=0.13.0",
-	"httpx>=0.27.0",
-	"lmql>=0.7.0",
-	"jsonschema>=4.25.1",
-	"json-strong-typing>=0.4.2",
+	"fastmcp>=2.14.4,<3",  # Pin to v2 until v3 is stable (v3.0.0b1 has breaking changes)
+	"orjson>=3.11.6",
+	"ruamel.yaml>=0.18.0",  # 0.19.x has different API - keep 0.18 for stability
+	"tomlkit>=0.14.0",
+	"httpx>=0.28.1",
+	"lmql>=0.7.3",
+	"jsonschema>=4.26.0",
+	"json-strong-typing>=0.4.3",
 ]
 
 [dependency-groups]
 dev = [
+	"pytest>=9.0.2",
 	"pytest-cov>=7.0.0",
-	"pytest>=8.4.2",
-	"pytest-cov>=6.0.0",
 	"pytest-mock>=3.14.0",
-	"ruff>=0.9.4",
+	"pytest-asyncio>=1.2.0",
+	"pytest-xdist>=3.8.0",
+	"ruff>=0.14.14",
+	"mypy>=1.19.1",
+	"basedpyright>=1.37.2",
 	"hatchling>=1.14.0",
 	"hatch-vcs>=0.5.0",
-	"mypy>=1.18.2",
-	"pytest-asyncio>=1.2.0",
-	"basedpyright>=1.33.0",
 	"tiktoken>=0.12.0",
-	"pytest-xdist>=3.8.0",
 	"prek>=0.2.19",
-	"types-jsonschema>=4.25.1.20251009",
+	"types-jsonschema>=4.26.0.20251224",
 ]
 
 [project.scripts]
