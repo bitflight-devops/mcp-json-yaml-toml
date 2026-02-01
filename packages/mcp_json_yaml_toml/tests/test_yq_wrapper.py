@@ -790,35 +790,38 @@ class TestPlatformBinaryInfo:
 
     def test_linux_amd64_naming(self) -> None:
         """Test binary naming for Linux amd64."""
+        version = DEFAULT_YQ_VERSION
         platform_prefix, binary_name, github_name = _get_platform_binary_info(
-            "linux", "amd64", "v4.52.2"
+            "linux", "amd64", version
         )
         assert platform_prefix == "yq-linux-amd64"
-        assert binary_name == "yq-linux-amd64-v4.52.2"
+        assert binary_name == f"yq-linux-amd64-{version}"
         assert github_name == "yq_linux_amd64"
 
     def test_darwin_arm64_naming(self) -> None:
         """Test binary naming for macOS arm64."""
+        version = DEFAULT_YQ_VERSION
         platform_prefix, binary_name, github_name = _get_platform_binary_info(
-            "darwin", "arm64", "v4.52.2"
+            "darwin", "arm64", version
         )
         assert platform_prefix == "yq-darwin-arm64"
-        assert binary_name == "yq-darwin-arm64-v4.52.2"
+        assert binary_name == f"yq-darwin-arm64-{version}"
         assert github_name == "yq_darwin_arm64"
 
     def test_windows_amd64_naming(self) -> None:
         """Test binary naming for Windows amd64."""
+        version = DEFAULT_YQ_VERSION
         platform_prefix, binary_name, github_name = _get_platform_binary_info(
-            "windows", "amd64", "v4.52.2"
+            "windows", "amd64", version
         )
         assert platform_prefix == "yq-windows-amd64"
-        assert binary_name == "yq-windows-amd64-v4.52.2.exe"
+        assert binary_name == f"yq-windows-amd64-{version}.exe"
         assert github_name == "yq_windows_amd64.exe"
 
     def test_unsupported_os_raises_error(self) -> None:
         """Test that unsupported OS raises clear error."""
         with pytest.raises(YQBinaryNotFoundError, match="Unsupported operating system"):
-            _get_platform_binary_info("freebsd", "amd64", "v4.52.2")
+            _get_platform_binary_info("freebsd", "amd64", DEFAULT_YQ_VERSION)
 
 
 class TestBundledChecksums:
@@ -868,17 +871,18 @@ class TestBundledChecksums:
         assert checksums == DEFAULT_YQ_CHECKSUMS
 
     def test_bundled_checksums_match_version(self) -> None:
-        """Test that bundled checksums are for the current default version.
+        """Test that bundled checksums are for all supported platforms.
 
-        Tests: Version consistency
-        How: Verify DEFAULT_YQ_VERSION is correctly referenced
-        Why: Ensure checksums match the pinned version
+        Tests: Checksum completeness
+        How: Verify all 5 platforms have checksums bundled
+        Why: Ensure checksums exist for all supported platforms
         """
-        # This test documents the relationship between version and checksums
-        assert DEFAULT_YQ_VERSION == "v4.52.2", (
-            "DEFAULT_YQ_VERSION changed but test not updated"
+        # The weekly yq-update workflow updates both version and checksums together
+        # This test verifies the structure, not the specific version
+        assert DEFAULT_YQ_VERSION.startswith("v"), (
+            "DEFAULT_YQ_VERSION should start with 'v'"
         )
-        # If version changes, checksums must also be updated
+        # All 5 supported platform binaries should have checksums
         assert len(DEFAULT_YQ_CHECKSUMS) == 5, "Expected 5 platform checksums"
 
 
