@@ -392,18 +392,56 @@ def _download_yq_binary(
         lock_path.unlink()
 
 
+def _is_mikefarah_yq(yq_path: Path) -> bool:
+    """Check if a yq binary is the mikefarah/yq (Go-based) version.
+
+    There are two common yq tools:
+    - mikefarah/yq: Go-based, outputs "yq (https://github.com/mikefarah/yq/) version v4.x.x"
+    - kislyuk/yq: Python-based wrapper around jq, outputs "yq 3.x.x"
+
+    We need the mikefarah version for YAML/TOML/XML support.
+
+    Args:
+        yq_path: Path to the yq binary to check
+
+    Returns:
+        True if this is mikefarah/yq, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            [str(yq_path), "--version"], capture_output=True, check=False, timeout=5
+        )
+    except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError):
+        return False
+    else:
+        if result.returncode != 0:
+            return False
+        version_output = result.stdout.decode("utf-8", errors="replace")
+        # mikefarah/yq includes the GitHub URL in its version output
+        return "mikefarah/yq" in version_output
+
+
 def _find_system_yq() -> Path | None:
     """Find yq binary installed via system package manager.
 
     Checks if yq is available in the system PATH (e.g., installed via
-    homebrew, apt, chocolatey, or go install).
+    homebrew, apt, chocolatey, or go install). Only returns the path if
+    it's the mikefarah/yq (Go-based) version, not the Python yq wrapper.
 
     Returns:
-        Path to system yq binary if found, None otherwise
+        Path to system yq binary if found and it's the correct version, None otherwise
     """
     yq_path = shutil.which("yq")
     if yq_path:
-        return Path(yq_path)
+        path = Path(yq_path)
+        if _is_mikefarah_yq(path):
+            return path
+        # Found yq but it's the wrong version (probably Python yq)
+        print(
+            f"Found yq at {yq_path} but it's not mikefarah/yq (Go version). "
+            "Install the correct yq: brew install yq | choco install yq | snap install yq",
+            file=sys.stderr,
+        )
     return None
 
 

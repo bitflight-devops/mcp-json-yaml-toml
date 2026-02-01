@@ -25,6 +25,7 @@ from mcp_json_yaml_toml.yq_wrapper import (
     _find_system_yq,
     _get_checksums,
     _get_platform_binary_info,
+    _is_mikefarah_yq,
     _verify_checksum,
     execute_yq,
     get_yq_binary_path,
@@ -609,22 +610,129 @@ class TestYQBinaryPathOverride:
         assert result.exists()
 
 
+class TestIsMikefarahYQ:
+    """Tests for _is_mikefarah_yq detection function."""
+
+    def test_detects_mikefarah_yq(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test that mikefarah/yq is correctly identified.
+
+        Tests: Go-based yq detection
+        How: Mock subprocess to return mikefarah/yq version output
+        Why: Ensure we use the correct yq binary
+        """
+        # Arrange - mock subprocess to return mikefarah/yq version
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = b"yq (https://github.com/mikefarah/yq/) version v4.52.2"
+        mocker.patch("subprocess.run", return_value=mock_result)
+
+        fake_binary = tmp_path / "yq"
+
+        # Act
+        result = _is_mikefarah_yq(fake_binary)
+
+        # Assert
+        assert result is True
+
+    def test_rejects_python_yq(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test that Python yq (kislyuk/yq) is rejected.
+
+        Tests: Python yq rejection
+        How: Mock subprocess to return Python yq version output
+        Why: Python yq is incompatible with our YAML/TOML processing
+        """
+        # Arrange - mock subprocess to return Python yq version
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = b"yq 3.4.3"  # Python yq output format
+        mocker.patch("subprocess.run", return_value=mock_result)
+
+        fake_binary = tmp_path / "yq"
+
+        # Act
+        result = _is_mikefarah_yq(fake_binary)
+
+        # Assert
+        assert result is False
+
+    def test_handles_execution_failure(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Test graceful handling when version check fails.
+
+        Tests: Error handling for version check
+        How: Mock subprocess to return non-zero exit code
+        Why: Ensure robust handling of broken or misconfigured yq
+        """
+        # Arrange
+        mock_result = Mock()
+        mock_result.returncode = 1
+        mock_result.stdout = b""
+        mocker.patch("subprocess.run", return_value=mock_result)
+
+        fake_binary = tmp_path / "yq"
+
+        # Act
+        result = _is_mikefarah_yq(fake_binary)
+
+        # Assert
+        assert result is False
+
+    def test_handles_timeout(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test graceful handling when version check times out.
+
+        Tests: Timeout handling
+        How: Mock subprocess to raise TimeoutExpired
+        Why: Prevent hanging on unresponsive binaries
+        """
+        # Arrange
+        mocker.patch("subprocess.run", side_effect=subprocess.TimeoutExpired("yq", 5))
+
+        fake_binary = tmp_path / "yq"
+
+        # Act
+        result = _is_mikefarah_yq(fake_binary)
+
+        # Assert
+        assert result is False
+
+    def test_handles_oserror(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test graceful handling when binary cannot be executed.
+
+        Tests: OSError handling
+        How: Mock subprocess to raise OSError
+        Why: Handle permission errors or missing binaries
+        """
+        # Arrange
+        mocker.patch("subprocess.run", side_effect=OSError("Permission denied"))
+
+        fake_binary = tmp_path / "yq"
+
+        # Act
+        result = _is_mikefarah_yq(fake_binary)
+
+        # Assert
+        assert result is False
+
+
 class TestSystemYQDetection:
     """Tests for system-installed yq detection."""
 
-    def test_find_system_yq_returns_path_when_found(
-        self, monkeypatch: pytest.MonkeyPatch
+    def test_find_system_yq_returns_path_when_mikefarah_yq_found(
+        self, mocker: MockerFixture
     ) -> None:
-        """Test _find_system_yq returns Path when yq is in PATH.
+        """Test _find_system_yq returns Path when mikefarah/yq is in PATH.
 
-        Tests: System yq detection
-        How: Mock shutil.which to return a path
-        Why: Verify detection works when yq is installed via package manager
+        Tests: System yq detection with correct version
+        How: Mock shutil.which and subprocess to simulate mikefarah/yq
+        Why: Verify detection works when correct yq is installed
         """
-        # Arrange - mock shutil.which
-        monkeypatch.setattr(
-            "shutil.which", lambda x: "/usr/local/bin/yq" if x == "yq" else None
-        )
+        # Arrange - mock shutil.which and version check
+        mocker.patch("shutil.which", return_value="/usr/local/bin/yq")
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = b"yq (https://github.com/mikefarah/yq/) version v4.52.2"
+        mocker.patch("subprocess.run", return_value=mock_result)
 
         # Act
         result = _find_system_yq()
@@ -632,8 +740,34 @@ class TestSystemYQDetection:
         # Assert
         assert result == Path("/usr/local/bin/yq")
 
+    def test_find_system_yq_returns_none_when_python_yq_found(
+        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test _find_system_yq returns None when Python yq is found.
+
+        Tests: Rejection of Python yq
+        How: Mock shutil.which to find yq, but version check shows Python yq
+        Why: Ensure we don't use incompatible Python yq wrapper
+        """
+        # Arrange
+        mocker.patch("shutil.which", return_value="/usr/bin/yq")
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = b"yq 3.4.3"  # Python yq
+        mocker.patch("subprocess.run", return_value=mock_result)
+
+        # Act
+        result = _find_system_yq()
+
+        # Assert
+        assert result is None
+
+        # Verify warning message was printed
+        captured = capsys.readouterr()
+        assert "not mikefarah/yq" in captured.err
+
     def test_find_system_yq_returns_none_when_not_found(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, mocker: MockerFixture
     ) -> None:
         """Test _find_system_yq returns None when yq is not in PATH.
 
@@ -642,7 +776,7 @@ class TestSystemYQDetection:
         Why: Verify graceful handling when yq not installed
         """
         # Arrange - mock shutil.which to return None
-        monkeypatch.setattr("shutil.which", lambda x: None)
+        mocker.patch("shutil.which", return_value=None)
 
         # Act
         result = _find_system_yq()

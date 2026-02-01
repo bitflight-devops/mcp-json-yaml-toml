@@ -328,10 +328,15 @@ The wrapper automatically manages yq binaries with these features:
 
 **Binary Discovery Priority:**
 
-1. Check if binary already exists in storage location
-2. If missing, download the pinned version from GitHub releases CDN
-3. Verify SHA256 checksums (bundled for default version, fetched for custom versions)
-4. Fall back to package-bundled binaries if download fails
+1. **YQ_BINARY_PATH** - Explicit user override (custom installation path)
+2. **Cached versioned binary** - Check `~/.local/bin/yq-{platform}-{arch}-{version}`
+3. **System PATH** - Look for `yq` installed via package manager (homebrew, apt, chocolatey)
+4. **Auto-download** - Download from GitHub releases CDN if none found
+5. Verify SHA256 checksums (bundled for default version, fetched for custom versions)
+
+**Important:** The system PATH lookup validates that the found `yq` is the correct
+mikefarah/yq (Go-based), not the Python `yq` wrapper (kislyuk/yq). If Python yq is
+found, it's skipped and auto-download proceeds.
 
 **Storage Locations (in order of preference):**
 
@@ -384,7 +389,31 @@ export YQ_VERSION=v4.50.0
 uvx mcp-json-yaml-toml
 ```
 
+**Use a custom binary location:**
+
+```bash
+# Point to a specific yq binary
+export YQ_BINARY_PATH=/usr/local/bin/yq
+uvx mcp-json-yaml-toml
+```
+
 **Note:** The pinned version is updated weekly via automated CI when new yq releases pass our test suite.
+
+### Package Manager Installation (Recommended for Corporate Environments)
+
+For environments with restricted internet access or where auto-download is not desired,
+install yq via your system package manager:
+
+| Platform | Command                                        | Notes                           |
+| -------- | ---------------------------------------------- | ------------------------------- |
+| macOS    | `brew install yq`                              | Homebrew (most common)          |
+| Windows  | `choco install yq`                             | Chocolatey                      |
+| Linux    | `snap install yq`                              | Snap (universal)                |
+| Linux    | `apt install yq`                               | Debian/Ubuntu (may be outdated) |
+| Any      | `go install github.com/mikefarah/yq/v4@latest` | Go toolchain required           |
+
+The wrapper will automatically detect and use system-installed yq when found in PATH,
+avoiding any network requests. Make sure it's the Go-based mikefarah/yq (not Python yq).
 
 ## Performance Notes
 
