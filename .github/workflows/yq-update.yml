@@ -1,0 +1,121 @@
+name: Weekly yq Version Update
+
+on:
+  schedule:
+    # Run every Monday at 9:00 UTC
+    - cron: "0 9 * * 1"
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-update:
+    name: Check for yq updates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Get current pinned version
+        id: current
+        run: |
+          CURRENT_VERSION=$(grep -oP 'DEFAULT_YQ_VERSION = "\K[^"]+' packages/mcp_json_yaml_toml/yq_wrapper.py)
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current pinned version: $CURRENT_VERSION"
+
+      - name: Get latest yq release
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST_VERSION=$(gh api repos/mikefarah/yq/releases/latest --jq '.tag_name')
+          RELEASE_URL=$(gh api repos/mikefarah/yq/releases/latest --jq '.html_url')
+          RELEASE_BODY=$(gh api repos/mikefarah/yq/releases/latest --jq '.body')
+          echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "url=$RELEASE_URL" >> $GITHUB_OUTPUT
+          # Store release body in a file to handle multiline content
+          echo "$RELEASE_BODY" > /tmp/release_notes.md
+          echo "Latest yq version: $LATEST_VERSION"
+
+      - name: Check if update needed
+        id: check
+        run: |
+          if [ "${{ steps.current.outputs.version }}" = "${{ steps.latest.outputs.version }}" ]; then
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "Already on latest version"
+          else
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Update available: ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          fi
+
+      - name: Update version in code
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          sed -i 's/DEFAULT_YQ_VERSION = "${{ steps.current.outputs.version }}"/DEFAULT_YQ_VERSION = "${{ steps.latest.outputs.version }}"/' \
+            packages/mcp_json_yaml_toml/yq_wrapper.py
+
+      - name: Install uv
+        if: steps.check.outputs.needs_update == 'true'
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        if: steps.check.outputs.needs_update == 'true'
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        if: steps.check.outputs.needs_update == 'true'
+        run: uv sync
+
+      - name: Run tests with new version
+        if: steps.check.outputs.needs_update == 'true'
+        id: tests
+        run: |
+          if uv run pytest -x -q; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.check.outputs.needs_update == 'true' && steps.tests.outputs.passed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH_NAME="chore/update-yq-${{ steps.latest.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH_NAME"
+          git add packages/mcp_json_yaml_toml/yq_wrapper.py
+          git commit -m "chore(yq): update pinned version to ${{ steps.latest.outputs.version }}"
+          git push origin "$BRANCH_NAME"
+
+          # Create PR with release notes
+          gh pr create \
+            --title "chore(yq): update to ${{ steps.latest.outputs.version }}" \
+            --body "$(cat <<EOF
+          ## yq Version Update
+
+          Updates pinned yq version from \`${{ steps.current.outputs.version }}\` to \`${{ steps.latest.outputs.version }}\`.
+
+          **Release URL:** ${{ steps.latest.outputs.url }}
+
+          ### Release Notes
+
+          $(cat /tmp/release_notes.md)
+
+          ---
+          *This PR was automatically created by the weekly yq update workflow.*
+          EOF
+          )"
+
+      - name: Report test failure
+        if: steps.check.outputs.needs_update == 'true' && steps.tests.outputs.passed == 'false'
+        run: |
+          echo "::warning::Tests failed with yq ${{ steps.latest.outputs.version }}. Manual investigation required."
+          echo "Current version: ${{ steps.current.outputs.version }}"
+          echo "Attempted version: ${{ steps.latest.outputs.version }}"
+          exit 1
