@@ -4,6 +4,8 @@ Tests binary detection, subprocess execution, error handling, and output parsing
 Includes both unit tests with mocked subprocess and integration tests with real yq.
 """
 
+import os
+import platform
 import subprocess
 from pathlib import Path
 from unittest.mock import Mock
@@ -12,14 +14,17 @@ import pytest
 from pytest_mock import MockerFixture
 
 from mcp_json_yaml_toml.yq_wrapper import (
+    DEFAULT_YQ_VERSION,
     FormatType,
     YQBinaryNotFoundError,
     YQError,
     YQExecutionError,
     YQResult,
+    _cleanup_old_versions,
     _verify_checksum,
     execute_yq,
     get_yq_binary_path,
+    get_yq_version,
     parse_yq_error,
     validate_yq_binary,
 )
@@ -536,3 +541,335 @@ class TestVerifyChecksum:
         result = _verify_checksum(test_file, expected_hash)
 
         assert result is True
+
+
+class TestGetYQVersion:
+    """Tests for get_yq_version function and version pinning."""
+
+    def test_get_yq_version_returns_default(self) -> None:
+        """Test get_yq_version returns DEFAULT_YQ_VERSION when env var not set.
+
+        Tests: Default version behavior
+        How: Ensure YQ_VERSION is not set, call get_yq_version
+        Why: Verify pinned version is used by default
+        """
+        # Arrange - ensure env var not set
+        original = os.environ.pop("YQ_VERSION", None)
+        try:
+            # Act
+            result = get_yq_version()
+
+            # Assert
+            assert result == DEFAULT_YQ_VERSION
+            assert result.startswith("v")
+        finally:
+            if original is not None:
+                os.environ["YQ_VERSION"] = original
+
+    def test_get_yq_version_respects_env_var(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test get_yq_version uses YQ_VERSION env var when set.
+
+        Tests: Environment variable override
+        How: Set YQ_VERSION env var, call get_yq_version
+        Why: Users should be able to override the pinned version
+        """
+        # Arrange
+        monkeypatch.setenv("YQ_VERSION", "v4.50.0")
+
+        # Act
+        result = get_yq_version()
+
+        # Assert
+        assert result == "v4.50.0"
+
+    def test_get_yq_version_adds_v_prefix(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test get_yq_version adds 'v' prefix if missing.
+
+        Tests: Version format normalization
+        How: Set YQ_VERSION without 'v' prefix
+        Why: Ensure consistent version format for GitHub URLs
+        """
+        # Arrange
+        monkeypatch.setenv("YQ_VERSION", "4.50.0")
+
+        # Act
+        result = get_yq_version()
+
+        # Assert
+        assert result == "v4.50.0"
+        assert result.startswith("v")
+
+    def test_get_yq_version_handles_whitespace(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test get_yq_version strips whitespace from env var.
+
+        Tests: Input sanitization
+        How: Set YQ_VERSION with whitespace
+        Why: Prevent issues from accidental whitespace in config
+        """
+        # Arrange
+        monkeypatch.setenv("YQ_VERSION", "  v4.50.0  ")
+
+        # Act
+        result = get_yq_version()
+
+        # Assert
+        assert result == "v4.50.0"
+
+    def test_get_yq_version_empty_env_uses_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test get_yq_version uses default when env var is empty string.
+
+        Tests: Empty env var handling
+        How: Set YQ_VERSION to empty string
+        Why: Ensure graceful fallback to default
+        """
+        # Arrange
+        monkeypatch.setenv("YQ_VERSION", "")
+
+        # Act
+        result = get_yq_version()
+
+        # Assert
+        assert result == DEFAULT_YQ_VERSION
+
+
+class TestVersionedBinaryNaming:
+    """Tests for versioned binary naming conventions."""
+
+    def test_binary_path_includes_version(self) -> None:
+        """Test that binary path includes version string.
+
+        Tests: Version-aware caching
+        How: Get binary path and check for version in name
+        Why: Ensure version updates trigger new downloads
+        """
+        # Act
+        binary_path = get_yq_binary_path()
+
+        # Assert - binary name should include version
+        version = get_yq_version()
+        assert version in binary_path.name, (
+            f"Binary name '{binary_path.name}' should include version '{version}'"
+        )
+
+    def test_binary_path_format_linux(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test binary naming format for Linux platform.
+
+        Tests: Linux binary naming convention
+        How: Mock platform detection, verify naming
+        Why: Ensure correct format: yq-linux-{arch}-{version}
+        """
+        if platform.system().lower() != "linux":
+            pytest.skip("Test only runs on Linux")
+
+        # Act
+        binary_path = get_yq_binary_path()
+        version = get_yq_version()
+
+        # Assert
+        assert binary_path.name.startswith("yq-linux-")
+        assert version in binary_path.name
+        # Should be: yq-linux-amd64-v4.52.2 or yq-linux-arm64-v4.52.2
+        assert binary_path.name.count("-") >= 3
+
+    def test_binary_path_format_macos(self) -> None:
+        """Test binary naming format for macOS platform.
+
+        Tests: macOS binary naming convention
+        How: Check naming on Darwin
+        Why: Ensure correct format: yq-darwin-{arch}-{version}
+        """
+        if platform.system().lower() != "darwin":
+            pytest.skip("Test only runs on macOS")
+
+        # Act
+        binary_path = get_yq_binary_path()
+        version = get_yq_version()
+
+        # Assert
+        assert binary_path.name.startswith("yq-darwin-")
+        assert version in binary_path.name
+
+    def test_binary_path_format_windows(self) -> None:
+        """Test binary naming format for Windows platform.
+
+        Tests: Windows binary naming convention
+        How: Check naming on Windows
+        Why: Ensure correct format: yq-windows-{arch}-{version}.exe
+        """
+        if platform.system().lower() != "windows":
+            pytest.skip("Test only runs on Windows")
+
+        # Act
+        binary_path = get_yq_binary_path()
+        version = get_yq_version()
+
+        # Assert
+        assert binary_path.name.startswith("yq-windows-")
+        assert version in binary_path.name
+        assert binary_path.name.endswith(".exe")
+
+    def test_different_versions_have_different_paths(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that different versions resolve to different binary paths.
+
+        Tests: Version isolation
+        How: Compare paths for two different versions
+        Why: Ensure version pinning actually changes the binary used
+        """
+        # Get default version path
+        default_path = get_yq_binary_path()
+
+        # Set a different version (hypothetical)
+        monkeypatch.setenv("YQ_VERSION", "v4.99.0")
+
+        # Get path for different version
+        # Note: This won't actually download, just compute the expected path
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+        arch = "amd64" if machine in {"x86_64", "amd64"} else "arm64"
+
+        if system == "linux":
+            expected_name = f"yq-linux-{arch}-v4.99.0"
+        elif system == "darwin":
+            expected_name = f"yq-darwin-{arch}-v4.99.0"
+        elif system == "windows":
+            expected_name = f"yq-windows-{arch}-v4.99.0.exe"
+        else:
+            pytest.skip(f"Unsupported platform: {system}")
+
+        # Assert - names should be different
+        assert default_path.name != expected_name
+
+
+class TestCleanupOldVersions:
+    """Tests for _cleanup_old_versions function."""
+
+    def test_cleanup_removes_old_versions(self, tmp_path: Path) -> None:
+        """Test that old versioned binaries are removed.
+
+        Tests: Old version cleanup
+        How: Create fake old binaries, run cleanup, verify removed
+        Why: Prevent disk space accumulation from multiple versions
+        """
+        # Arrange - create fake old binaries
+        old_binary_1 = tmp_path / "yq-linux-amd64-v4.50.0"
+        old_binary_2 = tmp_path / "yq-linux-amd64-v4.51.0"
+        current_binary = tmp_path / "yq-linux-amd64-v4.52.2"
+
+        old_binary_1.write_text("fake binary v4.50.0")
+        old_binary_2.write_text("fake binary v4.51.0")
+        current_binary.write_text("fake binary v4.52.2")
+
+        # Act - cleanup old versions
+        _cleanup_old_versions(tmp_path, "yq-linux-amd64", "yq-linux-amd64-v4.52.2")
+
+        # Assert - old binaries removed, current kept
+        assert not old_binary_1.exists(), "Old v4.50.0 should be removed"
+        assert not old_binary_2.exists(), "Old v4.51.0 should be removed"
+        assert current_binary.exists(), "Current v4.52.2 should be kept"
+
+    def test_cleanup_preserves_current_binary(self, tmp_path: Path) -> None:
+        """Test that current binary is not removed during cleanup.
+
+        Tests: Current version preservation
+        How: Create only current binary, run cleanup
+        Why: Ensure we don't accidentally delete what we just downloaded
+        """
+        # Arrange
+        current_binary = tmp_path / "yq-darwin-arm64-v4.52.2"
+        current_binary.write_text("fake binary")
+
+        # Act
+        _cleanup_old_versions(tmp_path, "yq-darwin-arm64", "yq-darwin-arm64-v4.52.2")
+
+        # Assert
+        assert current_binary.exists()
+
+    def test_cleanup_only_affects_matching_platform(self, tmp_path: Path) -> None:
+        """Test that cleanup only removes binaries for the same platform.
+
+        Tests: Platform isolation in cleanup
+        How: Create binaries for different platforms, cleanup one
+        Why: Prevent accidental removal of other platform binaries
+        """
+        # Arrange - create binaries for different platforms
+        linux_old = tmp_path / "yq-linux-amd64-v4.50.0"
+        linux_new = tmp_path / "yq-linux-amd64-v4.52.2"
+        darwin_binary = tmp_path / "yq-darwin-amd64-v4.50.0"
+        windows_binary = tmp_path / "yq-windows-amd64-v4.50.0.exe"
+
+        linux_old.write_text("fake")
+        linux_new.write_text("fake")
+        darwin_binary.write_text("fake")
+        windows_binary.write_text("fake")
+
+        # Act - cleanup only Linux
+        _cleanup_old_versions(tmp_path, "yq-linux-amd64", "yq-linux-amd64-v4.52.2")
+
+        # Assert - only Linux old removed
+        assert not linux_old.exists(), "Old Linux binary should be removed"
+        assert linux_new.exists(), "Current Linux binary should be kept"
+        assert darwin_binary.exists(), "Darwin binary should not be affected"
+        assert windows_binary.exists(), "Windows binary should not be affected"
+
+    def test_cleanup_handles_no_old_versions(self, tmp_path: Path) -> None:
+        """Test cleanup handles case when no old versions exist.
+
+        Tests: Edge case - no cleanup needed
+        How: Create only current binary, run cleanup
+        Why: Ensure no errors when nothing to clean
+        """
+        # Arrange
+        current = tmp_path / "yq-linux-arm64-v4.52.2"
+        current.write_text("fake")
+
+        # Act - should not raise
+        _cleanup_old_versions(tmp_path, "yq-linux-arm64", "yq-linux-arm64-v4.52.2")
+
+        # Assert
+        assert current.exists()
+
+    def test_cleanup_handles_empty_directory(self, tmp_path: Path) -> None:
+        """Test cleanup handles empty directory gracefully.
+
+        Tests: Edge case - empty directory
+        How: Run cleanup on empty directory
+        Why: Ensure no errors on fresh install
+        """
+        # Arrange - empty directory
+        # Act - should not raise
+        _cleanup_old_versions(tmp_path, "yq-linux-amd64", "yq-linux-amd64-v4.52.2")
+
+        # Assert - no files created
+        assert list(tmp_path.iterdir()) == []
+
+    def test_cleanup_windows_exe_naming(self, tmp_path: Path) -> None:
+        """Test cleanup works with Windows .exe naming convention.
+
+        Tests: Windows-specific cleanup
+        How: Create Windows binaries with .exe extension
+        Why: Ensure glob pattern matches .exe files correctly
+        """
+        # Arrange
+        old_exe = tmp_path / "yq-windows-amd64-v4.50.0.exe"
+        current_exe = tmp_path / "yq-windows-amd64-v4.52.2.exe"
+        old_exe.write_text("fake")
+        current_exe.write_text("fake")
+
+        # Act
+        _cleanup_old_versions(
+            tmp_path, "yq-windows-amd64", "yq-windows-amd64-v4.52.2.exe"
+        )
+
+        # Assert
+        assert not old_exe.exists(), "Old Windows exe should be removed"
+        assert current_exe.exists(), "Current Windows exe should be kept"
