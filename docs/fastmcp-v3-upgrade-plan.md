@@ -1,8 +1,8 @@
 # FastMCP v3 Upgrade Plan & New Features Analysis
 
-**Document Version:** 1.0  
-**Date:** 2026-02-01  
-**Current Version:** FastMCP 2.14.4  
+**Document Version:** 1.0
+**Date:** 2026-02-01
+**Current Version:** FastMCP 2.14.4
 **Target Version:** FastMCP 3.0.0 (beta)
 
 ---
@@ -24,26 +24,26 @@ This document provides a comprehensive analysis of FastMCP v3's new features and
 
 ### Production Dependencies
 
-| Package | Old Version | New Version | Status | Notes |
-|---------|------------|-------------|---------|-------|
-| **fastmcp** | 2.14.1 | **2.14.4** | ✅ Updated | Pinned to `<3` until v3 stable |
-| **orjson** | 3.11.5 | **3.11.6** | ✅ Updated | Latest JSON performance library |
-| **ruamel.yaml** | 0.18.x | **0.18.x** | ✅ Stable | Kept 0.18 (0.19 has API changes) |
-| **tomlkit** | 0.13.3 | **0.14.0** | ✅ Updated | Now handles nested structures! |
-| **httpx** | 0.28.1 | **0.28.1** | ✅ Current | Already latest |
-| **lmql** | 0.7.3 | **0.7.3** | ✅ Current | Already latest |
-| **jsonschema** | 4.25.1 | **4.26.0** | ✅ Updated | Latest schema validation |
-| **json-strong-typing** | 0.4.2 | **0.4.3** | ✅ Updated | Minor update |
+| Package                | Old Version | New Version | Status     | Notes                            |
+| ---------------------- | ----------- | ----------- | ---------- | -------------------------------- |
+| **fastmcp**            | 2.14.1      | **2.14.4**  | ✅ Updated | Pinned to `<3` until v3 stable   |
+| **orjson**             | 3.11.5      | **3.11.6**  | ✅ Updated | Latest JSON performance library  |
+| **ruamel.yaml**        | 0.18.x      | **0.18.x**  | ✅ Stable  | Kept 0.18 (0.19 has API changes) |
+| **tomlkit**            | 0.13.3      | **0.14.0**  | ✅ Updated | Now handles nested structures!   |
+| **httpx**              | 0.28.1      | **0.28.1**  | ✅ Current | Already latest                   |
+| **lmql**               | 0.7.3       | **0.7.3**   | ✅ Current | Already latest                   |
+| **jsonschema**         | 4.25.1      | **4.26.0**  | ✅ Updated | Latest schema validation         |
+| **json-strong-typing** | 0.4.2       | **0.4.3**   | ✅ Updated | Minor update                     |
 
 ### Development Dependencies
 
-| Package | Old Version | New Version | Status |
-|---------|------------|-------------|---------|
-| **pytest** | 8.4.2 | **9.0.2** | ✅ Updated |
-| **pytest-cov** | 6.0/7.0 | **7.0.0** | ✅ Updated |
-| **ruff** | 0.9.4 | **0.14.14** | ✅ Updated |
-| **mypy** | 1.18.2 | **1.19.1** | ✅ Updated |
-| **basedpyright** | 1.33.0 | **1.37.2** | ✅ Updated |
+| Package          | Old Version | New Version | Status     |
+| ---------------- | ----------- | ----------- | ---------- |
+| **pytest**       | 8.4.2       | **9.0.2**   | ✅ Updated |
+| **pytest-cov**   | 6.0/7.0     | **7.0.0**   | ✅ Updated |
+| **ruff**         | 0.9.4       | **0.14.14** | ✅ Updated |
+| **mypy**         | 1.18.2      | **1.19.1**  | ✅ Updated |
+| **basedpyright** | 1.33.0      | **1.37.2**  | ✅ Updated |
 
 ### Test Results
 
@@ -56,6 +56,7 @@ This document provides a comprehensive analysis of FastMCP v3's new features and
 The upgrade to tomlkit 0.14.0 brought a **major improvement**: it can now serialize nested TOML structures without falling back to JSON. This is a quality enhancement that required test updates to reflect the new capability.
 
 **Before (tomlkit 0.13.x):**
+
 ```python
 # Nested TOML structures required JSON fallback
 result = data_fn("config.toml", operation="get", key_path="database")
@@ -63,6 +64,7 @@ assert result["format"] == "json"  # Had to fall back
 ```
 
 **After (tomlkit 0.14.0):**
+
 ```python
 # Nested TOML structures now work natively!
 result = data_fn("config.toml", operation="get", key_path="database")
@@ -82,7 +84,7 @@ graph LR
     A[Component] --> B[Provider]
     B --> C[Transform]
     C --> D[MCP Client]
-    
+
     style A fill:#e1f5ff
     style B fill:#fff3e0
     style C fill:#f3e5f5
@@ -95,15 +97,16 @@ graph LR
 
 **Built-in Providers:**
 
-| Provider | Description | Use Case |
-|----------|-------------|----------|
-| **LocalProvider** | In-memory component storage | Default provider (current behavior) |
-| **FileSystemProvider** | Discover functions from directories | Hot-reload development |
-| **SkillsProvider** | Expose agent skill files as resources | Agent integration |
-| **OpenAPIProvider** | Generate tools from OpenAPI specs | API integration |
-| **ProxyProvider** | Proxy remote MCP servers | Server composition |
+| Provider               | Description                           | Use Case                            |
+| ---------------------- | ------------------------------------- | ----------------------------------- |
+| **LocalProvider**      | In-memory component storage           | Default provider (current behavior) |
+| **FileSystemProvider** | Discover functions from directories   | Hot-reload development              |
+| **SkillsProvider**     | Expose agent skill files as resources | Agent integration                   |
+| **OpenAPIProvider**    | Generate tools from OpenAPI specs     | API integration                     |
+| **ProxyProvider**      | Proxy remote MCP servers              | Server composition                  |
 
 **Example - FileSystemProvider:**
+
 ```python
 from fastmcp import FastMCP
 from fastmcp.providers import FileSystemProvider
@@ -115,6 +118,7 @@ mcp.add_provider(FileSystemProvider("./tools", watch=True))
 ```
 
 **Benefits for mcp-json-yaml-toml:**
+
 - **Hot Reload Development:** Changes to tools take effect immediately during development
 - **Modular Tool Organization:** Split large `server.py` into smaller, focused modules
 - **Plugin Architecture:** Community could contribute new tools as separate files
@@ -129,15 +133,16 @@ mcp.add_provider(FileSystemProvider("./tools", watch=True))
 
 **Built-in Transforms:**
 
-| Transform | Purpose | Example |
-|-----------|---------|---------|
-| **NamespaceTransform** | Prefix tool names | `data` → `json.data` |
-| **FilterTransform** | Show/hide components | Hide admin tools from some clients |
-| **VersionFilter** | Serve specific versions | Only show v2.0 tools |
-| **ResourcesAsTools** | Expose resources as tools | For tool-only clients |
-| **AuthMiddleware** | Apply authorization | Require scopes per tool |
+| Transform              | Purpose                   | Example                            |
+| ---------------------- | ------------------------- | ---------------------------------- |
+| **NamespaceTransform** | Prefix tool names         | `data` → `json.data`               |
+| **FilterTransform**    | Show/hide components      | Hide admin tools from some clients |
+| **VersionFilter**      | Serve specific versions   | Only show v2.0 tools               |
+| **ResourcesAsTools**   | Expose resources as tools | For tool-only clients              |
+| **AuthMiddleware**     | Apply authorization       | Require scopes per tool            |
 
 **Example - Namespace Transform:**
+
 ```python
 from fastmcp.transforms import NamespaceTransform
 
@@ -150,7 +155,8 @@ mcp.add_provider(
 ```
 
 **Benefits for mcp-json-yaml-toml:**
-- **Tool Organization:** Group tools by format (json.*, yaml.*, toml.*)
+
+- **Tool Organization:** Group tools by format (json._, yaml._, toml.\*)
 - **Version Management:** Serve v1 and v2 tools simultaneously
 - **Client Adaptation:** Show different tool subsets to different clients
 
@@ -163,6 +169,7 @@ mcp.add_provider(
 **What It Is:** Register and serve multiple versions of the same tool.
 
 **Example:**
+
 ```python
 @mcp.tool(version="1.0")
 def data_query(file: str, expression: str):
@@ -179,6 +186,7 @@ def data_query(file: str, expression: str, output_format: str = "auto"):
 ```
 
 **Benefits for mcp-json-yaml-toml:**
+
 - **Non-Breaking Evolution:** Add new parameters without breaking existing clients
 - **Deprecation Path:** Gracefully sunset old tool signatures
 - **Client Choice:** Let clients choose which version they want
@@ -192,6 +200,7 @@ def data_query(file: str, expression: str, output_format: str = "auto"):
 **What It Is:** State that persists throughout an entire client session (not just per-request).
 
 **Before (v2.x):**
+
 ```python
 # Global state - shared across ALL clients
 schema_manager = SchemaManager()
@@ -203,6 +212,7 @@ async def data_schema(...):
 ```
 
 **After (v3.0):**
+
 ```python
 @mcp.tool()
 async def data_schema(ctx: Context, ...):
@@ -211,11 +221,12 @@ async def data_schema(ctx: Context, ...):
     if not schema_manager:
         schema_manager = SchemaManager()
         await ctx.set_state("schema_manager", schema_manager)
-    
+
     schema_info = schema_manager.get_schema_info(...)
 ```
 
 **Benefits for mcp-json-yaml-toml:**
+
 - **Performance:** Cache schema lookups per-session (reduces file I/O)
 - **Isolation:** Each client gets their own schema associations
 - **Pagination:** Store cursor state without exposing internals
@@ -228,15 +239,16 @@ async def data_schema(ctx: Context, ...):
 
 ### 5. Developer Experience Improvements ⚡
 
-| Feature | Description | Benefit |
-|---------|-------------|---------|
-| **--reload Flag** | Auto-restart on file changes | Faster development |
-| **Threadpool Dispatch** | Sync functions run in threads | No async needed |
-| **Tool Timeouts** | Per-tool timeout configuration | Prevent hangs |
-| **OpenTelemetry** | Built-in tracing support | Production debugging |
-| **Pagination Support** | Built-in component list pagination | Large server support |
+| Feature                 | Description                        | Benefit              |
+| ----------------------- | ---------------------------------- | -------------------- |
+| **--reload Flag**       | Auto-restart on file changes       | Faster development   |
+| **Threadpool Dispatch** | Sync functions run in threads      | No async needed      |
+| **Tool Timeouts**       | Per-tool timeout configuration     | Prevent hangs        |
+| **OpenTelemetry**       | Built-in tracing support           | Production debugging |
+| **Pagination Support**  | Built-in component list pagination | Large server support |
 
 **Example - Hot Reload:**
+
 ```bash
 # Development mode with auto-restart
 fastmcp run server.py --reload
@@ -245,6 +257,7 @@ fastmcp run server.py --reload
 ```
 
 **Benefits for mcp-json-yaml-toml:**
+
 - **Faster Iteration:** No manual restarts during development
 - **Better Debugging:** OpenTelemetry traces for production issues
 - **Simpler Code:** No need to make all functions async
@@ -258,6 +271,7 @@ fastmcp run server.py --reload
 **What It Is:** Declarative authorization for tools, resources, and prompts.
 
 **Example:**
+
 ```python
 from fastmcp.auth import require_scopes
 
@@ -273,6 +287,7 @@ mcp.add_middleware(
 ```
 
 **Benefits for mcp-json-yaml-toml:**
+
 - **Security:** Restrict write operations to authorized clients
 - **Multi-Tenancy:** Different clients see different tool subsets
 - **Compliance:** Audit trail for tool access
@@ -305,6 +320,7 @@ These features are available in v2.14 and can be adopted incrementally:
 **Why:** Significant performance improvement for repeated schema lookups.
 
 **Changes Required:**
+
 1. Modify tools to accept `Context` parameter
 2. Implement per-session `SchemaManager` caching
 3. Update pagination state handling
@@ -312,6 +328,7 @@ These features are available in v2.14 and can be adopted incrementally:
 **Estimated Effort:** 2-3 days
 
 **Code Example:**
+
 ```python
 @mcp.tool()
 async def data_schema(ctx: Context, file: str, ...):
@@ -321,7 +338,7 @@ async def data_schema(ctx: Context, file: str, ...):
     if not schema_mgr:
         schema_mgr = SchemaManager()
         await ctx.set_state(cache_key, schema_mgr)
-    
+
     # Subsequent calls reuse the same instance
     schema_info = schema_mgr.get_schema_info_for_file(file)
 ```
@@ -331,6 +348,7 @@ async def data_schema(ctx: Context, file: str, ...):
 **Why:** Better debugging experience with richer error information.
 
 **Changes Required:**
+
 1. Add tool/operation context to ToolError messages
 2. Include file paths and operation types in errors
 3. Add validation hints to error responses
@@ -342,6 +360,7 @@ async def data_schema(ctx: Context, file: str, ...):
 **Why:** Type-safe resource URIs with automatic validation.
 
 **Changes Required:**
+
 1. Update resource decorators to use template syntax
 2. Add URI parameter validation
 3. Implement 404 handling for missing resources
@@ -357,11 +376,13 @@ async def data_schema(ctx: Context, file: str, ...):
 **When:** After v3.0 reaches stable release (not beta)
 
 **Breaking Changes to Address:**
+
 1. Import path changes (mostly automatic)
 2. Provider/transform API adoption
 3. Component lifecycle changes
 
 **Migration Steps:**
+
 1. Update `fastmcp` dependency to `>=3.0.0`
 2. Run migration script (provided by FastMCP)
 3. Refactor to provider architecture (optional but recommended)
@@ -371,6 +392,7 @@ async def data_schema(ctx: Context, file: str, ...):
 **Estimated Effort:** 1-2 weeks for full migration
 
 **Benefits:**
+
 - Modern architecture
 - Better composability
 - Hot-reload development
@@ -412,11 +434,11 @@ async def data_schema(ctx: Context, file: str, ...):
 
 ### Risks of Staying on v2.14.x
 
-| Risk | Severity | Mitigation |
-|------|----------|----------|
-| Missing new features | Low | v2.14 is feature-complete for current needs |
-| Security updates | Low | FastMCP team committed to v2.x security patches |
-| Community support | Low | v2.x will be supported for 12+ months |
+| Risk                 | Severity | Mitigation                                      |
+| -------------------- | -------- | ----------------------------------------------- |
+| Missing new features | Low      | v2.14 is feature-complete for current needs     |
+| Security updates     | Low      | FastMCP team committed to v2.x security patches |
+| Community support    | Low      | v2.x will be supported for 12+ months           |
 
 **Verdict:** ✅ Safe to stay on v2.14.x for production
 
@@ -424,12 +446,12 @@ async def data_schema(ctx: Context, file: str, ...):
 
 ### Risks of Upgrading to v3.0 (Beta)
 
-| Risk | Severity | Mitigation |
-|------|----------|----------|
-| Breaking changes | High | Wait for stable release |
-| Beta instability | High | Test thoroughly in staging |
-| Documentation gaps | Medium | FastMCP v3 docs still evolving |
-| Migration complexity | Medium | FastMCP provides migration tools |
+| Risk                 | Severity | Mitigation                       |
+| -------------------- | -------- | -------------------------------- |
+| Breaking changes     | High     | Wait for stable release          |
+| Beta instability     | High     | Test thoroughly in staging       |
+| Documentation gaps   | Medium   | FastMCP v3 docs still evolving   |
+| Migration complexity | Medium   | FastMCP provides migration tools |
 
 **Verdict:** ⚠️ Wait for stable v3.0 release
 
@@ -465,35 +487,35 @@ async def data_schema(ctx: Context, file: str, ...):
 
 ### FastMCP Documentation
 
-- **v2.x Docs:** https://gofastmcp.com/
-- **v3.0 Beta Release:** https://github.com/jlowin/fastmcp/releases/tag/v3.0.0b1
-- **Migration Guide:** https://github.com/jlowin/fastmcp/blob/main/docs/development/upgrade-guide.mdx
-- **Community Discord:** https://discord.gg/uu8dJCgttd
+- **v2.x Docs:** <https://gofastmcp.com/>
+- **v3.0 Beta Release:** <https://github.com/jlowin/fastmcp/releases/tag/v3.0.0b1>
+- **Migration Guide:** <https://github.com/jlowin/fastmcp/blob/main/docs/development/upgrade-guide.mdx>
+- **Community Discord:** <https://discord.gg/uu8dJCgttd>
 
 ### Dependency Changelogs
 
-- **tomlkit 0.14.0:** https://github.com/python-poetry/tomlkit/releases/tag/0.14.0
-- **FastMCP 2.14.4:** https://github.com/jlowin/fastmcp/releases/tag/v2.14.4
-- **orjson 3.11.6:** https://github.com/ijl/orjson/releases
-- **jsonschema 4.26.0:** https://github.com/python-jsonschema/jsonschema/releases
+- **tomlkit 0.14.0:** <https://github.com/python-poetry/tomlkit/releases/tag/0.14.0>
+- **FastMCP 2.14.4:** <https://github.com/jlowin/fastmcp/releases/tag/v2.14.4>
+- **orjson 3.11.6:** <https://github.com/ijl/orjson/releases>
+- **jsonschema 4.26.0:** <https://github.com/python-jsonschema/jsonschema/releases>
 
 ---
 
 ## Appendix A: FastMCP v2.14.4 vs v3.0.0 Feature Comparison
 
-| Feature | v2.14.4 | v3.0.0 | Notes |
-|---------|---------|---------|-------|
-| Basic Tools | ✅ | ✅ | Core functionality identical |
-| Resources | ✅ | ✅ | v3 adds template support |
-| Prompts | ✅ | ✅ | v3 adds Message types |
-| Context | ✅ | ✅ | v3 has enhanced session state |
-| Error Handling | ✅ | ✅ | Same ToolError system |
-| Provider Architecture | ❌ | ✅ | New in v3 |
-| Transforms | ❌ | ✅ | New in v3 |
-| Component Versioning | ❌ | ✅ | New in v3 |
-| Hot Reload | ❌ | ✅ | New in v3 |
-| OpenTelemetry | ❌ | ✅ | New in v3 |
-| Authorization | Basic | Advanced | Enhanced in v3 |
+| Feature               | v2.14.4 | v3.0.0   | Notes                         |
+| --------------------- | ------- | -------- | ----------------------------- |
+| Basic Tools           | ✅      | ✅       | Core functionality identical  |
+| Resources             | ✅      | ✅       | v3 adds template support      |
+| Prompts               | ✅      | ✅       | v3 adds Message types         |
+| Context               | ✅      | ✅       | v3 has enhanced session state |
+| Error Handling        | ✅      | ✅       | Same ToolError system         |
+| Provider Architecture | ❌      | ✅       | New in v3                     |
+| Transforms            | ❌      | ✅       | New in v3                     |
+| Component Versioning  | ❌      | ✅       | New in v3                     |
+| Hot Reload            | ❌      | ✅       | New in v3                     |
+| OpenTelemetry         | ❌      | ✅       | New in v3                     |
+| Authorization         | Basic   | Advanced | Enhanced in v3                |
 
 ---
 
@@ -502,6 +524,7 @@ async def data_schema(ctx: Context, file: str, ...):
 ### Example 1: Session-Scoped State (v2.14 → v2.14 Enhanced)
 
 **Before:**
+
 ```python
 # Global schema manager (shared across all sessions)
 schema_manager = SchemaManager()
@@ -513,6 +536,7 @@ def data_schema(file: str, action: str):
 ```
 
 **After:**
+
 ```python
 # No global state needed
 
@@ -523,7 +547,7 @@ async def data_schema(ctx: Context, file: str, action: str):
     if not schema_manager:
         schema_manager = SchemaManager()
         await ctx.set_state("schema_manager", schema_manager)
-    
+
     # Cache persists for this session only
     schema_info = schema_manager.get_schema_info_for_file(file)
     # ... rest of function
@@ -534,6 +558,7 @@ async def data_schema(ctx: Context, file: str, action: str):
 ### Example 2: Resource Templates (v2.14 → v2.14 Enhanced)
 
 **Before:**
+
 ```python
 @mcp.resource("lmql://constraints/{name}")
 def get_constraint_definition(name: str) -> dict[str, Any]:
@@ -549,6 +574,7 @@ def get_constraint_definition(name: str) -> dict[str, Any]:
 ```
 
 **After:**
+
 ```python
 from fastmcp.resources import ResourceTemplate
 
@@ -568,12 +594,14 @@ def get_constraint_definition(name: str) -> dict[str, Any]:
 ## Conclusion
 
 The dependency updates have been successfully completed, bringing significant improvements:
+
 - ✅ FastMCP 2.14.4 (latest stable)
 - ✅ tomlkit 0.14.0 with nested structure support
 - ✅ All dependencies at latest stable versions
 - ✅ All 350 tests passing with 76% coverage
 
 **Next Steps:**
+
 1. Implement session-scoped schema caching for performance
 2. Monitor FastMCP v3.0 progress
 3. Plan v3.0 migration for when it reaches stable release
