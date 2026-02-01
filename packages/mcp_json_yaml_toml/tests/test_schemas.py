@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -112,13 +113,14 @@ class TestGetIdeSchemaLocations:
     def test_includes_multiple_env_var_paths(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Verify multiple colon-separated paths are all included."""
+        """Verify multiple paths separated by os.pathsep are all included."""
         dir1 = tmp_path / "schemas1"
         dir2 = tmp_path / "schemas2"
         dir1.mkdir()
         dir2.mkdir()
 
-        monkeypatch.setenv("MCP_SCHEMA_CACHE_DIRS", f"{dir1}:{dir2}")
+        # Use os.pathsep for cross-platform compatibility (: on Unix, ; on Windows)
+        monkeypatch.setenv("MCP_SCHEMA_CACHE_DIRS", f"{dir1}{os.pathsep}{dir2}")
         monkeypatch.setattr("mcp_json_yaml_toml.schemas._expand_ide_patterns", list)
 
         locations = _get_ide_schema_locations()

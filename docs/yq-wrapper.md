@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `yq_wrapper` module provides a Python interface to the yq binary for querying and manipulating YAML, JSON, TOML, and other configuration formats. It automatically detects and uses the latest yq version from GitHub releases, with fallback to bundled binaries.
+The `yq_wrapper` module provides a Python interface to the yq binary for querying and manipulating YAML, JSON, TOML, and other configuration formats. It uses a pinned, tested version of yq by default (configurable via environment variable) and automatically downloads the binary on first use.
 
 ## Features
 
@@ -16,10 +16,14 @@ The `yq_wrapper` module provides a Python interface to the yq binary for queryin
 
 The yq wrapper includes intelligent binary management:
 
-- **Primary source**: Automatically downloads the latest yq release from GitHub
-- **Fallback**: Uses bundled binaries if download fails or is disabled
+- **Pinned version**: Uses a tested, pinned yq version by default (currently v4.52.2)
+- **Bundled checksums**: SHA256 checksums for the pinned version are bundled—no network request needed for verification
+- **User override**: Set `YQ_VERSION` environment variable to use a different version (requires network for checksums)
+- **Auto-download**: Automatically downloads the binary from GitHub CDN on first use
+- **Checksum verification**: All downloads are verified against SHA256 checksums
 - **Storage**: Downloaded binaries are cached at `~/.local/bin/` (with fallback to package directory)
-- **No external dependencies** required beyond Python 3.11+
+- **Cross-platform**: Supports Linux (amd64/arm64), macOS (amd64/arm64), and Windows (amd64)
+- **Zero GitHub API calls**: Binary download goes directly to CDN, checksums are bundled
 
 The wrapper will automatically handle binary discovery, downloading, and verification on first use.
 
@@ -303,12 +307,12 @@ The wrapper supports all formats that the current yq version supports:
 
 The wrapper automatically detects your platform and uses the appropriate binary:
 
-| Platform | Architecture | Binary Name          |
-| -------- | ------------ | -------------------- |
-| Linux    | x86_64/amd64 | yq-linux-amd64       |
-| macOS    | x86_64/amd64 | yq-darwin-amd64      |
-| macOS    | arm64        | yq-darwin-arm64      |
-| Windows  | x86_64/amd64 | yq-windows-amd64.exe |
+| Platform | Architecture | Binary Name (example)        |
+| -------- | ------------ | ---------------------------- |
+| Linux    | x86_64/amd64 | yq-linux-amd64-v4.52.2       |
+| macOS    | x86_64/amd64 | yq-darwin-amd64-v4.52.2      |
+| macOS    | arm64        | yq-darwin-arm64-v4.52.2      |
+| Windows  | x86_64/amd64 | yq-windows-amd64-v4.52.2.exe |
 
 ## Binary Management
 
@@ -316,43 +320,100 @@ The wrapper automatically detects your platform and uses the appropriate binary:
 
 The wrapper automatically manages yq binaries with these features:
 
+**Version Selection:**
+
+- Uses a pinned, tested version by default (e.g., `v4.52.2`)
+- Override with `YQ_VERSION` environment variable (e.g., `YQ_VERSION=v4.50.0`)
+- Zero GitHub API calls—checksums are bundled, only CDN download needed
+
 **Binary Discovery Priority:**
 
-1. Check for latest release on GitHub API
-2. Download to `~/.local/bin/` (standard user binary location)
-3. Verify SHA256 checksums from GitHub releases
-4. Fall back to package-bundled binaries if download fails
+1. **YQ_BINARY_PATH** - Explicit user override (custom installation path)
+2. **Cached versioned binary** - Check `~/.local/bin/yq-{platform}-{arch}-{version}`
+3. **System PATH** - Look for `yq` installed via package manager (homebrew, apt, chocolatey)
+4. **Auto-download** - Download from GitHub releases CDN if none found
+5. Verify SHA256 checksums (bundled for default version, fetched for custom versions)
+
+**Important:** The system PATH lookup validates that the found `yq` is the correct
+mikefarah/yq (Go-based), not the Python `yq` wrapper (kislyuk/yq). If Python yq is
+found, it's skipped and auto-download proceeds.
 
 **Storage Locations (in order of preference):**
 
-- `~/.local/bin/yq-<platform>-<arch>` - User binary directory (preferred)
-- `<package>/binaries/yq-<platform>-<arch>` - Package directory (fallback)
+- `~/.local/bin/yq-<platform>-<arch>-<version>` - User binary directory (preferred)
+- `<package>/binaries/yq-<platform>-<arch>-<version>` - Package directory (fallback)
+
+**Version-Aware Caching:**
+
+Binary filenames include the version (e.g., `yq-linux-amd64-v4.52.2`), which means:
+
+- Updating the pinned version automatically triggers a new download
+- Old versions are automatically cleaned up after successful download
+- Setting `YQ_VERSION` env var uses a separate cached binary per version
 
 **First-Use Setup:**
 
 On first execution, the wrapper will:
 
 1. Detect your platform and architecture
-2. Query GitHub API for the latest yq release
-3. Download the binary if not already present
-4. Verify checksums for security
+2. Use bundled SHA256 checksum (for pinned version) or fetch from GitHub (for custom version)
+3. Download the binary from GitHub releases CDN (~12MB)
+4. Verify the downloaded binary against checksum
 5. Cache the binary for future use
 
 No manual setup required—everything happens automatically on first use.
+For the default pinned version, only one network request is made (the binary download).
 
 ### Version Management
 
-To check which yq version is in use:
+**Check current configuration:**
 
 ```python
-from mcp_json_yaml_toml.yq_wrapper import get_yq_binary_path
+from mcp_json_yaml_toml.yq_wrapper import get_yq_version, get_yq_binary_path
 
+# Get the version that will be downloaded
+print(f"Configured version: {get_yq_version()}")
+# Output: v4.52.2
+
+# Get the binary path
 binary_path = get_yq_binary_path()
 print(f"yq binary: {binary_path}")
-# Output: /home/user/.local/bin/yq-linux-amd64
+# Output: /home/user/.local/bin/yq-linux-amd64-v4.52.2
 ```
 
-The actual version can be checked by running the binary with `--version`.
+**Override the version:**
+
+```bash
+# Use a specific yq version
+export YQ_VERSION=v4.50.0
+uvx mcp-json-yaml-toml
+```
+
+**Use a custom binary location:**
+
+```bash
+# Point to a specific yq binary
+export YQ_BINARY_PATH=/usr/local/bin/yq
+uvx mcp-json-yaml-toml
+```
+
+**Note:** The pinned version is updated weekly via automated CI when new yq releases pass our test suite.
+
+### Package Manager Installation (Recommended for Corporate Environments)
+
+For environments with restricted internet access or where auto-download is not desired,
+install yq via your system package manager:
+
+| Platform | Command                                        | Notes                           |
+| -------- | ---------------------------------------------- | ------------------------------- |
+| macOS    | `brew install yq`                              | Homebrew (most common)          |
+| Windows  | `choco install yq`                             | Chocolatey                      |
+| Linux    | `snap install yq`                              | Snap (universal)                |
+| Linux    | `apt install yq`                               | Debian/Ubuntu (may be outdated) |
+| Any      | `go install github.com/mikefarah/yq/v4@latest` | Go toolchain required           |
+
+The wrapper will automatically detect and use system-installed yq when found in PATH,
+avoiding any network requests. Make sure it's the Go-based mikefarah/yq (not Python yq).
 
 ## Performance Notes
 
@@ -370,9 +431,10 @@ If you get `YQBinaryNotFoundError`:
 
 **Auto-download issues:**
 
-1. Check network connectivity (GitHub API must be reachable)
+1. Check network connectivity (GitHub releases must be reachable)
 2. Verify `~/.local/bin/` is writable (or package binaries/ directory)
 3. Check that your platform is supported (Linux amd64/arm64, macOS amd64/arm64, Windows amd64)
+4. If using `YQ_VERSION` override, ensure the version exists on GitHub
 
 **Manual fallback:**
 

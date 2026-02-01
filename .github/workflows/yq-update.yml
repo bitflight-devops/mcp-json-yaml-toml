@@ -1,0 +1,183 @@
+name: Weekly yq Version Update
+
+on:
+  schedule:
+    # Run every Monday at 9:00 UTC
+    - cron: "0 9 * * 1"
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-update:
+    name: Check for yq updates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Get current pinned version
+        id: current
+        run: |
+          CURRENT_VERSION=$(grep -oP 'DEFAULT_YQ_VERSION = "\K[^"]+' packages/mcp_json_yaml_toml/yq_wrapper.py)
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current pinned version: $CURRENT_VERSION"
+
+      - name: Get latest yq release
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST_VERSION=$(gh api repos/mikefarah/yq/releases/latest --jq '.tag_name')
+          RELEASE_URL=$(gh api repos/mikefarah/yq/releases/latest --jq '.html_url')
+          RELEASE_BODY=$(gh api repos/mikefarah/yq/releases/latest --jq '.body')
+          echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "url=$RELEASE_URL" >> $GITHUB_OUTPUT
+          # Store release body in a file to handle multiline content
+          echo "$RELEASE_BODY" > /tmp/release_notes.md
+          echo "Latest yq version: $LATEST_VERSION"
+
+      - name: Check if update needed
+        id: check
+        run: |
+          if [ "${{ steps.current.outputs.version }}" = "${{ steps.latest.outputs.version }}" ]; then
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "Already on latest version"
+          else
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Update available: ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          fi
+
+      - name: Fetch checksums for new version
+        if: steps.check.outputs.needs_update == 'true'
+        id: checksums
+        env:
+          NEW_VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          # Download checksums file for the new version
+          CHECKSUMS_URL="https://github.com/mikefarah/yq/releases/download/${NEW_VERSION}/checksums"
+          echo "Downloading checksums from: $CHECKSUMS_URL"
+          curl -sL "$CHECKSUMS_URL" -o /tmp/checksums.txt
+
+          # Extract SHA256 hashes for the platforms we support
+          # Search for 64-character hex token (SHA256) on each binary's line
+          for binary in yq_linux_amd64 yq_linux_arm64 yq_darwin_amd64 yq_darwin_arm64 yq_windows_amd64.exe; do
+            # Get the line for this binary
+            line=$(grep "^${binary}[[:space:]]" /tmp/checksums.txt)
+            if [ -z "$line" ]; then
+              echo "ERROR: Could not find line for $binary in checksums file"
+              echo "Checksums file content:"
+              cat /tmp/checksums.txt
+              exit 1
+            fi
+
+            # Extract 64-character hex token (SHA256) from the line
+            sha256=$(echo "$line" | grep -oE '[0-9a-fA-F]{64}' | head -1)
+            if [ -z "$sha256" ]; then
+              echo "ERROR: Could not find 64-character SHA256 hash for $binary"
+              echo "Line content: $line"
+              exit 1
+            fi
+
+            # Validate the extracted hash is exactly 64 hex characters
+            if ! echo "$sha256" | grep -qE '^[0-9a-f]{64}$'; then
+              echo "ERROR: Invalid SHA256 format for $binary: $sha256"
+              exit 1
+            fi
+
+            echo "Found checksum for $binary: $sha256"
+
+            # Export as environment variable for Python script
+            case "$binary" in
+              yq_darwin_amd64) echo "CS_DARWIN_AMD64=$sha256" >> "$GITHUB_ENV" ;;
+              yq_darwin_arm64) echo "CS_DARWIN_ARM64=$sha256" >> "$GITHUB_ENV" ;;
+              yq_linux_amd64) echo "CS_LINUX_AMD64=$sha256" >> "$GITHUB_ENV" ;;
+              yq_linux_arm64) echo "CS_LINUX_ARM64=$sha256" >> "$GITHUB_ENV" ;;
+              yq_windows_amd64.exe) echo "CS_WINDOWS_AMD64=$sha256" >> "$GITHUB_ENV" ;;
+            esac
+          done
+
+      - name: Update version and checksums
+        if: steps.check.outputs.needs_update == 'true'
+        env:
+          NEW_VERSION: ${{ steps.latest.outputs.version }}
+          OLD_VERSION: ${{ steps.current.outputs.version }}
+        run: |
+          # Update the version constant
+          sed -i "s/DEFAULT_YQ_VERSION = \"${OLD_VERSION}\"/DEFAULT_YQ_VERSION = \"${NEW_VERSION}\"/" \
+            packages/mcp_json_yaml_toml/yq_wrapper.py
+
+          # Update the checksums dict using the helper script
+          python3 .github/scripts/update_yq_checksums.py
+
+          echo "Updated version to ${NEW_VERSION} and checksums"
+
+      - name: Install uv
+        if: steps.check.outputs.needs_update == 'true'
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        if: steps.check.outputs.needs_update == 'true'
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        if: steps.check.outputs.needs_update == 'true'
+        run: uv sync
+
+      - name: Run tests with new version
+        if: steps.check.outputs.needs_update == 'true'
+        id: tests
+        run: |
+          if uv run pytest -x -q; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.check.outputs.needs_update == 'true' && steps.tests.outputs.passed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH_NAME="chore/update-yq-${{ steps.latest.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH_NAME"
+          git add packages/mcp_json_yaml_toml/yq_wrapper.py
+          git commit -m "chore(yq): update pinned version to ${{ steps.latest.outputs.version }}"
+          git push origin "$BRANCH_NAME"
+
+          # Create PR with release notes
+          gh pr create \
+            --title "chore(yq): update to ${{ steps.latest.outputs.version }}" \
+            --body "$(cat <<EOF
+          ## yq Version Update
+
+          Updates pinned yq version from \`${{ steps.current.outputs.version }}\` to \`${{ steps.latest.outputs.version }}\`.
+
+          **Release URL:** ${{ steps.latest.outputs.url }}
+
+          ### Changes
+          - Updated \`DEFAULT_YQ_VERSION\` to \`${{ steps.latest.outputs.version }}\`
+          - Updated \`DEFAULT_YQ_CHECKSUMS\` with new SHA256 hashes
+
+          ### Release Notes
+
+          $(cat /tmp/release_notes.md)
+
+          ---
+          *This PR was automatically created by the weekly yq update workflow.*
+          EOF
+          )"
+
+      - name: Report test failure
+        if: steps.check.outputs.needs_update == 'true' && steps.tests.outputs.passed == 'false'
+        run: |
+          echo "::warning::Tests failed with yq ${{ steps.latest.outputs.version }}. Manual investigation required."
+          echo "Current version: ${{ steps.current.outputs.version }}"
+          echo "Attempted version: ${{ steps.latest.outputs.version }}"
+          exit 1

@@ -35,6 +35,7 @@ dependencies = [
 	"lmql>=0.7.3",
 	"jsonschema>=4.26.0",
 	"json-strong-typing>=0.4.3",
+	"portalocker>=3.1.1",  # Cross-platform file locking for binary downloads
 ]
 
 [dependency-groups]

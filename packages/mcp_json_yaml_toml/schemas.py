@@ -351,9 +351,10 @@ def _get_ide_schema_locations() -> list[Path]:
             pass
 
     # 2. Check environment variable for custom locations
+    # Use os.pathsep for cross-platform compatibility (: on Unix, ; on Windows)
     env_dirs = os.getenv("MCP_SCHEMA_CACHE_DIRS")
     if env_dirs:
-        for dir_str in env_dirs.split(":"):
+        for dir_str in env_dirs.split(os.pathsep):
             dir_path = Path(dir_str.strip()).expanduser()
             if dir_path.exists() and dir_path.is_dir():
                 locations.append(dir_path)
