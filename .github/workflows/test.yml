@@ -163,6 +163,44 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Install yq binary (Unix)
+        if: runner.os != 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ~/.local/bin
+          YQ_VERSION=$(gh api repos/mikefarah/yq/releases/latest --jq '.tag_name')
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            ARCH=$(uname -m)
+            if [ "$ARCH" = "arm64" ]; then
+              YQ_BINARY="yq_darwin_arm64"
+              YQ_LOCAL="yq-darwin-arm64"
+            else
+              YQ_BINARY="yq_darwin_amd64"
+              YQ_LOCAL="yq-darwin-amd64"
+            fi
+          else
+            YQ_BINARY="yq_linux_amd64"
+            YQ_LOCAL="yq-linux-amd64"
+          fi
+          gh release download "$YQ_VERSION" --repo mikefarah/yq --pattern "$YQ_BINARY" --output ~/.local/bin/"$YQ_LOCAL"
+          chmod +x ~/.local/bin/"$YQ_LOCAL"
+          echo "Downloaded yq $YQ_VERSION as $YQ_LOCAL"
+
+      - name: Install yq binary (Windows)
+        if: runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.local\bin" | Out-Null
+          $version = gh api repos/mikefarah/yq/releases/latest --jq '.tag_name'
+          $arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
+          $binaryName = "yq_windows_$arch.exe"
+          $localName = "yq-windows-$arch.exe"
+          gh release download $version --repo mikefarah/yq --pattern $binaryName --output "$env:USERPROFILE\.local\bin\$localName"
+          Write-Host "Downloaded yq $version as $localName"
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
