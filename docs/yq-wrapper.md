@@ -306,12 +306,12 @@ The wrapper supports all formats that the current yq version supports:
 
 The wrapper automatically detects your platform and uses the appropriate binary:
 
-| Platform | Architecture | Binary Name          |
-| -------- | ------------ | -------------------- |
-| Linux    | x86_64/amd64 | yq-linux-amd64       |
-| macOS    | x86_64/amd64 | yq-darwin-amd64      |
-| macOS    | arm64        | yq-darwin-arm64      |
-| Windows  | x86_64/amd64 | yq-windows-amd64.exe |
+| Platform | Architecture | Binary Name (example)        |
+| -------- | ------------ | ---------------------------- |
+| Linux    | x86_64/amd64 | yq-linux-amd64-v4.52.2       |
+| macOS    | x86_64/amd64 | yq-darwin-amd64-v4.52.2      |
+| macOS    | arm64        | yq-darwin-arm64-v4.52.2      |
+| Windows  | x86_64/amd64 | yq-windows-amd64-v4.52.2.exe |
 
 ## Binary Management
 
@@ -334,8 +334,16 @@ The wrapper automatically manages yq binaries with these features:
 
 **Storage Locations (in order of preference):**
 
-- `~/.local/bin/yq-<platform>-<arch>` - User binary directory (preferred)
-- `<package>/binaries/yq-<platform>-<arch>` - Package directory (fallback)
+- `~/.local/bin/yq-<platform>-<arch>-<version>` - User binary directory (preferred)
+- `<package>/binaries/yq-<platform>-<arch>-<version>` - Package directory (fallback)
+
+**Version-Aware Caching:**
+
+Binary filenames include the version (e.g., `yq-linux-amd64-v4.52.2`), which means:
+
+- Updating the pinned version automatically triggers a new download
+- Old versions are automatically cleaned up after successful download
+- Setting `YQ_VERSION` env var uses a separate cached binary per version
 
 **First-Use Setup:**
 
@@ -362,7 +370,7 @@ print(f"Configured version: {get_yq_version()}")
 # Get the binary path
 binary_path = get_yq_binary_path()
 print(f"yq binary: {binary_path}")
-# Output: /home/user/.local/bin/yq-linux-amd64
+# Output: /home/user/.local/bin/yq-linux-amd64-v4.52.2
 ```
 
 **Override the version:**

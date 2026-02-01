@@ -215,6 +215,35 @@ def _get_checksums(version: str) -> dict[str, str]:  # pragma: no cover
     return checksums
 
 
+def _cleanup_old_versions(
+    storage_dir: Path, platform_prefix: str, current_binary: str
+) -> None:  # pragma: no cover
+    """Clean up old version binaries after a successful download.
+
+    Removes old versioned binaries for the same platform to prevent disk space
+    accumulation. For example, when downloading yq-linux-amd64-v4.53.0, this
+    will remove yq-linux-amd64-v4.52.2 if it exists.
+
+    Args:
+        storage_dir: Directory containing yq binaries
+        platform_prefix: Platform/arch prefix (e.g., "yq-linux-amd64")
+        current_binary: Current binary filename to keep (e.g., "yq-linux-amd64-v4.53.0")
+    """
+    # Find old versioned binaries matching the platform prefix
+    # Pattern: yq-linux-amd64-v*.* (matches versioned binaries)
+    for old_binary in storage_dir.glob(f"{platform_prefix}-v*"):
+        if old_binary.name != current_binary:
+            try:
+                old_binary.unlink()
+                print(f"Cleaned up old version: {old_binary.name}", file=sys.stderr)
+            except OSError as e:
+                # Best effort - don't fail if cleanup fails
+                print(
+                    f"Note: Could not remove old binary {old_binary.name}: {e}",
+                    file=sys.stderr,
+                )
+
+
 def _verify_checksum(file_path: Path, expected_hash: str) -> bool:
     """Verify a file's SHA256 checksum.
 
@@ -232,18 +261,24 @@ def _verify_checksum(file_path: Path, expected_hash: str) -> bool:
 
 
 def _download_yq_binary(
-    binary_name: str, github_name: str, dest_path: Path, version: str
+    binary_name: str,
+    github_name: str,
+    dest_path: Path,
+    version: str,
+    platform_prefix: str,
 ) -> None:  # pragma: no cover
     """Download and verify a single yq binary with cross-platform file locking.
 
     Uses portalocker for cross-platform file locking to ensure only one process
     downloads the binary. Other processes block until the lock is released.
+    After successful download, cleans up old versions of the same platform binary.
 
     Args:
-        binary_name: Local filename (e.g., "yq-linux-amd64")
+        binary_name: Local filename (e.g., "yq-linux-amd64-v4.52.2")
         github_name: GitHub release asset name (e.g., "yq_linux_amd64")
         dest_path: Destination path for downloaded binary
         version: Release version tag (e.g., "v4.48.2")
+        platform_prefix: Platform/arch prefix without version (e.g., "yq-linux-amd64")
 
     Raises:
         YQError: If download or verification fails
@@ -303,6 +338,9 @@ def _download_yq_binary(
                 f"Successfully downloaded and verified {binary_name}", file=sys.stderr
             )
 
+            # Clean up old versions after successful download
+            _cleanup_old_versions(dest_path.parent, platform_prefix, binary_name)
+
         finally:
             # Clean up temp file if it still exists (e.g., if verification failed)
             with contextlib.suppress(OSError):
@@ -340,15 +378,22 @@ def get_yq_binary_path() -> Path:
             f"Unsupported architecture: {machine}. Supported architectures: x86_64/amd64, arm64/aarch64"
         )
 
-    # Determine binary filename and GitHub asset name
+    # Get the target version (pinned default or env var override)
+    version = get_yq_version()
+
+    # Determine binary filename (includes version for proper cache invalidation),
+    # platform prefix (for cleanup), and GitHub asset name (for download URL)
     if system == "linux":
-        binary_name = f"yq-linux-{arch}"
+        platform_prefix = f"yq-linux-{arch}"
+        binary_name = f"{platform_prefix}-{version}"
         github_name = f"yq_linux_{arch}"
     elif system == "darwin":  # pragma: no cover
-        binary_name = f"yq-darwin-{arch}"
+        platform_prefix = f"yq-darwin-{arch}"
+        binary_name = f"{platform_prefix}-{version}"
         github_name = f"yq_darwin_{arch}"
     elif system == "windows":  # pragma: no cover
-        binary_name = f"yq-windows-{arch}.exe"
+        platform_prefix = f"yq-windows-{arch}"
+        binary_name = f"{platform_prefix}-{version}.exe"
         github_name = f"yq_windows_{arch}.exe"
     else:  # pragma: no cover
         raise YQBinaryNotFoundError(
@@ -374,11 +419,10 @@ def get_yq_binary_path() -> Path:
     )  # pragma: no cover
 
     try:  # pragma: no cover
-        # Get pinned version (or override from YQ_VERSION env var)
-        version = get_yq_version()
-
-        # Download to storage directory
-        _download_yq_binary(binary_name, github_name, storage_binary, version)
+        # Download to storage directory (version already resolved above)
+        _download_yq_binary(
+            binary_name, github_name, storage_binary, version, platform_prefix
+        )
 
         # Verify it exists and return
         if storage_binary.exists():
