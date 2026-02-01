@@ -13,6 +13,7 @@ import contextlib
 import hashlib
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import uuid
@@ -391,19 +392,82 @@ def _download_yq_binary(
         lock_path.unlink()
 
 
-def get_yq_binary_path() -> Path:
-    """Get the path to the platform-specific yq binary.
+def _find_system_yq() -> Path | None:
+    """Find yq binary installed via system package manager.
 
-    Detects the current operating system and architecture, then returns the
-    path to the appropriate bundled yq binary. If the binary is not found in
-    bundled locations, attempts to auto-download it from GitHub releases.
+    Checks if yq is available in the system PATH (e.g., installed via
+    homebrew, apt, chocolatey, or go install).
+
+    Returns:
+        Path to system yq binary if found, None otherwise
+    """
+    yq_path = shutil.which("yq")
+    if yq_path:
+        return Path(yq_path)
+    return None
+
+
+def _get_platform_binary_info(
+    system: str, arch: str, version: str
+) -> tuple[str, str, str]:
+    """Get platform-specific binary naming information.
+
+    Args:
+        system: Operating system (linux, darwin, windows)
+        arch: Architecture (amd64, arm64)
+        version: yq version string (e.g., v4.52.2)
+
+    Returns:
+        Tuple of (platform_prefix, binary_name, github_name)
+
+    Raises:
+        YQBinaryNotFoundError: If the platform is not supported
+    """
+    if system == "linux":
+        platform_prefix = f"yq-linux-{arch}"
+        binary_name = f"{platform_prefix}-{version}"
+        github_name = f"yq_linux_{arch}"
+    elif system == "darwin":
+        platform_prefix = f"yq-darwin-{arch}"
+        binary_name = f"{platform_prefix}-{version}"
+        github_name = f"yq_darwin_{arch}"
+    elif system == "windows":
+        platform_prefix = f"yq-windows-{arch}"
+        binary_name = f"{platform_prefix}-{version}.exe"
+        github_name = f"yq_windows_{arch}.exe"
+    else:
+        raise YQBinaryNotFoundError(
+            f"Unsupported operating system: {system}. "
+            f"Supported systems: Linux, Darwin (macOS), Windows"
+        )
+    return platform_prefix, binary_name, github_name
+
+
+def get_yq_binary_path() -> Path:
+    """Get the path to the yq binary.
+
+    Resolution order:
+    1. YQ_BINARY_PATH env var (explicit user override)
+    2. Cached versioned binary (~/.local/bin/yq-{platform}-{arch}-{version})
+    3. System PATH lookup (yq from homebrew/apt/chocolatey)
+    4. Auto-download from GitHub releases CDN
 
     Returns:
         Path to the yq binary executable
 
     Raises:
-        YQBinaryNotFoundError: If the binary for this platform cannot be found or downloaded
+        YQBinaryNotFoundError: If the binary cannot be found or downloaded
     """
+    # 1. Check for explicit user override via YQ_BINARY_PATH
+    custom_path = os.environ.get("YQ_BINARY_PATH", "").strip()
+    if custom_path:
+        custom_binary = Path(custom_path).expanduser()
+        if custom_binary.exists() and custom_binary.is_file():
+            return custom_binary
+        raise YQBinaryNotFoundError(
+            f"YQ_BINARY_PATH set to '{custom_path}' but file does not exist"
+        )
+
     system = platform.system().lower()
     machine = platform.machine().lower()
 
@@ -420,41 +484,41 @@ def get_yq_binary_path() -> Path:
     # Get the target version (pinned default or env var override)
     version = get_yq_version()
 
-    # Determine binary filename (includes version for proper cache invalidation),
-    # platform prefix (for cleanup), and GitHub asset name (for download URL)
-    if system == "linux":
-        platform_prefix = f"yq-linux-{arch}"
-        binary_name = f"{platform_prefix}-{version}"
-        github_name = f"yq_linux_{arch}"
-    elif system == "darwin":  # pragma: no cover
-        platform_prefix = f"yq-darwin-{arch}"
-        binary_name = f"{platform_prefix}-{version}"
-        github_name = f"yq_darwin_{arch}"
-    elif system == "windows":  # pragma: no cover
-        platform_prefix = f"yq-windows-{arch}"
-        binary_name = f"{platform_prefix}-{version}.exe"
-        github_name = f"yq_windows_{arch}.exe"
-    else:  # pragma: no cover
-        raise YQBinaryNotFoundError(
-            f"Unsupported operating system: {system}. Supported systems: Linux, Darwin (macOS), Windows"
-        )
+    # Get platform-specific binary naming
+    platform_prefix, binary_name, github_name = _get_platform_binary_info(
+        system, arch, version
+    )
 
     # Look for binary in multiple locations
-    # 1. ~/.local/bin/ or package binaries/ (determined by _get_storage_location)
+    # 2. Cached versioned binary (~/.local/bin/ or package binaries/)
     storage_dir = _get_storage_location()
     storage_binary = storage_dir / binary_name
 
-    # Check if binary already exists
     if storage_binary.exists():
         return storage_binary
 
-    # Binary not found - attempt auto-download
-    # This code path is only reached when binary is missing (not during normal testing)
+    # 3. Check system PATH for yq installed via package manager
+    # (homebrew, apt, chocolatey, go install, etc.)
+    system_yq = _find_system_yq()
+    if system_yq:
+        print(
+            f"Using system-installed yq at: {system_yq}", file=sys.stderr
+        )  # pragma: no cover
+        return system_yq  # pragma: no cover
+
+    # 4. Binary not found - attempt auto-download from GitHub
     print(
         f"\nyq binary not found for {system}/{arch}", file=sys.stderr
     )  # pragma: no cover
     print(
         "Attempting to auto-download from GitHub releases...", file=sys.stderr
+    )  # pragma: no cover
+    print(
+        "Tip: Install yq via package manager to avoid downloads:", file=sys.stderr
+    )  # pragma: no cover
+    print(
+        "  macOS: brew install yq | Windows: choco install yq | Linux: snap install yq",
+        file=sys.stderr,
     )  # pragma: no cover
 
     try:  # pragma: no cover

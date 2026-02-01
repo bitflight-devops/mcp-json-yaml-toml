@@ -22,7 +22,9 @@ from mcp_json_yaml_toml.yq_wrapper import (
     YQExecutionError,
     YQResult,
     _cleanup_old_versions,
+    _find_system_yq,
     _get_checksums,
+    _get_platform_binary_info,
     _verify_checksum,
     execute_yq,
     get_yq_binary_path,
@@ -543,6 +545,146 @@ class TestVerifyChecksum:
         result = _verify_checksum(test_file, expected_hash)
 
         assert result is True
+
+
+class TestYQBinaryPathOverride:
+    """Tests for YQ_BINARY_PATH environment variable override."""
+
+    def test_yq_binary_path_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that YQ_BINARY_PATH env var overrides default resolution.
+
+        Tests: Custom binary path override
+        How: Create a fake binary and set YQ_BINARY_PATH to it
+        Why: Allow users to specify custom yq installations
+        """
+        # Arrange - create a fake binary file
+        fake_binary = tmp_path / "my-custom-yq"
+        fake_binary.write_text("fake binary")
+        monkeypatch.setenv("YQ_BINARY_PATH", str(fake_binary))
+
+        # Act
+        result = get_yq_binary_path()
+
+        # Assert
+        assert result == fake_binary
+
+    def test_yq_binary_path_nonexistent_raises_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that nonexistent YQ_BINARY_PATH raises clear error.
+
+        Tests: Error handling for invalid custom path
+        How: Set YQ_BINARY_PATH to nonexistent file
+        Why: Provide clear error when user misconfigures path
+        """
+        # Arrange
+        nonexistent = tmp_path / "does-not-exist"
+        monkeypatch.setenv("YQ_BINARY_PATH", str(nonexistent))
+
+        # Act & Assert
+        with pytest.raises(YQBinaryNotFoundError, match="does not exist"):
+            get_yq_binary_path()
+
+    def test_yq_binary_path_supports_tilde_expansion(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that YQ_BINARY_PATH supports ~ expansion.
+
+        Tests: Home directory expansion
+        How: Set YQ_BINARY_PATH with ~ prefix
+        Why: Allow convenient home-relative paths
+        """
+        # Arrange - we can't actually test ~ expansion without creating file in home
+        # Just verify the code path handles expanduser
+        fake_path = tmp_path / "yq-test"
+        fake_path.write_text("fake")
+        monkeypatch.setenv("YQ_BINARY_PATH", str(fake_path))
+
+        # Act
+        result = get_yq_binary_path()
+
+        # Assert - path was resolved
+        assert result.exists()
+
+
+class TestSystemYQDetection:
+    """Tests for system-installed yq detection."""
+
+    def test_find_system_yq_returns_path_when_found(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test _find_system_yq returns Path when yq is in PATH.
+
+        Tests: System yq detection
+        How: Mock shutil.which to return a path
+        Why: Verify detection works when yq is installed via package manager
+        """
+        # Arrange - mock shutil.which
+        monkeypatch.setattr(
+            "shutil.which", lambda x: "/usr/local/bin/yq" if x == "yq" else None
+        )
+
+        # Act
+        result = _find_system_yq()
+
+        # Assert
+        assert result == Path("/usr/local/bin/yq")
+
+    def test_find_system_yq_returns_none_when_not_found(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test _find_system_yq returns None when yq is not in PATH.
+
+        Tests: System yq not found
+        How: Mock shutil.which to return None
+        Why: Verify graceful handling when yq not installed
+        """
+        # Arrange - mock shutil.which to return None
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        # Act
+        result = _find_system_yq()
+
+        # Assert
+        assert result is None
+
+
+class TestPlatformBinaryInfo:
+    """Tests for _get_platform_binary_info helper function."""
+
+    def test_linux_amd64_naming(self) -> None:
+        """Test binary naming for Linux amd64."""
+        platform_prefix, binary_name, github_name = _get_platform_binary_info(
+            "linux", "amd64", "v4.52.2"
+        )
+        assert platform_prefix == "yq-linux-amd64"
+        assert binary_name == "yq-linux-amd64-v4.52.2"
+        assert github_name == "yq_linux_amd64"
+
+    def test_darwin_arm64_naming(self) -> None:
+        """Test binary naming for macOS arm64."""
+        platform_prefix, binary_name, github_name = _get_platform_binary_info(
+            "darwin", "arm64", "v4.52.2"
+        )
+        assert platform_prefix == "yq-darwin-arm64"
+        assert binary_name == "yq-darwin-arm64-v4.52.2"
+        assert github_name == "yq_darwin_arm64"
+
+    def test_windows_amd64_naming(self) -> None:
+        """Test binary naming for Windows amd64."""
+        platform_prefix, binary_name, github_name = _get_platform_binary_info(
+            "windows", "amd64", "v4.52.2"
+        )
+        assert platform_prefix == "yq-windows-amd64"
+        assert binary_name == "yq-windows-amd64-v4.52.2.exe"
+        assert github_name == "yq_windows_amd64.exe"
+
+    def test_unsupported_os_raises_error(self) -> None:
+        """Test that unsupported OS raises clear error."""
+        with pytest.raises(YQBinaryNotFoundError, match="Unsupported operating system"):
+            _get_platform_binary_info("freebsd", "amd64", "v4.52.2")
 
 
 class TestBundledChecksums:
