@@ -32,11 +32,15 @@ Decimal phases appear between their surrounding integers in numeric order.
 3. yq binary lifecycle management is decoupled from query execution (backends/binary_manager.py exists)
 4. QueryBackend protocol exists with YqBackend implementation (enables future backend swaps)
 5. All existing tests pass without modification (behavior preserved)
-   **Plans**: TBD
+
+**Plans:** 4 plans
 
 Plans:
 
-- [ ] TBD - Will be defined during `/gsd:plan-phase 1`
+- [ ] 01-01-PLAN.md -- Foundation types, QueryBackend protocol, and SAFE-01 ruamel.yaml pin
+- [ ] 01-02-PLAN.md -- Extract pagination logic into services/pagination.py
+- [ ] 01-03-PLAN.md -- Extract binary manager and yq backend, convert yq_wrapper.py to shim
+- [ ] 01-04-PLAN.md -- Extract format detection into formats/base.py, full verification gate
 
 ### Phase 2: Tool Layer Refactoring
 
@@ -98,7 +102,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase                       | Plans Complete | Status      | Completed |
 | --------------------------- | -------------- | ----------- | --------- |
-| 1. Architectural Foundation | 0/TBD          | Not started | -         |
+| 1. Architectural Foundation | 0/4            | Not started | -         |
 | 2. Tool Layer Refactoring   | 0/TBD          | Not started | -         |
 | 3. FastMCP 3.x Migration    | 0/TBD          | Not started | -         |
 | 4. Competitive Features     | 0/TBD          | Not started | -         |
