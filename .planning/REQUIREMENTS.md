@@ -63,30 +63,30 @@ Deferred to future release. Tracked but not in current roadmap.
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-| Requirement | Phase | Status  |
-| ----------- | ----- | ------- |
-| ARCH-01     | —     | Pending |
-| ARCH-02     | —     | Pending |
-| ARCH-03     | —     | Pending |
-| ARCH-04     | —     | Pending |
-| ARCH-05     | —     | Pending |
-| FMCP-01     | —     | Pending |
-| FMCP-02     | —     | Pending |
-| FMCP-03     | —     | Pending |
-| FMCP-04     | —     | Pending |
-| FMCP-05     | —     | Pending |
-| SAFE-01     | —     | Pending |
-| SAFE-02     | —     | Pending |
-| FEAT-01     | —     | Pending |
-| FEAT-02     | —     | Pending |
+| Requirement | Phase   | Status  |
+| ----------- | ------- | ------- |
+| ARCH-01     | Phase 1 | Pending |
+| ARCH-02     | Phase 1 | Pending |
+| ARCH-03     | Phase 1 | Pending |
+| ARCH-04     | Phase 1 | Pending |
+| SAFE-01     | Phase 1 | Pending |
+| ARCH-05     | Phase 2 | Pending |
+| FMCP-04     | Phase 2 | Pending |
+| FMCP-05     | Phase 2 | Pending |
+| FMCP-01     | Phase 3 | Pending |
+| FMCP-02     | Phase 3 | Pending |
+| FMCP-03     | Phase 3 | Pending |
+| SAFE-02     | Phase 3 | Pending |
+| FEAT-01     | Phase 4 | Pending |
+| FEAT-02     | Phase 4 | Pending |
 
 **Coverage:**
 
 - v1 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 
 _Requirements defined: 2026-02-14_
-_Last updated: 2026-02-14 after initial definition_
+_Last updated: 2026-02-14 after roadmap creation_
