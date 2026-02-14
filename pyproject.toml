@@ -91,8 +91,8 @@ source = "vcs"
 addopts = [
     "--cov-report=term-missing",
     "--cov=packages/mcp_json_yaml_toml",
-    "-n",
     "-v",
+    "-n",
     "auto",
 ]
 markers = [
@@ -320,8 +320,12 @@ first = [
     "dependencies",
 ]
 
-[tool.tomlsort.overrides."tool.pytest.*"]
+[tool.tomlsort.overrides."tool.pytest"]
 inline_arrays = true
+
+[tool.tomlsort.overrides."tool.pytest.addopts"]
+table_keys = false
+inline_arrays = false
 
 [tool.tomlsort.overrides."tool.ruff"]
 inline_arrays = true
