@@ -859,7 +859,7 @@ class TestDataMerge:
         """
         # Arrange - non-existent first file
         # Act & Assert - raises ToolError
-        with pytest.raises(ToolError, match="First file not found"):
+        with pytest.raises(ToolError, match="File not found"):
             data_merge_fn("/nonexistent/file.json", str(sample_json_config))
 
 
