@@ -80,7 +80,11 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+3 todos captured from code review (2026-02-15):
+
+1. **Fix systemic code quality issues** (area: services) — dict returns, DRY violations, exception patterns, print logging
+2. **Refactor god modules and deprecated shims** (area: services) — split data_operations.py/schemas.py, migrate yq_wrapper imports
+3. **Improve test quality and coverage gaps** (area: testing) — private method tests, behavioral naming, edge case coverage
 
 ### Blockers/Concerns
 
