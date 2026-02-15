@@ -6,22 +6,49 @@ files:
   - packages/mcp_json_yaml_toml/binary_manager.py
   - packages/mcp_json_yaml_toml/yaml_optimizer.py
   - packages/mcp_json_yaml_toml/config.py
+  - packages/mcp_json_yaml_toml/server.py
 ---
 
 ## Problem
 
-Phase 6 (Operational Safety) requires replacing `print()` to stderr with structured logging. The current codebase uses `print(..., file=sys.stderr)` in `binary_manager.py` for download progress and error reporting. The ROADMAP success criteria specify "binary_manager.py emits structured log records instead of print() to stderr" and "logging.debug() uses lazy %-formatting throughout codebase."
+The codebase uses `print(..., file=sys.stderr)` for meta-process tracing (download progress, binary management, error reporting). This conflates user-facing output with internal diagnostic tracing. There is no way to capture, rotate, or analyze operational logs after the fact.
 
-The standard library `logging` module works but `loguru` provides structured output, lazy formatting by default, better exception formatting, and zero-config setup — all aligned with the Phase 6 goals.
+Two distinct output channels are needed:
+
+1. **User/AI-facing output**: `rich.console.print()` — dialog, results, formatted display
+2. **Internal tracing**: `loguru` — what happened, when, for later analysis if needed
+
+`print()` should not be used for either purpose going forward.
 
 ## Solution
 
-Evaluate `loguru` as the logging backend for Phase 6 implementation:
+**Decision: Use loguru (not stdlib logging)**
 
-- Replace `print(..., file=sys.stderr)` calls in `binary_manager.py` with `loguru.logger` calls
-- Use `loguru`'s built-in lazy formatting (eliminates the %-formatting requirement automatically)
-- Structured JSON output available via `logger.add(sink, serialize=True)` for observability
-- Consider whether `loguru` or stdlib `logging` better fits the project's dependency philosophy (currently zero external runtime deps beyond FastMCP ecosystem)
-- If stdlib preferred, use `logging.getLogger(__name__)` pattern instead
+Architecture:
 
-TBD: Decision needed on loguru vs stdlib logging during Phase 6 planning.
+- **loguru** for all internal process tracing (binary downloads, format detection, yq execution, error paths)
+- **rich console.print** for user/AI-facing output only
+- **print() eliminated** from all meta-process tracking
+
+Logging behavior requirements:
+
+- **Default state**: Logging disabled (no file output, minimal stderr)
+- **stderr**: Only ERROR and WARNING level by default; must be squashable (fully silent mode)
+- **File logging**: Optional — configurable log folder path via environment variable or config
+- **Log rotation**: When file logging enabled, rotate old logs automatically (loguru's `rotation` parameter)
+- **Enablement**: Opt-in via environment variable (e.g., `MCP_LOG_LEVEL=DEBUG`, `MCP_LOG_DIR=/path/to/logs`)
+
+Implementation pattern:
+
+```python
+from loguru import logger
+
+# Remove default stderr handler, add controlled one
+logger.remove()
+if log_level := os.getenv("MCP_LOG_LEVEL"):
+    logger.add(sys.stderr, level=log_level.upper())
+if log_dir := os.getenv("MCP_LOG_DIR"):
+    logger.add(f"{log_dir}/mcp-server.log", rotation="10 MB", retention="3 days")
+```
+
+This feeds directly into Phase 6 (Operational Safety) planning.
