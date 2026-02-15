@@ -73,8 +73,8 @@ Plans:
 
 Plans:
 
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01: DRY utility extraction (require_format_enabled, resolve_file_path, TOML fallback, navigate_to_parent)
+- [ ] 05-02: Type safety (Pydantic returns, FormatType enum consistency, specific exception catches)
 
 #### Phase 6: Operational Safety
 
