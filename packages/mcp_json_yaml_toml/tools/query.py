@@ -19,7 +19,14 @@ from mcp_json_yaml_toml.services.data_operations import _build_query_response
 from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_yq
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+)
 def data_query(
     file_path: Annotated[str, Field(description="Path to file")],
     expression: Annotated[

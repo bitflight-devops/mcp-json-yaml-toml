@@ -16,7 +16,14 @@ from mcp_json_yaml_toml.services.data_operations import (
 )
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+)
 def data(
     file_path: Annotated[str, Field(description="Path to file")],
     operation: Annotated[

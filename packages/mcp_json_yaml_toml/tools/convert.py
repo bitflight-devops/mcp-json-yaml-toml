@@ -19,7 +19,14 @@ from mcp_json_yaml_toml.server import mcp
 from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_yq
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+)
 def data_convert(
     file_path: Annotated[str, Field(description="Path to source file")],
     output_format: Annotated[
@@ -102,7 +109,14 @@ def data_convert(
         raise ToolError(f"Conversion failed: {e}") from e
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(
+    annotations={
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+)
 def data_merge(
     file_path1: Annotated[str, Field(description="Path to first file (base)")],
     file_path2: Annotated[str, Field(description="Path to second file (overlay)")],
