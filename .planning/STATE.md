@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** AI assistants can safely read and modify structured configuration files without destroying formatting, comments, or file structure.
-**Current focus:** Milestone v1.1 — Internal Quality (defining requirements)
+**Current focus:** Phase 5 - Type Safety and DRY Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements for v1.1
-Last activity: 2026-02-15 — Milestone v1.1 started
+Phase: 5 of 8 (Type Safety and DRY Foundation)
+Plan: - (no plans created yet)
+Status: Ready to plan
+Last activity: 2026-02-15 — Roadmap created for v1.1 Internal Quality milestone
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [████░░░░░░] 50% (v1.0 complete: 4 phases, v1.1: 0/4 phases)
 
 ## Performance Metrics
 
@@ -40,22 +40,17 @@ _Updated after each plan completion_
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Carried from v1.0:
+Recent decisions affecting current work:
 
-- Keep existing tool names: Production clients depend on current API surface
-- Stay on yq: dasel destroys comments/anchors
-- SAFE-01: ruamel.yaml pinned >=0.18.0,<0.19
-- Re-export pattern: noqa:F401 for backward-compatible re-exports from services submodules
-- \_DictAccessMixin for backward-compatible dict-like access in response models
-- Response model imports must be runtime (not TYPE_CHECKING) for FastMCP/Pydantic
-- FastMCP 3.x decorators return original function directly
-- 60s timeout for file-processing tools, 10s for in-memory tools
-- Draft 2020-12 as default JSON Schema validator
-- Import tool functions from server module in tests (not tools/) to avoid circular import
+- **Skip research for v1.1**: Internal quality work — code review reports already document all patterns and locations
+- **Layered architecture**: Extract backends, formats, models, services, tools from monolithic server.py (v1.0)
+- **FastMCP 3.x migration**: Upgrade after architecture refactoring to minimize migration surface (v1.0)
+- **60s timeout for file-processing tools, 10s for in-memory tools** (v1.0)
+- **Draft 2020-12 as default JSON Schema validator** (v1.0)
 
 ### Pending Todos
 
-3 todos captured from code review (2026-02-15):
+From .planning/todos/pending/ — 3 pending todos from code review:
 
 1. **Fix systemic code quality issues** (area: services) — dict returns, DRY violations, exception patterns, print logging
 2. **Refactor god modules and deprecated shims** (area: services) — split data_operations.py/schemas.py, migrate yq_wrapper imports
@@ -65,16 +60,8 @@ Carried from v1.0:
 
 None yet.
 
-**Research findings (from v1.0):**
-
-- FastMCP 3.0.0rc2 installed and all 415 tests passing
-- ruamel.yaml pinned <0.19 (SAFE-01 complete)
-- Dasel comment/anchor destruction eliminates backend migration path
-- deepdiff 8.6.1 installed with orderly-set dependency
-- opentelemetry-sdk 1.39.1 as optional telemetry extra
-
 ## Session Continuity
 
-Last session: 2026-02-15 (milestone v1.1 initialization)
-Stopped at: Defining requirements
+Last session: 2026-02-15 (roadmap creation)
+Stopped at: Roadmap created for v1.1, ready to plan Phase 5
 Resume file: None

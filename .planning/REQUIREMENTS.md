@@ -108,36 +108,36 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ### v1.1 (Active)
 
-| Requirement | Phase | Status  |
-| ----------- | ----- | ------- |
-| TYPE-01     | —     | Pending |
-| TYPE-02     | —     | Pending |
-| TYPE-03     | —     | Pending |
-| DRY-01      | —     | Pending |
-| DRY-02      | —     | Pending |
-| DRY-03      | —     | Pending |
-| OPS-01      | —     | Pending |
-| OPS-02      | —     | Pending |
-| OPS-03      | —     | Pending |
-| OPS-04      | —     | Pending |
-| ARCH-06     | —     | Pending |
-| ARCH-07     | —     | Pending |
-| ARCH-08     | —     | Pending |
-| ARCH-09     | —     | Pending |
-| ARCH-10     | —     | Pending |
-| TEST-01     | —     | Pending |
-| TEST-02     | —     | Pending |
-| TEST-03     | —     | Pending |
-| TEST-04     | —     | Pending |
-| TEST-05     | —     | Pending |
+| Requirement | Phase   | Status  |
+| ----------- | ------- | ------- |
+| TYPE-01     | Phase 5 | Pending |
+| TYPE-02     | Phase 5 | Pending |
+| TYPE-03     | Phase 5 | Pending |
+| DRY-01      | Phase 5 | Pending |
+| DRY-02      | Phase 5 | Pending |
+| DRY-03      | Phase 5 | Pending |
+| OPS-01      | Phase 6 | Pending |
+| OPS-02      | Phase 6 | Pending |
+| OPS-03      | Phase 6 | Pending |
+| OPS-04      | Phase 6 | Pending |
+| ARCH-06     | Phase 7 | Pending |
+| ARCH-07     | Phase 7 | Pending |
+| ARCH-08     | Phase 7 | Pending |
+| ARCH-09     | Phase 7 | Pending |
+| ARCH-10     | Phase 7 | Pending |
+| TEST-01     | Phase 8 | Pending |
+| TEST-02     | Phase 8 | Pending |
+| TEST-03     | Phase 8 | Pending |
+| TEST-04     | Phase 8 | Pending |
+| TEST-05     | Phase 8 | Pending |
 
 **Coverage:**
 
 - v1.1 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- Mapped to phases: 20
+- Unmapped: 0 ✓
 
 ---
 
 _Requirements defined: 2026-02-14_
-_Last updated: 2026-02-15 after v1.1 milestone definition_
+_Last updated: 2026-02-15 after v1.1 roadmap creation_

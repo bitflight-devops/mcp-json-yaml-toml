@@ -1,115 +1,147 @@
 # Roadmap: mcp-json-yaml-toml
 
-## Overview
+## Milestones
 
-This roadmap transforms a production MCP server from architectural technical debt (1880-line god module) into a maintainable, extensible system. The journey progresses from extracting backend abstraction and utilities, through tool layer refactoring and Pydantic response models, to FastMCP 3.x migration unlocking automatic threadpool and structured output, concluding with competitive features (config diffing and observability). The architecture refactoring happens on FastMCP 2.x to reduce migration risk, then upgrades to FastMCP 3.x with a smaller migration surface.
+- ✅ **v1.0 Layered Architecture** - Phases 1-4 (shipped 2026-02-14)
+- 🚧 **v1.1 Internal Quality** - Phases 5-8 (in progress)
 
 ## Phases
 
-**Phase Numbering:**
-
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
-
-Decimal phases appear between their surrounding integers in numeric order.
-
-- [x] **Phase 1: Architectural Foundation** - Extract backend abstraction, utilities, and format handlers (2026-02-14)
-- [x] **Phase 2: Tool Layer Refactoring** - Split server.py into thin tool decorators with Pydantic models (2026-02-14)
-- [x] **Phase 3: FastMCP 3.x Migration** - Upgrade framework and adopt new capabilities (2026-02-15)
-- [x] **Phase 4: Competitive Features** - Add config diffing and OpenTelemetry observability (2026-02-15)
-
-## Phase Details
+<details>
+<summary>✅ v1.0 Layered Architecture (Phases 1-4) - SHIPPED 2026-02-14</summary>
 
 ### Phase 1: Architectural Foundation
 
-**Goal**: Reduce server.py complexity by extracting backend abstraction, pagination utilities, and format handlers into dedicated modules
-**Depends on**: Nothing (first phase)
-**Requirements**: ARCH-01, ARCH-02, ARCH-03, ARCH-04, SAFE-01
-**Success Criteria** (what must be TRUE):
-
-1. Pagination logic exists in dedicated services/pagination.py module (no longer scattered in server.py)
-2. Format detection and value parsing exist in formats/base.py (extracted from server.py)
-3. yq binary lifecycle management is decoupled from query execution (backends/binary_manager.py exists)
-4. QueryBackend protocol exists with YqBackend implementation (enables future backend swaps)
-5. All existing tests pass without modification (behavior preserved)
-
-**Plans:** 4 plans
+**Goal**: Extract core execution layer and establish service boundaries
+**Plans**: 4 plans
 
 Plans:
 
-- [x] 01-01-PLAN.md -- Foundation types, QueryBackend protocol, and SAFE-01 ruamel.yaml pin
-- [x] 01-02-PLAN.md -- Extract pagination logic into services/pagination.py
-- [x] 01-03-PLAN.md -- Extract binary manager and yq backend, convert yq_wrapper.py to shim
-- [x] 01-04-PLAN.md -- Extract format detection into formats/base.py, full verification gate
+- [x] 01-01: Architecture extraction validation
+- [x] 01-02: Pydantic migration for response models
+- [x] 01-03: Monolithic server split
+- [x] 01-04: Tool handler extraction
 
 ### Phase 2: Tool Layer Refactoring
 
-**Goal**: Reduce server.py to tool registration and dispatch only, with all business logic delegated to services and complete tool annotations
-**Depends on**: Phase 1
-**Requirements**: ARCH-05, FMCP-04, FMCP-05
-**Success Criteria** (what must be TRUE):
-
-1. server.py contains only FastMCP initialization and tool registration imports (under 100 lines)
-2. Each tool exists as thin decorator in tools/ directory (data.py, query.py, schema.py, convert.py, constraints.py)
-3. All tool return types use Pydantic response models (foundation for structured output in Phase 3)
-4. All tools have complete annotations (readOnlyHint, destructiveHint, idempotentHint where applicable)
-5. Existing tool names unchanged (data, data_query, data_schema, data_convert, data_merge remain stable)
-
-**Plans:** 4 plans
+**Goal**: Standardize tool layer with type safety and timeouts
+**Plans**: 2 plans
 
 Plans:
 
-- [x] 02-01-PLAN.md -- Response models and schema validation service extraction
-- [x] 02-02-PLAN.md -- Data operations service layer extraction
-- [x] 02-03-PLAN.md -- Tool layer split into tools/ directory
-- [x] 02-04-PLAN.md -- Pydantic return types and complete tool annotations
+- [x] 02-01: Tool timeout defaults and Pydantic schema integration
+- [x] 02-02: Unified service injection and error handling
 
 ### Phase 3: FastMCP 3.x Migration
 
-**Goal**: Upgrade to FastMCP 3.x unlocking automatic threadpool, tool timeouts, and structured output
-**Depends on**: Phase 2
-**Requirements**: FMCP-01, FMCP-02, FMCP-03, SAFE-02
-**Success Criteria** (what must be TRUE):
-
-1. pyproject.toml pins fastmcp>=3.0.0,<4 and all tests pass on FastMCP 3.x
-2. yq subprocess calls execute via automatic threadpool (no manual executor required)
-3. Long-running tools have timeout protection (timeout parameter set on decorators)
-4. All tools return structured output (outputSchema auto-generated from Pydantic models)
-5. JSON Schema validator defaults to Draft 2020-12 (upgraded from Draft 7)
-
-**Plans:** 2 plans
+**Goal**: Upgrade to FastMCP 3.x structured output with type validation
+**Plans**: 2 plans
 
 Plans:
 
-- [x] 03-01-PLAN.md -- FastMCP 3.x dependency upgrade and import compatibility (FMCP-01, FMCP-02)
-- [x] 03-02-PLAN.md -- Tool timeouts, Draft 2020-12 default, and outputSchema verification (FMCP-03, SAFE-02)
+- [x] 03-01: FastMCP 3.x framework upgrade and tool configuration
+- [x] 03-02: Backward compatibility layer for DictAccessMixin
 
-### Phase 4: Competitive Features
+### Phase 4: Feature Integration
 
-**Goal**: Add high-value differentiators with low implementation cost (config diffing and observability)
-**Depends on**: Phase 3
-**Requirements**: FEAT-01, FEAT-02
-**Success Criteria** (what must be TRUE):
-
-1. data_diff tool exists and returns structured diff between two configuration files
-2. Users can compare config files of different formats (e.g., JSON vs YAML)
-3. OpenTelemetry instrumentation is configured and operational
-4. Server operations emit traces to configured OTLP endpoint
-   **Plans:** 2 plans
+**Goal**: Ship config diffing and observability capabilities
+**Plans**: 1 plan
 
 Plans:
 
-- [x] 04-01-PLAN.md -- Add data_diff tool for structured config file comparison (FEAT-01)
-- [x] 04-02-PLAN.md -- Add OpenTelemetry observability with optional SDK extras (FEAT-02)
+- [x] 04-01: data_diff implementation and OpenTelemetry integration
+
+</details>
+
+### 🚧 v1.1 Internal Quality (In Progress)
+
+**Milestone Goal:** Remediate code review findings — eliminate systemic quality issues, refactor god modules, and improve test standards.
+
+#### Phase 5: Type Safety and DRY Foundation
+
+**Goal**: Establish type safety baseline and eliminate duplicate patterns
+**Depends on**: Phase 4
+**Requirements**: TYPE-01, TYPE-02, TYPE-03, DRY-01, DRY-02, DRY-03
+**Success Criteria** (what must be TRUE):
+
+1. All service handler functions return typed Pydantic models instead of dict[str, Any]
+2. Format type checks use FormatType enum consistently across all modules
+3. Exception handling uses specific exception types with targeted recovery actions
+4. Format-enable checks execute through single shared function (no duplicate implementations)
+5. File path resolution and TOML fallback logic extracted to shared utilities
+   **Plans**: TBD
+
+Plans:
+
+- [ ] 05-01: TBD
+- [ ] 05-02: TBD
+
+#### Phase 6: Operational Safety
+
+**Goal**: Replace print() debugging with proper logging and add configuration caching
+**Depends on**: Phase 5
+**Requirements**: OPS-01, OPS-02, OPS-03, OPS-04
+**Success Criteria** (what must be TRUE):
+
+1. binary_manager.py emits structured log records instead of print() to stderr
+2. config.py caches parsed environment configuration (no repeated parsing)
+3. yaml_optimizer.py validates environment input instead of crashing at import
+4. logging.debug() uses lazy %-formatting throughout codebase
+   **Plans**: TBD
+
+Plans:
+
+- [ ] 06-01: TBD
+
+#### Phase 7: Architecture Refactoring
+
+**Goal**: Split god modules and migrate off deprecated import shim
+**Depends on**: Phase 6
+**Requirements**: ARCH-06, ARCH-07, ARCH-08, ARCH-09, ARCH-10
+**Success Criteria** (what must be TRUE):
+
+1. data_operations.py split into focused service modules (get, mutation, query)
+2. schemas.py split into focused sub-modules (loading, IDE cache, scanning)
+3. Production code imports from backends modules instead of yq_wrapper.py shim
+4. server.py **all** contains only public API symbols
+5. Tools accept schema_manager as parameter instead of using module singleton
+   **Plans**: TBD
+
+Plans:
+
+- [ ] 07-01: TBD
+- [ ] 07-02: TBD
+
+#### Phase 8: Test Quality
+
+**Goal**: Standardize test patterns and add edge case coverage
+**Depends on**: Phase 7
+**Requirements**: TEST-01, TEST-02, TEST-03, TEST-04, TEST-05
+**Success Criteria** (what must be TRUE):
+
+1. Tests verify behavior through public API (no private method testing)
+2. Test names follow behavioral pattern (test_what_when_condition_then_outcome)
+3. Edge cases covered: permissions, malformed input, resource cleanup
+4. Repetitive test data converted to parameterized tests
+5. verify_features.py test_hints() contains proper assertions
+   **Plans**: TBD
+
+Plans:
+
+- [ ] 08-01: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 5 → 6 → 7 → 8
 
-| Phase                       | Plans Complete | Status     | Completed  |
-| --------------------------- | -------------- | ---------- | ---------- |
-| 1. Architectural Foundation | 4/4            | ✓ Complete | 2026-02-14 |
-| 2. Tool Layer Refactoring   | 4/4            | ✓ Complete | 2026-02-14 |
-| 3. FastMCP 3.x Migration    | 2/2            | ✓ Complete | 2026-02-15 |
-| 4. Competitive Features     | 2/2            | ✓ Complete | 2026-02-15 |
+| Phase                             | Milestone | Plans Complete | Status      | Completed  |
+| --------------------------------- | --------- | -------------- | ----------- | ---------- |
+| 1. Architectural Foundation       | v1.0      | 4/4            | Complete    | 2026-02-14 |
+| 2. Tool Layer Refactoring         | v1.0      | 2/2            | Complete    | 2026-02-14 |
+| 3. FastMCP 3.x Migration          | v1.0      | 2/2            | Complete    | 2026-02-14 |
+| 4. Feature Integration            | v1.0      | 1/1            | Complete    | 2026-02-14 |
+| 5. Type Safety and DRY Foundation | v1.1      | 0/TBD          | Not started | -          |
+| 6. Operational Safety             | v1.1      | 0/TBD          | Not started | -          |
+| 7. Architecture Refactoring       | v1.1      | 0/TBD          | Not started | -          |
+| 8. Test Quality                   | v1.1      | 0/TBD          | Not started | -          |
