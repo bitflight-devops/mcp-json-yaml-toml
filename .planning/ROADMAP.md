@@ -14,7 +14,7 @@ This roadmap transforms a production MCP server from architectural technical deb
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Architectural Foundation** - Extract backend abstraction, utilities, and format handlers (2026-02-14)
-- [ ] **Phase 2: Tool Layer Refactoring** - Split server.py into thin tool decorators with Pydantic models
+- [x] **Phase 2: Tool Layer Refactoring** - Split server.py into thin tool decorators with Pydantic models (2026-02-14)
 - [ ] **Phase 3: FastMCP 3.x Migration** - Upgrade framework and adopt new capabilities
 - [ ] **Phase 4: Competitive Features** - Add config diffing and OpenTelemetry observability
 
@@ -59,10 +59,10 @@ Plans:
 
 Plans:
 
-- [ ] 02-01-PLAN.md -- Response models and schema validation service extraction
-- [ ] 02-02-PLAN.md -- Data operations service layer extraction
-- [ ] 02-03-PLAN.md -- Tool layer split into tools/ directory
-- [ ] 02-04-PLAN.md -- Pydantic return types and complete tool annotations
+- [x] 02-01-PLAN.md -- Response models and schema validation service extraction
+- [x] 02-02-PLAN.md -- Data operations service layer extraction
+- [x] 02-03-PLAN.md -- Tool layer split into tools/ directory
+- [x] 02-04-PLAN.md -- Pydantic return types and complete tool annotations
 
 ### Phase 3: FastMCP 3.x Migration
 
@@ -107,6 +107,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase                       | Plans Complete | Status      | Completed  |
 | --------------------------- | -------------- | ----------- | ---------- |
 | 1. Architectural Foundation | 4/4            | ✓ Complete  | 2026-02-14 |
-| 2. Tool Layer Refactoring   | 0/4            | Not started | -          |
+| 2. Tool Layer Refactoring   | 4/4            | ✓ Complete  | 2026-02-14 |
 | 3. FastMCP 3.x Migration    | 0/TBD          | Not started | -          |
 | 4. Competitive Features     | 0/TBD          | Not started | -          |

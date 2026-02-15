@@ -13,15 +13,15 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **ARCH-02**: Extract format detection and value parsing from server.py into dedicated module
 - [x] **ARCH-03**: Decouple yq binary lifecycle management from query execution in yq_wrapper.py
 - [x] **ARCH-04**: Create backend abstraction layer with pluggable execution engine interface
-- [ ] **ARCH-05**: Reduce server.py to tool registration and dispatch only
+- [x] **ARCH-05**: Reduce server.py to tool registration and dispatch only
 
 ### FastMCP
 
 - [ ] **FMCP-01**: Migrate from FastMCP 2.x to FastMCP 3.x with all tests passing
 - [ ] **FMCP-02**: Leverage automatic threadpool for sync yq subprocess calls
 - [ ] **FMCP-03**: Add tool timeout support for long-running operations
-- [ ] **FMCP-04**: Create Pydantic response models for all tool outputs (structured output)
-- [ ] **FMCP-05**: Add complete tool annotations (readOnlyHint, destructiveHint, idempotentHint) to all tools
+- [x] **FMCP-04**: Create Pydantic response models for all tool outputs (structured output)
+- [x] **FMCP-05**: Add complete tool annotations (readOnlyHint, destructiveHint, idempotentHint) to all tools
 
 ### Safety
 
@@ -70,9 +70,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARCH-03     | Phase 1 | Done    |
 | ARCH-04     | Phase 1 | Done    |
 | SAFE-01     | Phase 1 | Done    |
-| ARCH-05     | Phase 2 | Pending |
-| FMCP-04     | Phase 2 | Pending |
-| FMCP-05     | Phase 2 | Pending |
+| ARCH-05     | Phase 2 | Done    |
+| FMCP-04     | Phase 2 | Done    |
+| FMCP-05     | Phase 2 | Done    |
 | FMCP-01     | Phase 3 | Pending |
 | FMCP-02     | Phase 3 | Pending |
 | FMCP-03     | Phase 3 | Pending |
@@ -89,4 +89,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 
 _Requirements defined: 2026-02-14_
-_Last updated: 2026-02-14 after Phase 1 completion_
+_Last updated: 2026-02-14 after Phase 2 completion_
