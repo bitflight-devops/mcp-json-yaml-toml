@@ -56,11 +56,12 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-From .planning/todos/pending/ — 3 pending todos from code review:
+From .planning/todos/pending/ — 4 pending todos:
 
 1. **Fix systemic code quality issues** (area: services) — dict returns, DRY violations, exception patterns, print logging
 2. **Refactor god modules and deprecated shims** (area: services) — split data_operations.py/schemas.py, migrate yq_wrapper imports
 3. **Improve test quality and coverage gaps** (area: testing) — private method tests, behavioral naming, edge case coverage
+4. **Integrate loguru for structured logging** (area: services) — evaluate loguru vs stdlib logging for Phase 6 print() replacement
 
 ### Blockers/Concerns
 
