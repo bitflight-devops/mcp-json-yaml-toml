@@ -1,10 +1,15 @@
 """Test that files without anchors are NOT optimized."""
 
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import pytest
 
 from mcp_json_yaml_toml import server
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.mark.integration
@@ -26,7 +31,7 @@ def test_no_optimization_for_files_without_anchors(tmp_path: Path) -> None:
 """)
 
     # Add a third service with the same config
-    result = server.data.fn(
+    result = server.data(
         file_path=str(test_file),
         operation="set",
         key_path="services.cache",

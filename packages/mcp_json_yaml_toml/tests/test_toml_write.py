@@ -1,10 +1,15 @@
 """Tests for TOML write operations."""
 
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import pytest
 
 from mcp_json_yaml_toml import server
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestTOMLWriteOperations:
@@ -21,7 +26,7 @@ port = 5432
 """)
 
         # Add a new key
-        result = server.data.fn(
+        result = server.data(
             file_path=str(test_file),
             operation="set",
             key_path="database.username",
@@ -46,7 +51,7 @@ name = "myapp"
 """)
 
         # Add nested config
-        result = server.data.fn(
+        result = server.data(
             file_path=str(test_file),
             operation="set",
             key_path="app.database",
@@ -71,7 +76,7 @@ username = "admin"
 """)
 
         # Delete a key
-        result = server.data.fn(
+        result = server.data(
             file_path=str(test_file), operation="delete", key_path="database.username"
         )
 

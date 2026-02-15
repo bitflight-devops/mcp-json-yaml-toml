@@ -2,14 +2,15 @@
 
 Comprehensive tests for all MCP tools: data_query, data, data_schema, data_convert, and data_merge.
 
-Note: FastMCP decorates functions as FunctionTool objects. Access the underlying
-function via .fn attribute (e.g., server.data_query.fn()).
+Note: FastMCP 3.x decorators return the original function directly.
+In 2.x, .fn was needed to access the underlying function; in 3.x it's not.
 """
+
+from __future__ import annotations
 
 import json
 import unittest.mock
-from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from fastmcp.exceptions import ToolError
@@ -18,12 +19,15 @@ from mcp_json_yaml_toml import server
 from mcp_json_yaml_toml.lmql_constraints import ConstraintRegistry
 from mcp_json_yaml_toml.yq_wrapper import FormatType
 
-# Extract underlying functions from FastMCP FunctionTool wrappers
-data_query_fn = server.data_query.fn
-data_fn = server.data.fn
-data_schema_fn = server.data_schema.fn
-data_convert_fn = server.data_convert.fn
-data_merge_fn = server.data_merge.fn
+if TYPE_CHECKING:
+    from pathlib import Path
+
+# FastMCP 3.x: decorators return the original function directly (no .fn needed)
+data_query_fn = server.data_query
+data_fn = server.data
+data_schema_fn = server.data_schema
+data_convert_fn = server.data_convert
+data_merge_fn = server.data_merge
 
 
 class TestDataQuery:
@@ -865,13 +869,12 @@ class TestPrompts:
     def test_explain_config(self) -> None:
         """Test explain_config prompt generation.
 
-        Note: FastMCP's FunctionPrompt.fn is typed as returning
-        PromptResult | Awaitable[PromptResult], but for sync prompt functions
-        that return str, it actually returns str at runtime.
+        Note: FastMCP 3.x decorators return the original function directly,
+        so we call the function without .fn accessor.
         We use cast() to assert the known runtime type.
         """
 
-        prompt = cast("str", server.explain_config.fn("config.json"))
+        prompt = cast("str", server.explain_config("config.json"))
         assert "analyze and explain" in prompt
         assert "config.json" in prompt
 
@@ -881,7 +884,7 @@ class TestPrompts:
         Note: See test_explain_config docstring for type cast explanation.
         """
 
-        prompt = cast("str", server.suggest_improvements.fn("config.yaml"))
+        prompt = cast("str", server.suggest_improvements("config.yaml"))
         assert "suggest improvements" in prompt
         assert "config.yaml" in prompt
 
@@ -891,14 +894,14 @@ class TestPrompts:
         Note: See test_explain_config docstring for type cast explanation.
         """
 
-        prompt = cast("str", server.convert_to_schema.fn("data.toml"))
+        prompt = cast("str", server.convert_to_schema("data.toml"))
         assert "generate a JSON schema" in prompt
         assert "data.toml" in prompt
 
 
-# Extract underlying functions for LMQL constraint tools
-constraint_validate_fn = server.constraint_validate.fn
-constraint_list_fn = server.constraint_list.fn
+# FastMCP 3.x: decorators return the original function directly (no .fn needed)
+constraint_validate_fn = server.constraint_validate
+constraint_list_fn = server.constraint_list
 
 
 class TestConstraintTools:

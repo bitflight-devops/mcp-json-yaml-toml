@@ -1,10 +1,15 @@
 """Integration tests for YAML anchor optimization."""
 
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import pytest
 
 from mcp_json_yaml_toml import server
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestYAMLOptimizationIntegration:
@@ -27,7 +32,7 @@ services:
 """)
 
         # Add a third service with the same config
-        result = server.data.fn(
+        result = server.data(
             file_path=str(test_file),
             operation="set",
             key_path="services.cache",
@@ -65,7 +70,7 @@ job1:
 """)
 
         # Add another job
-        result = server.data.fn(
+        result = server.data(
             file_path=str(test_file),
             operation="set",
             key_path="job2",
@@ -90,7 +95,7 @@ job1:
         test_file.write_text('{"job1": {"image": "node:22"}}')
 
         # Modify it
-        result = server.data.fn(
+        result = server.data(
             file_path=str(test_file),
             operation="set",
             key_path="job2",
