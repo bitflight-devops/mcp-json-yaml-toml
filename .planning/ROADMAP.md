@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Architectural Foundation** - Extract backend abstraction, utilities, and format handlers (2026-02-14)
 - [x] **Phase 2: Tool Layer Refactoring** - Split server.py into thin tool decorators with Pydantic models (2026-02-14)
 - [x] **Phase 3: FastMCP 3.x Migration** - Upgrade framework and adopt new capabilities (2026-02-15)
-- [ ] **Phase 4: Competitive Features** - Add config diffing and OpenTelemetry observability
+- [x] **Phase 4: Competitive Features** - Add config diffing and OpenTelemetry observability (2026-02-15)
 
 ## Phase Details
 
@@ -99,17 +99,17 @@ Plans:
 
 Plans:
 
-- [ ] 04-01-PLAN.md -- Add data_diff tool for structured config file comparison (FEAT-01)
-- [ ] 04-02-PLAN.md -- Add OpenTelemetry observability with optional SDK extras (FEAT-02)
+- [x] 04-01-PLAN.md -- Add data_diff tool for structured config file comparison (FEAT-01)
+- [x] 04-02-PLAN.md -- Add OpenTelemetry observability with optional SDK extras (FEAT-02)
 
 ## Progress
 
 **Execution Order:**
 Phases execute in numeric order: 1 → 2 → 3 → 4
 
-| Phase                       | Plans Complete | Status      | Completed  |
-| --------------------------- | -------------- | ----------- | ---------- |
-| 1. Architectural Foundation | 4/4            | ✓ Complete  | 2026-02-14 |
-| 2. Tool Layer Refactoring   | 4/4            | ✓ Complete  | 2026-02-14 |
-| 3. FastMCP 3.x Migration    | 2/2            | ✓ Complete  | 2026-02-15 |
-| 4. Competitive Features     | 0/2            | Not started | -          |
+| Phase                       | Plans Complete | Status     | Completed  |
+| --------------------------- | -------------- | ---------- | ---------- |
+| 1. Architectural Foundation | 4/4            | ✓ Complete | 2026-02-14 |
+| 2. Tool Layer Refactoring   | 4/4            | ✓ Complete | 2026-02-14 |
+| 3. FastMCP 3.x Migration    | 2/2            | ✓ Complete | 2026-02-15 |
+| 4. Competitive Features     | 2/2            | ✓ Complete | 2026-02-15 |
