@@ -21,12 +21,13 @@ from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_
 
 
 @mcp.tool(
+    timeout=60.0,
     annotations={
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
         "openWorldHint": False,
-    }
+    },
 )
 def data_convert(
     file_path: Annotated[str, Field(description="Path to source file")],
@@ -111,12 +112,13 @@ def data_convert(
 
 
 @mcp.tool(
+    timeout=60.0,
     annotations={
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
         "openWorldHint": False,
-    }
+    },
 )
 def data_merge(
     file_path1: Annotated[str, Field(description="Path to first file (base)")],

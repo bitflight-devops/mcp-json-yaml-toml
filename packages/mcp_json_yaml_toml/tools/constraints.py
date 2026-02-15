@@ -65,12 +65,13 @@ def get_constraint_definition(name: str) -> dict[str, Any]:
 
 
 @mcp.tool(
+    timeout=10.0,
     annotations={
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
         "openWorldHint": False,
-    }
+    },
 )
 def constraint_validate(
     constraint_name: Annotated[
@@ -125,12 +126,13 @@ def constraint_validate(
 
 
 @mcp.tool(
+    timeout=10.0,
     annotations={
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
         "openWorldHint": False,
-    }
+    },
 )
 def constraint_list() -> ConstraintListResponse:
     """Return a list of all registered LMQL constraints with their metadata.

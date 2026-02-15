@@ -23,12 +23,13 @@ from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_
 
 
 @mcp.tool(
+    timeout=60.0,
     annotations={
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
         "openWorldHint": False,
-    }
+    },
 )
 def data_query(
     file_path: Annotated[str, Field(description="Path to file")],
