@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastmcp.exceptions import ToolError
 from pydantic import Field
@@ -14,6 +14,9 @@ from mcp_json_yaml_toml.config import (
     validate_format,
 )
 from mcp_json_yaml_toml.formats.base import _detect_file_format
+from mcp_json_yaml_toml.models.responses import (
+    DataResponse,  # noqa: TC001 — runtime import required by FastMCP/Pydantic for return-type resolution
+)
 from mcp_json_yaml_toml.server import mcp
 from mcp_json_yaml_toml.services.data_operations import _build_query_response
 from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_yq
@@ -45,7 +48,7 @@ def data_query(
             description="Pagination cursor from previous response (omit for first page)"
         ),
     ] = None,
-) -> dict[str, Any]:
+) -> DataResponse:
     """Extract specific data, filter content, or transform structure without modification.
 
     Use when you need to extract specific data, filter content, or transform the structure of a JSON, YAML, or TOML file without modifying it.

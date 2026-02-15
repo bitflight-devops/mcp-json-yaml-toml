@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 import orjson
 from fastmcp.exceptions import ToolError
@@ -15,6 +15,7 @@ from mcp_json_yaml_toml.config import (
     validate_format,
 )
 from mcp_json_yaml_toml.formats.base import _detect_file_format
+from mcp_json_yaml_toml.models.responses import ConvertResponse, MergeResponse
 from mcp_json_yaml_toml.server import mcp
 from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_yq
 
@@ -39,7 +40,7 @@ def data_convert(
             description="Optional output file path (if not provided, returns converted content)"
         ),
     ] = None,
-) -> dict[str, Any]:
+) -> ConvertResponse:
     """Convert file format.
 
     Use when you need to transform a file from one format (JSON, YAML, TOML) to another.
@@ -89,21 +90,21 @@ def data_convert(
         if output_file:
             out_path = Path(output_file).expanduser().resolve()
             out_path.write_text(result.stdout, encoding="utf-8")
-            return {
-                "success": True,
-                "input_file": str(path),
-                "output_file": str(out_path),
-                "input_format": input_format,
-                "output_format": output_fmt,
-                "message": f"Converted {input_format} to {output_fmt}",
-            }
-        return {
-            "success": True,
-            "input_file": str(path),
-            "input_format": input_format,
-            "output_format": output_fmt,
-            "result": result.stdout,
-        }
+            return ConvertResponse(
+                success=True,
+                input_file=str(path),
+                output_file=str(out_path),
+                input_format=input_format,
+                output_format=output_fmt,
+                message=f"Converted {input_format} to {output_fmt}",
+            )
+        return ConvertResponse(
+            success=True,
+            input_file=str(path),
+            input_format=input_format,
+            output_format=output_fmt,
+            result=result.stdout,
+        )
 
     except YQExecutionError as e:
         raise ToolError(f"Conversion failed: {e}") from e
@@ -130,7 +131,7 @@ def data_merge(
             description="Optional output file path (if not provided, returns merged content)"
         ),
     ] = None,
-) -> dict[str, Any]:
+) -> MergeResponse:
     """Merge two files into a single deep-merged configuration.
 
     Performs a deep merge where values from the second (overlay) file override or extend
@@ -144,8 +145,8 @@ def data_merge(
         output_file (str | None): Optional path to write the merged output. When omitted, merged content is returned.
 
     Returns:
-        dict: A payload describing the merge. On success includes "success": True, "file1", "file2",
-        "output_format", and either "result" (merged content) or "output_file" (written path).
+        MergeResponse with "success", "file1", "file2", "output_format",
+        and either "result" (merged content) or "output_file" (written path).
 
     Raises:
         ToolError: If an input file is missing, its format is not enabled, the output format is invalid, or the merge fails.
@@ -203,21 +204,21 @@ def data_merge(
         if output_file:
             out_path = Path(output_file).expanduser().resolve()
             out_path.write_text(merge_result.stdout, encoding="utf-8")
-            return {
-                "success": True,
-                "file1": str(path1),
-                "file2": str(path2),
-                "output_file": str(out_path),
-                "output_format": output_fmt,
-                "message": "Files merged successfully",
-            }
-        return {
-            "success": True,
-            "file1": str(path1),
-            "file2": str(path2),
-            "output_format": output_fmt,
-            "result": merge_result.stdout,
-        }
+            return MergeResponse(
+                success=True,
+                file1=str(path1),
+                file2=str(path2),
+                output_file=str(out_path),
+                output_format=output_fmt,
+                message="Files merged successfully",
+            )
+        return MergeResponse(
+            success=True,
+            file1=str(path1),
+            file2=str(path2),
+            output_format=output_fmt,
+            result=merge_result.stdout,
+        )
 
     except YQExecutionError as e:
         raise ToolError(f"Merge failed: {e}") from e

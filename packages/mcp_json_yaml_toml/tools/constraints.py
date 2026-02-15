@@ -12,6 +12,10 @@ from mcp_json_yaml_toml.lmql_constraints import (
     get_constraint_hint,
     validate_tool_input,
 )
+from mcp_json_yaml_toml.models.responses import (
+    ConstraintListResponse,
+    ConstraintValidateResponse,
+)
 from mcp_json_yaml_toml.server import mcp
 
 # ---------------------------------------------------------------------------
@@ -76,7 +80,7 @@ def constraint_validate(
         ),
     ],
     value: Annotated[str, Field(description="Value to validate")],
-) -> dict[str, Any]:
+) -> ConstraintValidateResponse:
     """Validate a value against an LMQL-style constraint.
 
     Use this tool to check if a value satisfies a constraint before using it
@@ -97,17 +101,27 @@ def constraint_validate(
     - FILE_PATH: Valid file path syntax
     """
     result = validate_tool_input(constraint_name, value)
-    response = result.to_dict()
-    response["constraint"] = constraint_name
-    response["value"] = value
 
-    # Add hint for invalid values
+    # Build hint for invalid values
+    hint_value: str | None = None
     if not result.valid:
-        hint = get_constraint_hint(constraint_name, value)
-        if hint:
-            response["hint"] = hint
+        hint_value = get_constraint_hint(constraint_name, value)
 
-    return response
+    # Collect dynamic extras (suggestions, remaining_pattern) for
+    # Pydantic's extra="allow" bucket -- exclude known model fields.
+    result_dict = result.to_dict()
+    known_fields = ConstraintValidateResponse.model_fields
+    extras = {k: v for k, v in result_dict.items() if k not in known_fields}
+
+    return ConstraintValidateResponse(
+        valid=result.valid,
+        constraint=constraint_name,
+        value=value,
+        error=result.error,
+        is_partial=result.is_partial or None,
+        hint=hint_value,
+        **extras,
+    )
 
 
 @mcp.tool(
@@ -118,22 +132,22 @@ def constraint_validate(
         "openWorldHint": False,
     }
 )
-def constraint_list() -> dict[str, Any]:
+def constraint_list() -> ConstraintListResponse:
     """Return a list of all registered LMQL constraints with their metadata.
 
     Returns:
-        result (dict): A dictionary with keys:
+        ConstraintListResponse with keys:
             - "constraints": a list of constraint objects; each object includes a "name" key and the constraint's definition fields (e.g., "description", any other metadata).
             - "usage": a string describing how to validate a value against a constraint (e.g., call `constraint_validate(constraint_name, value)`).
     """
     definitions = ConstraintRegistry.get_all_definitions()
-    return {
-        "constraints": [{"name": name, **defn} for name, defn in definitions.items()],
-        "usage": (
+    return ConstraintListResponse(
+        constraints=[{"name": name, **defn} for name, defn in definitions.items()],
+        usage=(
             "Use constraint_validate(constraint_name, value) to validate inputs. "
             "Access constraint definitions via lmql://constraints/{name} resource."
         ),
-    }
+    )
 
 
 # ---------------------------------------------------------------------------

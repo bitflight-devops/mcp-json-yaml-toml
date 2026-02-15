@@ -21,7 +21,7 @@ from mcp_json_yaml_toml.formats.base import (
     _parse_content_for_validation,
     _parse_set_value,
 )
-from mcp_json_yaml_toml.models.responses import SchemaResponse
+from mcp_json_yaml_toml.models.responses import DataResponse, SchemaResponse
 from mcp_json_yaml_toml.services.pagination import (
     PAGE_SIZE_CHARS,
     _get_pagination_hint,
@@ -716,8 +716,8 @@ def _dispatch_delete_operation(
 
 def _build_query_response(
     result: Any, output_format: FormatType, path: Path, cursor: str | None
-) -> dict[str, Any]:
-    """Build response dict for data_query.
+) -> DataResponse:
+    """Build response for data_query.
 
     Args:
         result: YQ execution result
@@ -726,7 +726,7 @@ def _build_query_response(
         cursor: Pagination cursor
 
     Returns:
-        Response dict
+        DataResponse model instance
     """
     result_str = (
         result.stdout
@@ -737,22 +737,19 @@ def _build_query_response(
     if len(result_str) > PAGE_SIZE_CHARS or cursor is not None:
         hint = _get_pagination_hint(result.data)
         pagination = _paginate_result(result_str, cursor, advisory_hint=hint)
-        response = {
-            "success": True,
-            "result": pagination["data"],
-            "format": output_format,
-            "file": str(path),
-            "paginated": True,
-        }
-        if "nextCursor" in pagination:
-            response["nextCursor"] = pagination["nextCursor"]
-        if "advisory" in pagination:
-            response["advisory"] = pagination["advisory"]
-        return response
+        return DataResponse(
+            success=True,
+            result=pagination["data"],
+            format=output_format,
+            file=str(path),
+            paginated=True,
+            nextCursor=pagination.get("nextCursor"),
+            advisory=pagination.get("advisory"),
+        )
 
-    return {
-        "success": True,
-        "result": result_str if output_format != "json" else result.data,
-        "format": output_format,
-        "file": str(path),
-    }
+    return DataResponse(
+        success=True,
+        result=result_str if output_format != "json" else result.data,
+        format=output_format,
+        file=str(path),
+    )
