@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeGuard, assert_nev
 
 import httpx
 import orjson
-import tomlkit
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from jsonschema import Draft7Validator, Draft202012Validator
@@ -21,12 +20,16 @@ from jsonschema.exceptions import SchemaError, ValidationError
 from pydantic import BaseModel, Field
 from referencing import Registry, Resource
 from referencing.exceptions import NoSuchResource
-from ruamel.yaml import YAML
 
 from mcp_json_yaml_toml.config import (
     is_format_enabled,
     parse_enabled_formats,
     validate_format,
+)
+from mcp_json_yaml_toml.formats.base import (
+    _detect_file_format,
+    _parse_content_for_validation,
+    _parse_set_value,
 )
 from mcp_json_yaml_toml.lmql_constraints import (
     ConstraintRegistry,
@@ -78,34 +81,6 @@ class SchemaResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def _parse_content_for_validation(
-    content: str, input_format: FormatType | str
-) -> Any | None:
-    """Parse content string into data structure for schema validation.
-
-    Args:
-        content: Raw file content string
-        input_format: File format (json, yaml, toml)
-
-    Returns:
-        Parsed data structure or None if format not recognized
-
-    Raises:
-        ToolError: If parsing fails
-    """
-    try:
-        if input_format == "json":
-            return orjson.loads(content)
-        if input_format in {"yaml", FormatType.YAML}:
-            yaml = YAML(typ="safe", pure=True)
-            return yaml.load(content)
-        if input_format in {"toml", FormatType.TOML}:
-            return tomlkit.parse(content)
-    except Exception as e:
-        raise ToolError(f"Failed to parse content for validation: {e}") from e
-    return None
-
-
 def _validate_and_write_content(
     path: Path, content: str, schema_path: Path | None, input_format: FormatType | str
 ) -> None:
@@ -137,32 +112,6 @@ def is_schema(value: Any) -> TypeGuard[JsonType]:
         and isinstance(item_value, (bool, int, float, str, dict, list))
         for key, item_value in value.items()
     )
-
-
-def _detect_file_format(file_path: Path) -> FormatType:
-    """Detect format from file extension.
-
-    Args:
-        file_path: Path to file
-
-    Returns:
-        Detected format type
-
-    Raises:
-        ToolError: If format cannot be detected
-    """
-    suffix = file_path.suffix.lower().lstrip(".")
-    # Handle yml -> yaml alias
-    if suffix == "yml":
-        suffix = "yaml"
-
-    try:
-        return FormatType(suffix)
-    except ValueError:
-        valid_formats = [f.value for f in FormatType]
-        raise ToolError(
-            f"Cannot detect format from extension '.{suffix}'. Supported formats: {', '.join(valid_formats)}"
-        ) from None
 
 
 def _handle_data_get_schema(
@@ -427,70 +376,6 @@ def _optimize_yaml_if_needed(path: Path) -> bool:
         path.write_text(optimized_yaml, encoding="utf-8")
         return True
     return False
-
-
-def _parse_typed_json(
-    value: str, expected_type: type | tuple[type, ...], type_name: str
-) -> Any:
-    """Parse JSON value and validate type.
-
-    Args:
-        value: JSON string to parse
-        expected_type: Expected Python type or tuple of types
-        type_name: Human-readable type name for error messages
-
-    Returns:
-        Parsed value
-
-    Raises:
-        ToolError: If parsing fails or type doesn't match
-    """
-    try:
-        parsed = orjson.loads(value)
-    except orjson.JSONDecodeError as e:
-        raise ToolError(f"Invalid {type_name} value: {e}") from e
-    if not isinstance(parsed, expected_type):
-        raise ToolError(
-            f"value_type='{type_name}' but value parses to {type(parsed).__name__}: {value}"
-        )
-    return parsed
-
-
-def _parse_set_value(
-    value: str | None,
-    value_type: Literal["string", "number", "boolean", "null", "json"] | None,
-) -> Any:
-    """Parse value for SET operation based on value_type.
-
-    Args:
-        value: Value to parse
-        value_type: How to interpret the value
-
-    Returns:
-        Parsed value ready for setting
-
-    Raises:
-        ToolError: If value is invalid for the specified type
-    """
-    if value_type == "null":
-        return None
-    if value is None:
-        raise ToolError(f"value is required when value_type='{value_type or 'json'}'")
-
-    match value_type:
-        case "string":
-            return value
-        case "number":
-            return _parse_typed_json(value, (int, float), "number")
-        case "boolean":
-            return _parse_typed_json(value, bool, "boolean")
-        case _:
-            # value_type is None or "json" - parse as JSON
-            try:
-                return orjson.loads(value)
-            except orjson.JSONDecodeError as e:
-                raise ToolError(f"Invalid JSON value: {e}") from e
-                raise ToolError(f"Invalid JSON value: {e}") from e
 
 
 def _handle_data_set(
