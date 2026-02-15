@@ -11,15 +11,12 @@ from typing import TYPE_CHECKING, Any, Literal, TypeGuard
 import orjson
 from fastmcp.exceptions import ToolError
 
-from mcp_json_yaml_toml.config import (
-    is_format_enabled,
-    parse_enabled_formats,
-    validate_format,
-)
+from mcp_json_yaml_toml.config import require_format_enabled, validate_format
 from mcp_json_yaml_toml.formats.base import (
     _detect_file_format,
     _parse_content_for_validation,
     _parse_set_value,
+    should_fallback_toml_to_json,
 )
 from mcp_json_yaml_toml.models.responses import DataResponse, SchemaResponse
 from mcp_json_yaml_toml.services.pagination import (
@@ -267,14 +264,9 @@ def _handle_data_get_value(
         if schema_info:
             response["schema_info"] = schema_info
     except YQExecutionError as e:
-        # Auto-fallback to JSON if TOML output was auto-selected and yq can't encode nested structures
-        if (
-            not output_format_explicit
-            and output_fmt == FormatType.TOML
-            and input_format == FormatType.TOML
-            and "only scalars" in str(e.stderr)
+        if should_fallback_toml_to_json(
+            e, output_format_explicit, output_fmt, input_format
         ):
-            # Retry with JSON output format
             return _handle_data_get_value(
                 path,
                 key_path,
@@ -601,11 +593,7 @@ def _dispatch_get_operation(
         )
 
     input_format = _detect_file_format(path)
-    if not is_format_enabled(input_format):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
+    require_format_enabled(input_format)
 
     # Track whether output format was explicitly provided
     output_format_explicit = output_format is not None
@@ -668,11 +656,7 @@ def _dispatch_set_operation(
         )
 
     input_format = _detect_file_format(path)
-    if not is_format_enabled(input_format):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
+    require_format_enabled(input_format)
 
     return _handle_data_set(
         path, key_path, value, value_type, input_format, schema_info, schema_manager
@@ -703,11 +687,7 @@ def _dispatch_delete_operation(
         raise ToolError("key_path is required for operation='delete'")
 
     input_format = _detect_file_format(path)
-    if not is_format_enabled(input_format):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
+    require_format_enabled(input_format)
 
     return _handle_data_delete(
         path, key_path, input_format, schema_info, schema_manager

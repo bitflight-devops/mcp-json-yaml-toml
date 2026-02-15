@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated, Any, Literal, assert_never
 
-from fastmcp.exceptions import ToolError
 from pydantic import Field
 
+from mcp_json_yaml_toml.formats.base import resolve_file_path
 from mcp_json_yaml_toml.server import mcp, schema_manager
 from mcp_json_yaml_toml.services.data_operations import (
     _dispatch_delete_operation,
@@ -79,10 +78,7 @@ def data(
     - set: Update/create value at key_path (always writes to file)
     - delete: Remove key/element at key_path (always writes to file)
     """
-    path = Path(file_path).expanduser().resolve()
-
-    if not path.exists():
-        raise ToolError(f"File not found: {file_path}")
+    path = resolve_file_path(file_path)
 
     schema_info = schema_manager.get_schema_info_for_file(path)
 

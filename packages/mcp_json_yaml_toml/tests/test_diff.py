@@ -182,7 +182,7 @@ class TestDataDiffTool:
         f2 = tmp_path / "b.json"
         f2.write_text("{}")
 
-        with pytest.raises(ToolError, match="First file not found"):
+        with pytest.raises(ToolError, match="File not found"):
             data_diff_fn(str(tmp_path / "nonexistent.json"), str(f2))
 
     def test_missing_second_file(self, tmp_path: Path) -> None:
@@ -190,7 +190,7 @@ class TestDataDiffTool:
         f1 = tmp_path / "a.json"
         f1.write_text("{}")
 
-        with pytest.raises(ToolError, match="Second file not found"):
+        with pytest.raises(ToolError, match="File not found"):
             data_diff_fn(str(f1), str(tmp_path / "nonexistent.json"))
 
     def test_ignore_order_parameter(self, tmp_path: Path) -> None:

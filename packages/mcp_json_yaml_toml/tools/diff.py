@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated
 
 from fastmcp.exceptions import ToolError
 from pydantic import Field
 
-from mcp_json_yaml_toml.config import is_format_enabled, parse_enabled_formats
-from mcp_json_yaml_toml.formats.base import _detect_file_format
+from mcp_json_yaml_toml.config import require_format_enabled
+from mcp_json_yaml_toml.formats.base import _detect_file_format, resolve_file_path
 from mcp_json_yaml_toml.models.responses import DiffResponse
 from mcp_json_yaml_toml.server import mcp
 from mcp_json_yaml_toml.services.diff_operations import (
@@ -47,30 +46,15 @@ def data_diff(
     Side effects: None (read-only).
     Failure modes: ToolError if files not found or formats disabled.
     """
-    path1 = Path(file_path1).expanduser().resolve()
-    path2 = Path(file_path2).expanduser().resolve()
-
-    if not path1.exists():
-        raise ToolError(f"First file not found: {file_path1}")
-    if not path2.exists():
-        raise ToolError(f"Second file not found: {file_path2}")
+    path1 = resolve_file_path(file_path1)
+    path2 = resolve_file_path(file_path2)
 
     # Detect formats
     format1 = _detect_file_format(path1)
     format2 = _detect_file_format(path2)
 
-    if not is_format_enabled(format1):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format of first file '{format1}' is not enabled. "
-            f"Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
-    if not is_format_enabled(format2):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format of second file '{format2}' is not enabled. "
-            f"Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
+    require_format_enabled(format1)
+    require_format_enabled(format2)
 
     try:
         # Parse both files to Python dicts via yq -> JSON pipeline

@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated
 
 from fastmcp.exceptions import ToolError
 from pydantic import Field
 
-from mcp_json_yaml_toml.config import (
-    is_format_enabled,
-    parse_enabled_formats,
-    validate_format,
+from mcp_json_yaml_toml.config import require_format_enabled, validate_format
+from mcp_json_yaml_toml.formats.base import (
+    _detect_file_format,
+    resolve_file_path,
+    should_fallback_toml_to_json,
 )
-from mcp_json_yaml_toml.formats.base import _detect_file_format
 from mcp_json_yaml_toml.models.responses import (
     DataResponse,  # noqa: TC001 — runtime import required by FastMCP/Pydantic for return-type resolution
 )
@@ -58,18 +57,11 @@ def data_query(
     Side effects: None (read-only).
     Failure modes: FileNotFoundError if file missing. ToolError if format disabled or query fails.
     """
-    path = Path(file_path).expanduser().resolve()
-
-    if not path.exists():
-        raise ToolError(f"File not found: {file_path}")
+    path = resolve_file_path(file_path)
 
     # Check if format is enabled
     input_format: FormatType = _detect_file_format(path)
-    if not is_format_enabled(input_format):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
+    require_format_enabled(input_format)
 
     # Track whether output format was explicitly provided
     output_format_explicit = output_format is not None
@@ -90,14 +82,9 @@ def data_query(
         return _build_query_response(result, output_format_value, path, cursor)
 
     except YQExecutionError as e:
-        # Auto-fallback to JSON if TOML output was auto-selected and yq can't encode nested structures
-        if (
-            not output_format_explicit
-            and output_format_value == FormatType.TOML
-            and input_format == FormatType.TOML
-            and "only scalars" in str(e.stderr)
+        if should_fallback_toml_to_json(
+            e, output_format_explicit, output_format_value, input_format
         ):
-            # Retry with JSON output format
             result = execute_yq(
                 expression,
                 input_file=path,

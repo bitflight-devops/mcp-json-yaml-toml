@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from fastmcp.exceptions import ToolError
 from pydantic import Field
 
-from mcp_json_yaml_toml.config import is_format_enabled, parse_enabled_formats
-from mcp_json_yaml_toml.formats.base import _detect_file_format
+from mcp_json_yaml_toml.config import require_format_enabled
+from mcp_json_yaml_toml.formats.base import _detect_file_format, resolve_file_path
 from mcp_json_yaml_toml.server import mcp, schema_manager
 from mcp_json_yaml_toml.services.schema_validation import _validate_against_schema
 from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_yq
@@ -29,16 +29,10 @@ def _handle_schema_validate(
     """Handle validate action."""
     if not file_path:
         raise ToolError("file_path required for validate action")
-    file_path_obj = Path(file_path).expanduser().resolve()
-    if not file_path_obj.exists():
-        raise ToolError(f"File not found: {file_path}")
+    file_path_obj = resolve_file_path(file_path)
 
     input_format = _detect_file_format(file_path_obj)
-    if not is_format_enabled(input_format):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
+    require_format_enabled(input_format)
 
     validation_results: dict[str, Any] = {
         "file": str(file_path_obj),
@@ -59,9 +53,7 @@ def _handle_schema_validate(
 
         schema_file: Path | None = None
         if schema_path:
-            schema_file = Path(schema_path).expanduser().resolve()
-            if not schema_file.exists():
-                raise ToolError(f"Schema file not found: {schema_path}")
+            schema_file = resolve_file_path(schema_path)
         else:
             # Try to get cached schema path from SchemaManager
             schema_file = schema_manager.get_schema_path_for_file(file_path_obj)
@@ -139,9 +131,7 @@ def _handle_schema_associate(
     """Handle associate action."""
     if not file_path:
         raise ToolError("file_path required for associate action")
-    file_path_obj = Path(file_path).expanduser().resolve()
-    if not file_path_obj.exists():
-        raise ToolError(f"File not found: {file_path}")
+    file_path_obj = resolve_file_path(file_path)
 
     url = schema_url
     name = schema_name
@@ -174,7 +164,7 @@ def _handle_schema_disassociate(file_path: str | None) -> dict[str, Any]:
     """Handle disassociate action."""
     if not file_path:
         raise ToolError("file_path required for disassociate action")
-    file_path_obj = Path(file_path).expanduser().resolve()
+    file_path_obj = resolve_file_path(file_path, must_exist=False)
     removed = schema_manager.remove_file_association(file_path_obj)
     return {
         "success": True,
