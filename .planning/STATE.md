@@ -9,20 +9,20 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 ## Current Position
 
-Phase: 5 of 8 (Type Safety and DRY Foundation)
-Plan: 1 of 2 complete
-Status: Executing
-Last activity: 2026-02-15 — Completed 05-01 DRY utility extraction
+Phase: 5 of 8 (Type Safety and DRY Foundation) -- COMPLETE
+Plan: 2 of 2 complete
+Status: Phase complete
+Last activity: 2026-02-15 — Completed 05-02 Type safety migration
 
-Progress: [█████░░░░░] 56% (v1.0 complete: 4 phases, v1.1: 0.5/4 phases)
+Progress: [██████░░░░] 63% (v1.0 complete: 4 phases, v1.1: 1/4 phases)
 
 ## Performance Metrics
 
 **v1.0 Velocity:**
 
-- Total plans completed: 13
+- Total plans completed: 14 (v1.0) + 2 (v1.1) = 16
 - Average duration: 9min
-- Total execution time: 123min
+- Total execution time: 149min
 
 **By Phase (v1.0):**
 
@@ -32,7 +32,7 @@ Progress: [█████░░░░░] 56% (v1.0 complete: 4 phases, v1.1: 0
 | 02    | 4     | 48min | 12min    |
 | 03    | 2     | 11min | 6min     |
 | 04    | 2     | 25min | 13min    |
-| 05    | 1     | 13min | 13min    |
+| 05    | 2     | 26min | 13min    |
 
 _Updated after each plan completion_
 
@@ -50,6 +50,9 @@ Recent decisions affecting current work:
 - **Draft 2020-12 as default JSON Schema validator** (v1.0)
 - **Standardized error messages for file resolution**: resolve_file_path() uses generic "File not found" (v1.1 05-01)
 - **Selective DRY extraction**: Directory paths and output paths kept inline; only input file paths use resolve_file_path() (v1.1 05-01)
+- **Union return type for data tool**: DataResponse | SchemaResponse | MutationResponse (SchemaResponse doesn't inherit ToolResponse) (v1.1 05-02)
+- **Alias-aware \_DictAccessMixin**: \_resolve_field_name() handles Pydantic field aliases for backward-compat dict access (v1.1 05-02)
+- **Runtime imports for FastMCP tools**: Response model imports need noqa: TC001 since FastMCP resolves annotations at decorator time (v1.1 05-02)
 
 ### Pending Todos
 
@@ -66,5 +69,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-15 (plan execution)
-Stopped at: Completed 05-01-PLAN.md, ready for 05-02-PLAN.md
+Stopped at: Completed 05-02-PLAN.md — Phase 05 complete
 Resume file: None
