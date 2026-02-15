@@ -9,10 +9,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Architecture
 
-- [ ] **ARCH-01**: Extract pagination utilities from server.py into dedicated module
-- [ ] **ARCH-02**: Extract format detection and value parsing from server.py into dedicated module
-- [ ] **ARCH-03**: Decouple yq binary lifecycle management from query execution in yq_wrapper.py
-- [ ] **ARCH-04**: Create backend abstraction layer with pluggable execution engine interface
+- [x] **ARCH-01**: Extract pagination utilities from server.py into dedicated module
+- [x] **ARCH-02**: Extract format detection and value parsing from server.py into dedicated module
+- [x] **ARCH-03**: Decouple yq binary lifecycle management from query execution in yq_wrapper.py
+- [x] **ARCH-04**: Create backend abstraction layer with pluggable execution engine interface
 - [ ] **ARCH-05**: Reduce server.py to tool registration and dispatch only
 
 ### FastMCP
@@ -25,7 +25,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Safety
 
-- [ ] **SAFE-01**: Pin ruamel.yaml to >=0.18.0,<0.19 to prevent 0.19 deployment failures
+- [x] **SAFE-01**: Pin ruamel.yaml to >=0.18.0,<0.19 to prevent 0.19 deployment failures
 - [ ] **SAFE-02**: Upgrade JSON Schema default validator to Draft 2020-12
 
 ### Features
@@ -65,11 +65,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase   | Status  |
 | ----------- | ------- | ------- |
-| ARCH-01     | Phase 1 | Pending |
-| ARCH-02     | Phase 1 | Pending |
-| ARCH-03     | Phase 1 | Pending |
-| ARCH-04     | Phase 1 | Pending |
-| SAFE-01     | Phase 1 | Pending |
+| ARCH-01     | Phase 1 | Done    |
+| ARCH-02     | Phase 1 | Done    |
+| ARCH-03     | Phase 1 | Done    |
+| ARCH-04     | Phase 1 | Done    |
+| SAFE-01     | Phase 1 | Done    |
 | ARCH-05     | Phase 2 | Pending |
 | FMCP-04     | Phase 2 | Pending |
 | FMCP-05     | Phase 2 | Pending |
@@ -89,4 +89,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 ---
 
 _Requirements defined: 2026-02-14_
-_Last updated: 2026-02-14 after roadmap creation_
+_Last updated: 2026-02-14 after Phase 1 completion_
