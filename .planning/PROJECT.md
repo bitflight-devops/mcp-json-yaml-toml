@@ -12,28 +12,42 @@ AI assistants can safely read and modify structured configuration files without 
 
 ### Validated
 
-- ✓ Unified data tool for CRUD operations on JSON/YAML/TOML files — existing
-- ✓ data_query tool for read-only yq expression evaluation — existing
-- ✓ data_schema tool for JSON Schema discovery and validation — existing
-- ✓ data_convert tool for format conversion between JSON/YAML/TOML — existing
-- ✓ data_merge tool for deep merging files — existing
-- ✓ Format-preserving edits via ruamel.yaml and tomlkit — existing
-- ✓ Cursor-based pagination for large results (10KB chunks) — existing
-- ✓ LMQL constraint validation for AI-safe structured output — existing
-- ✓ Schema catalog integration with SchemaStore.org and IDE schema discovery — existing
-- ✓ Cross-platform yq binary management with version-aware caching — existing
-- ✓ YAML anchor optimization detecting and creating anchors for duplicate structures — existing
-- ✓ MCP resources exposing constraint definitions — existing
-- ✓ MCP prompts for config analysis and improvement suggestions — existing
-- ✓ Environment-based format enablement via MCP_CONFIG_FORMATS — existing
-- ✓ Cross-platform CI (Linux, macOS, Windows) — existing
+- ✓ Unified data tool for CRUD operations on JSON/YAML/TOML files — v1.0
+- ✓ data_query tool for read-only yq expression evaluation — v1.0
+- ✓ data_schema tool for JSON Schema discovery and validation — v1.0
+- ✓ data_convert tool for format conversion between JSON/YAML/TOML — v1.0
+- ✓ data_merge tool for deep merging files — v1.0
+- ✓ data_diff tool for structured cross-format config comparison — v1.0
+- ✓ Format-preserving edits via ruamel.yaml and tomlkit — v1.0
+- ✓ Cursor-based pagination for large results (10KB chunks) — v1.0
+- ✓ LMQL constraint validation for AI-safe structured output — v1.0
+- ✓ Schema catalog integration with SchemaStore.org and IDE schema discovery — v1.0
+- ✓ Cross-platform yq binary management with version-aware caching — v1.0
+- ✓ YAML anchor optimization detecting and creating anchors for duplicate structures — v1.0
+- ✓ MCP resources exposing constraint definitions — v1.0
+- ✓ MCP prompts for config analysis and improvement suggestions — v1.0
+- ✓ Environment-based format enablement via MCP_CONFIG_FORMATS — v1.0
+- ✓ Cross-platform CI (Linux, macOS, Windows) — v1.0
+- ✓ Layered architecture: backends, formats, models, services, tools — v1.0
+- ✓ FastMCP 3.x with structured output, timeouts, automatic threadpool — v1.0
+- ✓ OpenTelemetry observability with optional SDK extras — v1.0
+- ✓ Pydantic response models with DictAccessMixin backward compat — v1.0
+- ✓ JSON Schema Draft 2020-12 default validator — v1.0
 
 ### Active
 
-- [ ] Upgrade from FastMCP 2.x to FastMCP 3.x, leveraging new protocol features
-- [ ] Evaluate yq alternatives (dasel, native MCP from CLI tools) to reduce binary management complexity
-- [ ] Simplify or replace yq binary management layer (download reliability, platform detection)
-- [ ] Implement findings from research — adopt recommended architecture changes
+<!-- v1.1: Internal Quality — Code review remediation -->
+
+- [ ] Service handlers return typed Pydantic response models instead of dict[str, Any]
+- [ ] DRY violations eliminated (format-enable-check, TOML fallback, file path resolution)
+- [ ] Exception patterns use specific catches, not broad except Exception
+- [ ] binary_manager.py uses logging module instead of print() to stderr
+- [ ] data_operations.py split into focused service modules (SRP)
+- [ ] schemas.py split into focused sub-modules
+- [ ] Production imports migrated off deprecated yq_wrapper.py shim
+- [ ] config.py caches parsed environment configuration
+- [ ] Test suite uses behavioral naming and tests public API, not private methods
+- [ ] Edge case coverage added: permissions, malformed input, resource cleanup
 
 ### Out of Scope
 
@@ -41,17 +55,27 @@ AI assistants can safely read and modify structured configuration files without 
 - Changing existing MCP tool names (data, data_query, data_schema, data_convert, data_merge) — existing clients depend on these
 - Adding new file format support beyond JSON/YAML/TOML — not the focus of this milestone
 
+## Current Milestone: v1.1 Internal Quality
+
+**Goal:** Remediate code review findings — eliminate systemic quality issues, refactor god modules, and improve test standards.
+
+**Target improvements:**
+
+- Type safety: dict returns → Pydantic models across all service handlers
+- DRY: Extract shared patterns (format checks, file resolution, TOML fallback)
+- Architecture: Split 756-line data_operations.py and 1201-line schemas.py
+- Correctness: Specific exception catches, logging instead of print()
+- Tests: Behavioral naming, public API testing, edge case coverage
+
 ## Context
 
-The project is mature and production-deployed. The current pain points are:
+The project is mature and production-deployed. v1.0 milestone completed a full architecture refactoring (4 phases, 12 plans) from a monolithic server.py to layered architecture with FastMCP 3.x. Code review identified systemic patterns that accumulated during the refactoring and need remediation.
 
-1. **FastMCP version**: Pinned to v2 (`>=2.14.4,<3`) because v3 had breaking changes at beta. FastMCP 3 is now progressing and may offer new capabilities worth adopting.
+**Code review reports:** `.claude/smells/` directory contains detailed findings with file:line references.
 
-2. **yq binary management**: The `yq_wrapper.py` module (~760 lines) handles binary detection, downloading, platform selection, checksums, version caching, and file locking. This is the most complex and fragile part of the codebase. GitHub API rate limits and network failures during binary download are ongoing issues.
+**Pending todos:** `.planning/todos/pending/` contains 3 structured todos mapping to the review findings.
 
-3. **dasel as alternative**: [dasel](https://github.com/TomWright/dasel) supports JSON, YAML, TOML, XML, CSV and may offer a simpler integration path. Additionally, both yq and dasel could potentially serve MCP directly, eliminating the Python wrapper entirely.
-
-The codebase has ~80% test coverage, comprehensive linting (ruff, mypy, basedpyright), and uses hatchling for builds with hatch-vcs for versioning.
+The codebase has 415 tests at ~80% coverage, comprehensive linting (ruff, mypy, basedpyright), and uses hatchling for builds with hatch-vcs for versioning.
 
 ## Constraints
 
@@ -62,12 +86,16 @@ The codebase has ~80% test coverage, comprehensive linting (ruff, mypy, basedpyr
 
 ## Key Decisions
 
-| Decision                 | Rationale                                                                                                            | Outcome   |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------- | --------- |
-| Research before building | Domain is evolving (FastMCP 3, dasel ecosystem) — need current information before committing to architecture changes | — Pending |
-| Keep existing tool names | Production clients depend on current API surface                                                                     | ✓ Good    |
-| Evaluate yq alternatives | yq binary management is the highest-complexity, most-fragile subsystem                                               | — Pending |
+| Decision                 | Rationale                                                                                                            | Outcome |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------- | ------- |
+| Research before building | Domain is evolving (FastMCP 3, dasel ecosystem) — need current information before committing to architecture changes | ✓ Good  |
+| Keep existing tool names | Production clients depend on current API surface                                                                     | ✓ Good  |
+| Evaluate yq alternatives | Research concluded dasel destroys comments/anchors — staying with yq                                                 | ✓ Good  |
+| Stay on yq               | dasel destroys comments and anchors, eliminating it as backend alternative                                           | ✓ Good  |
+| Layered architecture     | Extract backends, formats, models, services, tools from monolithic server.py                                         | ✓ Good  |
+| FastMCP 3.x migration    | Upgrade after architecture refactoring to minimize migration surface                                                 | ✓ Good  |
+| Skip research for v1.1   | Internal quality work — code review reports already document all patterns and locations                              | ✓ Good  |
 
 ---
 
-_Last updated: 2026-02-14 after initialization_
+_Last updated: 2026-02-15 after v1.1 milestone start_
