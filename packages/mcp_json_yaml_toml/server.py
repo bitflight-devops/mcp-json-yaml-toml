@@ -11,15 +11,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeGuard, assert_never
 
-import httpx
 import orjson
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
-from jsonschema import Draft7Validator, Draft202012Validator
-from jsonschema.exceptions import SchemaError, ValidationError
-from pydantic import BaseModel, Field
-from referencing import Registry, Resource
-from referencing.exceptions import NoSuchResource
+from pydantic import Field
 
 from mcp_json_yaml_toml.config import (
     is_format_enabled,
@@ -36,6 +31,7 @@ from mcp_json_yaml_toml.lmql_constraints import (
     get_constraint_hint,
     validate_tool_input,
 )
+from mcp_json_yaml_toml.models.responses import SchemaResponse
 from mcp_json_yaml_toml.schemas import SchemaInfo, SchemaManager
 from mcp_json_yaml_toml.services.pagination import (  # noqa: F401 — re-exported for backward compat
     ADVISORY_PAGE_THRESHOLD,
@@ -47,14 +43,10 @@ from mcp_json_yaml_toml.services.pagination import (  # noqa: F401 — re-export
     _paginate_result,
     _summarize_structure,
 )
+from mcp_json_yaml_toml.services.schema_validation import _validate_against_schema
 from mcp_json_yaml_toml.toml_utils import delete_toml_key, set_toml_value
 from mcp_json_yaml_toml.yaml_optimizer import optimize_yaml_file
-from mcp_json_yaml_toml.yq_wrapper import (
-    FormatType,
-    YQError,
-    YQExecutionError,
-    execute_yq,
-)
+from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_yq
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -66,19 +58,6 @@ mcp = FastMCP("mcp-json-yaml-toml", mask_error_details=False)
 
 # Initialize Schema Manager
 schema_manager = SchemaManager()
-
-
-class SchemaResponse(BaseModel):
-    """Response format for schema retrieval."""
-
-    success: bool
-    file: str
-    message: str
-    schema_: dict[str, Any] | None = Field(default=None, alias="schema")
-    schema_info: SchemaInfo | None = None
-    schema_file: str | None = None
-
-    model_config = {"populate_by_name": True}
 
 
 def _validate_and_write_content(
@@ -577,67 +556,6 @@ def _handle_data_delete(
     return _delete_yq_key_handler(
         path, key_path, input_format, schema_path, schema_info
     )
-
-
-def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
-    """Validate data against JSON schema.
-
-    Uses referencing.Registry to handle $ref resolution without deprecated auto-fetch.
-
-    Args:
-        data: Data to validate (parsed from JSON/YAML)
-        schema_path: Path to schema file
-
-    Returns:
-        Tuple of (is_valid, message)
-    """
-
-    def retrieve_via_httpx(uri: str) -> Resource:
-        """Retrieve schema from HTTP(S) URI using httpx."""
-        try:
-            response = httpx.get(uri, follow_redirects=True, timeout=10.0)
-            response.raise_for_status()
-            contents = response.json()
-            return Resource.from_contents(contents)
-        except (httpx.HTTPError, httpx.TimeoutException) as e:
-            raise NoSuchResource(ref=uri) from e
-
-    try:
-        # Load schema
-        schema_format = _detect_file_format(schema_path)
-        schema_result = execute_yq(
-            ".",
-            input_file=schema_path,
-            input_format=schema_format,
-            output_format=FormatType.JSON,
-        )
-
-        if schema_result.data is None:
-            return False, f"Failed to parse schema file: {schema_path}"
-
-        schema = schema_result.data
-
-        # Create registry with httpx retrieval for remote $refs
-        registry: Registry = Registry(retrieve=retrieve_via_httpx)
-
-        # Choose validator based on schema's $schema field or default to Draft 7
-        schema_dialect = schema.get("$schema", "")
-        if "draft/2020-12" in schema_dialect or "draft-2020-12" in schema_dialect:
-            Draft202012Validator(schema, registry=registry).validate(data)
-        else:
-            # Default to Draft 7 which is most common
-            Draft7Validator(schema, registry=registry).validate(data)
-
-    except ValidationError as e:
-        return False, f"Schema validation failed: {e.message}"
-    except SchemaError as e:
-        return False, f"Invalid schema: {e.message}"
-    except YQError as e:
-        return False, f"Failed to load schema: {e}"
-    except (OSError, orjson.JSONDecodeError) as e:
-        return False, f"Schema validation error: {e}"
-    else:
-        return True, "Schema validation passed"
 
 
 def _dispatch_get_operation(

@@ -6,12 +6,13 @@ They are the foundation for FMCP-04 typed return values.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from mcp_json_yaml_toml.schemas import SchemaInfo
+from mcp_json_yaml_toml.schemas import (
+    SchemaInfo,  # noqa: TC001 — Pydantic needs this at runtime for model building
+)
 
 
 class ToolResponse(BaseModel):
