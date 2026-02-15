@@ -60,17 +60,29 @@ def _parse_content_for_validation(
     Raises:
         ToolError: If parsing fails
     """
+    # Normalize to FormatType for consistent comparison
     try:
-        if input_format == "json":
-            return orjson.loads(content)
-        if input_format in {"yaml", FormatType.YAML}:
-            yaml = YAML(typ="safe", pure=True)
-            return yaml.load(content)
-        if input_format in {"toml", FormatType.TOML}:
-            return tomlkit.parse(content)
+        fmt = (
+            FormatType(input_format)
+            if not isinstance(input_format, FormatType)
+            else input_format
+        )
+    except ValueError:
+        return None
+
+    try:
+        match fmt:
+            case FormatType.JSON:
+                return orjson.loads(content)
+            case FormatType.YAML:
+                yaml = YAML(typ="safe", pure=True)
+                return yaml.load(content)
+            case FormatType.TOML:
+                return tomlkit.parse(content)
+            case _:
+                return None
     except Exception as e:
         raise ToolError(f"Failed to parse content for validation: {e}") from e
-    return None
 
 
 def _parse_typed_json(
