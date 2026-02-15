@@ -67,13 +67,13 @@ def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
         # Create registry with httpx retrieval for remote $refs
         registry: Registry = Registry(retrieve=retrieve_via_httpx)
 
-        # Choose validator based on schema's $schema field or default to Draft 7
+        # Choose validator based on schema's $schema field or default to Draft 2020-12
         schema_dialect = schema.get("$schema", "")
-        if "draft/2020-12" in schema_dialect or "draft-2020-12" in schema_dialect:
-            Draft202012Validator(schema, registry=registry).validate(data)
-        else:
-            # Default to Draft 7 which is most common
+        if "draft-07" in schema_dialect or "draft/7" in schema_dialect:
             Draft7Validator(schema, registry=registry).validate(data)
+        else:
+            # Default to Draft 2020-12 (current JSON Schema standard)
+            Draft202012Validator(schema, registry=registry).validate(data)
 
     except ValidationError as e:
         return False, f"Schema validation failed: {e.message}"
