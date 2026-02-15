@@ -124,6 +124,19 @@ class MergeResponse(ToolResponse):
     message: str | None = None
 
 
+class DiffResponse(ToolResponse):
+    """Response for data_diff tool."""
+
+    file1: str = ""
+    file2: str = ""
+    file1_format: str = ""
+    file2_format: str = ""
+    has_differences: bool = False
+    summary: str = ""
+    differences: dict[str, Any] | None = None  # DeepDiff to_dict() output
+    statistics: dict[str, int] | None = None  # Count of changes by type
+
+
 class ConstraintValidateResponse(_DictAccessMixin, BaseModel):
     """Response for constraint_validate tool.
 
@@ -171,6 +184,7 @@ __all__ = [
     "ConstraintValidateResponse",
     "ConvertResponse",
     "DataResponse",
+    "DiffResponse",
     "MergeResponse",
     "MutationResponse",
     "SchemaActionResponse",

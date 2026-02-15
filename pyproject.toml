@@ -27,6 +27,7 @@ keywords = [
 ]
 requires-python = ">=3.11,<3.15"
 dependencies = [
+    "deepdiff>=8.0.0",
     "fastmcp>=3.0.0rc1,<4", # FastMCP 3.x - automatic threadpool, tool timeouts, outputSchema
     "httpx>=0.28.1",
     "json-strong-typing>=0.4.3",
