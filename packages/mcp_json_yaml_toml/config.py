@@ -10,7 +10,18 @@ from __future__ import annotations
 
 import os
 
+from fastmcp.exceptions import ToolError
+
 from mcp_json_yaml_toml.yq_wrapper import FormatType
+
+__all__ = [
+    "DEFAULT_FORMATS",
+    "get_enabled_formats_str",
+    "is_format_enabled",
+    "parse_enabled_formats",
+    "require_format_enabled",
+    "validate_format",
+]
 
 # Default enabled formats
 DEFAULT_FORMATS: list[FormatType] = [FormatType.JSON, FormatType.YAML, FormatType.TOML]
@@ -55,6 +66,23 @@ def parse_enabled_formats() -> list[FormatType]:
         return list(DEFAULT_FORMATS)
 
     return enabled_formats
+
+
+def require_format_enabled(format_type: FormatType | str) -> None:
+    """Raise ToolError if the given format is not enabled.
+
+    Args:
+        format_type: The format to check (FormatType enum or string).
+
+    Raises:
+        ToolError: If format is disabled, with message listing enabled formats.
+    """
+    if not is_format_enabled(format_type):
+        enabled = parse_enabled_formats()
+        raise ToolError(
+            f"Format '{format_type}' is not enabled. "
+            f"Enabled formats: {', '.join(f.value for f in enabled)}"
+        )
 
 
 def is_format_enabled(format_name: str) -> bool:

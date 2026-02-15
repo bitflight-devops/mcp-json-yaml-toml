@@ -14,7 +14,7 @@ import tomlkit
 from fastmcp.exceptions import ToolError
 from ruamel.yaml import YAML
 
-from mcp_json_yaml_toml.yq_wrapper import FormatType
+from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError
 
 
 def _detect_file_format(file_path: str | Path) -> FormatType:
@@ -136,9 +136,59 @@ def _parse_set_value(
                 raise ToolError(f"Invalid JSON value: {e}") from e
 
 
+def resolve_file_path(file_path: str, *, must_exist: bool = True) -> Path:
+    """Resolve and validate a file path.
+
+    Args:
+        file_path: Raw file path string from tool input.
+        must_exist: If True (default), raise ToolError when file does not exist.
+
+    Returns:
+        Resolved absolute Path.
+
+    Raises:
+        ToolError: If must_exist is True and file does not exist.
+    """
+    path = Path(file_path).expanduser().resolve()
+    if must_exist and not path.exists():
+        raise ToolError(f"File not found: {file_path}")
+    return path
+
+
+def should_fallback_toml_to_json(
+    error: YQExecutionError,
+    output_format_explicit: bool,
+    output_format: FormatType,
+    input_format: FormatType,
+) -> bool:
+    """Check if a TOML output failure should fall back to JSON.
+
+    yq cannot encode nested/non-scalar structures as TOML output. When the output
+    format was auto-selected (not explicit), this function identifies the specific
+    error and signals the caller to retry with JSON output.
+
+    Args:
+        error: The YQExecutionError from the failed execution.
+        output_format_explicit: Whether the user explicitly requested this output format.
+        output_format: The output format that was used.
+        input_format: The input file format.
+
+    Returns:
+        True if the caller should retry with FormatType.JSON output.
+    """
+    return (
+        not output_format_explicit
+        and output_format == FormatType.TOML
+        and input_format == FormatType.TOML
+        and "only scalars" in str(error.stderr)
+    )
+
+
 __all__ = [
     "_detect_file_format",
     "_parse_content_for_validation",
     "_parse_set_value",
     "_parse_typed_json",
+    "resolve_file_path",
+    "should_fallback_toml_to_json",
 ]
