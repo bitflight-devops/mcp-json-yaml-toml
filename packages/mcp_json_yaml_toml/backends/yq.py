@@ -16,6 +16,7 @@ from mcp_json_yaml_toml.backends.binary_manager import (
     get_yq_binary_path,
     validate_yq_binary,
 )
+from mcp_json_yaml_toml.telemetry import get_tracer
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -232,24 +233,31 @@ def execute_yq(
         null_input,
     )
 
-    # Execute command
-    result = _run_yq_subprocess(cmd, input_data)
+    # Execute command with telemetry span
+    tracer = get_tracer()
+    with tracer.start_as_current_span("yq.execute") as span:
+        span.set_attribute("yq.expression", expression)
+        span.set_attribute("yq.input_format", str(input_format))
+        span.set_attribute("yq.output_format", str(output_format))
 
-    # Decode output
-    stdout = result.stdout.decode("utf-8")
-    stderr = result.stderr.decode("utf-8")
+        result = _run_yq_subprocess(cmd, input_data)
 
-    # Check for errors
-    if result.returncode != 0:
-        error_msg = parse_yq_error(stderr)
-        raise YQExecutionError(
-            f"yq command failed: {error_msg}",
-            stderr=stderr,
-            returncode=result.returncode,
-        )
+        # Decode output
+        stdout = result.stdout.decode("utf-8")
+        stderr = result.stderr.decode("utf-8")
+        span.set_attribute("yq.returncode", result.returncode)
 
-    # Parse JSON output if applicable
-    parsed_data, stderr = _parse_json_output(stdout, stderr, output_format)
+        # Check for errors
+        if result.returncode != 0:
+            error_msg = parse_yq_error(stderr)
+            raise YQExecutionError(
+                f"yq command failed: {error_msg}",
+                stderr=stderr,
+                returncode=result.returncode,
+            )
+
+        # Parse JSON output if applicable
+        parsed_data, stderr = _parse_json_output(stdout, stderr, output_format)
 
     return YQResult(
         stdout=stdout, stderr=stderr, returncode=result.returncode, data=parsed_data
