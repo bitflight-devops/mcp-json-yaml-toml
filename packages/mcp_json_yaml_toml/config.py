@@ -6,6 +6,8 @@ This module handles:
 - Default configuration values
 """
 
+from __future__ import annotations
+
 import os
 
 from mcp_json_yaml_toml.yq_wrapper import FormatType

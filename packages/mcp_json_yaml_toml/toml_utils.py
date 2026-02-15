@@ -4,11 +4,15 @@ Since yq cannot write TOML (only read), we use tomlkit for TOML write operations
 tomlkit preserves comments and formatting, consistent with our ruamel.yaml approach for YAML.
 """
 
+from __future__ import annotations
+
 from collections.abc import MutableMapping
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import tomlkit
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def set_toml_value(file_path: Path, key_path: str, value: Any) -> str:

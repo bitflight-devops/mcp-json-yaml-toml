@@ -4,6 +4,8 @@ This module provides functionality to detect duplicate structures in YAML data
 and optimize them using anchors and aliases to maintain DRY principles.
 """
 
+from __future__ import annotations
+
 import hashlib
 import os
 from collections import defaultdict

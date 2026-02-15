@@ -52,6 +52,7 @@ from mcp_json_yaml_toml.tools.constraints import (  # noqa: E402
 )
 from mcp_json_yaml_toml.tools.convert import data_convert, data_merge  # noqa: E402
 from mcp_json_yaml_toml.tools.data import data  # noqa: E402
+from mcp_json_yaml_toml.tools.diff import data_diff  # noqa: E402
 from mcp_json_yaml_toml.tools.query import data_query  # noqa: E402
 from mcp_json_yaml_toml.tools.schema import data_schema  # noqa: E402
 
@@ -82,6 +83,7 @@ __all__ = [
     # Tools
     "data",
     "data_convert",
+    "data_diff",
     "data_merge",
     "data_query",
     "data_schema",

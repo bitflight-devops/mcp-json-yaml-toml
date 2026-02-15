@@ -3,6 +3,8 @@
 Handles automatic schema discovery via Schema Store and local caching.
 """
 
+from __future__ import annotations
+
 import contextlib
 import datetime
 import fnmatch
@@ -10,11 +12,10 @@ import logging
 import os
 import re
 import time
-from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import httpx
 import orjson
@@ -22,10 +23,14 @@ import tomlkit
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 from strong_typing.auxiliary import Alias
-from strong_typing.core import Schema
 from strong_typing.exception import JsonKeyError, JsonTypeError, JsonValueError
 from strong_typing.serialization import json_to_object, object_to_json
 from tomlkit.exceptions import ParseError, TOMLKitError
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from strong_typing.core import Schema
 
 
 @dataclass
