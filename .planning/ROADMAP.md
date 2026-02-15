@@ -95,11 +95,12 @@ Plans:
 2. Users can compare config files of different formats (e.g., JSON vs YAML)
 3. OpenTelemetry instrumentation is configured and operational
 4. Server operations emit traces to configured OTLP endpoint
-   **Plans**: TBD
+   **Plans:** 2 plans
 
 Plans:
 
-- [ ] TBD - Will be defined during `/gsd:plan-phase 4`
+- [ ] 04-01-PLAN.md -- Add data_diff tool for structured config file comparison (FEAT-01)
+- [ ] 04-02-PLAN.md -- Add OpenTelemetry observability with optional SDK extras (FEAT-02)
 
 ## Progress
 
@@ -111,4 +112,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Architectural Foundation | 4/4            | ✓ Complete  | 2026-02-14 |
 | 2. Tool Layer Refactoring   | 4/4            | ✓ Complete  | 2026-02-14 |
 | 3. FastMCP 3.x Migration    | 2/2            | ✓ Complete  | 2026-02-15 |
-| 4. Competitive Features     | 0/TBD          | Not started | -          |
+| 4. Competitive Features     | 0/2            | Not started | -          |
