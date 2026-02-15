@@ -10,31 +10,31 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 2 of 4 (Tool Layer Refactoring)
-Plan: 1/4 complete
+Plan: 2/4 complete
 Status: Executing Phase 2
-Last activity: 2026-02-15 — Plan 02-01 complete (response models + schema validation service)
+Last activity: 2026-02-15 — Plan 02-02 complete (data operations extraction to services)
 
-Progress: [███░░░░░░░] 31% (1/4 phases, 1/4 plans in phase 2)
+Progress: [████░░░░░░] 38% (1/4 phases, 2/4 plans in phase 2)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 8min
-- Total execution time: 39min
+- Total execution time: 47min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 | ----- | ----- | ----- | -------- |
 | 01    | 4     | 26min | 7min     |
-| 02    | 1     | 13min | 13min    |
+| 02    | 2     | 21min | 11min    |
 
 **Recent Trend:**
 
-- Last 5 plans: 01-02 (7min), 01-03 (8min), 01-04 (6min), 02-01 (13min)
-- Trend: Slightly up (~9min/plan)
+- Last 5 plans: 01-03 (8min), 01-04 (6min), 02-01 (13min), 02-02 (8min)
+- Trend: Stable (~9min/plan)
 
 _Updated after each plan completion_
 
@@ -57,6 +57,8 @@ Recent decisions affecting current work:
 - [Phase 02]: ToolResponse base uses extra=allow as safety net during refactoring (tighten to forbid in Plan 04)
 - [Phase 02]: SchemaInfo must be runtime import in responses.py (noqa: TC001) -- Pydantic requires field types at model building time
 - [Phase 02]: ValueError used instead of orjson.JSONDecodeError in schema_validation.py (functionally equivalent, avoids unnecessary dependency)
+- [Phase 02]: schema_manager passed as optional parameter (default None) to service-layer dispatch/handler functions instead of global access
+- [Phase 02]: Re-export \_validate_and_write_content and is_schema from server.py for backward compat (noqa: F401)
 
 ### Pending Todos
 
@@ -74,6 +76,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-15 (phase 2 plan 01 execution)
-Stopped at: Completed 02-01-PLAN.md (response models + schema validation service)
+Last session: 2026-02-15 (phase 2 plan 02 execution)
+Stopped at: Completed 02-02-PLAN.md (data operations extraction to services)
 Resume file: None
