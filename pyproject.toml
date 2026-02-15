@@ -39,6 +39,12 @@ dependencies = [
     "tomlkit>=0.14.0",
 ]
 
+[project.optional-dependencies]
+telemetry = [
+    "opentelemetry-sdk>=1.30.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.30.0",
+]
+
 [project.scripts]
 mcp-json-yaml-toml = "mcp_json_yaml_toml.server:main"
 
@@ -57,6 +63,7 @@ dev = [
     "hatch-vcs>=0.5.0",
     "hatchling>=1.14.0",
     "mypy>=1.19.1",
+    "opentelemetry-sdk>=1.30.0",
     "prek>=0.2.19",
     "pytest-asyncio>=1.2.0",
     "pytest-cov>=7.0.0",
