@@ -1,33 +1,29 @@
 """MCP server for querying and modifying JSON, YAML, and TOML files.
 
-This server provides tools for reading, modifying, validating, and transforming
-files using yq. Tools are dynamically registered based on the
-MCP_CONFIG_FORMATS environment variable.
+Thin registration shell: FastMCP init, schema manager, tool imports, and main().
+Tool logic lives in ``tools/``, business logic in ``services/``.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_never
-
-import orjson
 from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError
-from pydantic import Field
 
-from mcp_json_yaml_toml.config import (
-    is_format_enabled,
-    parse_enabled_formats,
-    validate_format,
-)
-from mcp_json_yaml_toml.formats.base import _detect_file_format
-from mcp_json_yaml_toml.lmql_constraints import (
-    ConstraintRegistry,
-    get_constraint_hint,
-    validate_tool_input,
-)
 from mcp_json_yaml_toml.schemas import SchemaManager
-from mcp_json_yaml_toml.services.data_operations import (  # noqa: F401 — re-exported for backward compat
+
+# ---------------------------------------------------------------------------
+# Core objects — MUST be defined BEFORE tool module imports so that
+# ``from mcp_json_yaml_toml.server import mcp`` resolves without error.
+# ---------------------------------------------------------------------------
+mcp = FastMCP("mcp-json-yaml-toml", mask_error_details=False)
+schema_manager = SchemaManager()
+
+# ---------------------------------------------------------------------------
+# Re-exports for backward compatibility (models, services, tools).
+# Tool imports also trigger @mcp.tool / @mcp.resource / @mcp.prompt
+# registration.  Tests access ``server.data_query``, ``server.data``, etc.
+# ---------------------------------------------------------------------------
+from mcp_json_yaml_toml.models.responses import SchemaResponse  # noqa: E402
+from mcp_json_yaml_toml.services.data_operations import (  # noqa: E402
     _build_query_response,
     _dispatch_delete_operation,
     _dispatch_get_operation,
@@ -35,7 +31,7 @@ from mcp_json_yaml_toml.services.data_operations import (  # noqa: F401 — re-e
     _validate_and_write_content,
     is_schema,
 )
-from mcp_json_yaml_toml.services.pagination import (  # noqa: F401 — re-exported for backward compat
+from mcp_json_yaml_toml.services.pagination import (  # noqa: E402
     ADVISORY_PAGE_THRESHOLD,
     MAX_PRIMITIVE_DISPLAY_LENGTH,
     PAGE_SIZE_CHARS,
@@ -45,771 +41,67 @@ from mcp_json_yaml_toml.services.pagination import (  # noqa: F401 — re-export
     _paginate_result,
     _summarize_structure,
 )
-from mcp_json_yaml_toml.services.schema_validation import _validate_against_schema
-from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_yq
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-# Initialize FastMCP server
-mcp = FastMCP("mcp-json-yaml-toml", mask_error_details=False)
-
-# Initialize Schema Manager
-schema_manager = SchemaManager()
-
-
-@mcp.tool(annotations={"readOnlyHint": True})
-def data_query(
-    file_path: Annotated[str, Field(description="Path to file")],
-    expression: Annotated[
-        str,
-        Field(
-            description="yq expression to evaluate (e.g., '.name', '.items[]', '.data.users')"
-        ),
-    ],
-    output_format: Annotated[
-        FormatType | None,
-        Field(description="Output format (defaults to same as input file format)"),
-    ] = None,
-    cursor: Annotated[
-        str | None,
-        Field(
-            description="Pagination cursor from previous response (omit for first page)"
-        ),
-    ] = None,
-) -> dict[str, Any]:
-    """Extract specific data, filter content, or transform structure without modification.
-
-    Use when you need to extract specific data, filter content, or transform the structure of a JSON, YAML, or TOML file without modifying it.
-
-    Output contract: Returns {"success": bool, "result": Any, "format": str, "file": str, ...}.
-    Side effects: None (read-only).
-    Failure modes: FileNotFoundError if file missing. ToolError if format disabled or query fails.
-    """
-    path = Path(file_path).expanduser().resolve()
-
-    if not path.exists():
-        raise ToolError(f"File not found: {file_path}")
-
-    # Check if format is enabled
-    input_format: FormatType = _detect_file_format(path)
-    if not is_format_enabled(input_format):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
-
-    # Track whether output format was explicitly provided
-    output_format_explicit = output_format is not None
-
-    # Use input format as output if not specified
-    # Use input format as output if not specified
-    output_format_value: FormatType = (
-        input_format if output_format is None else validate_format(output_format)
-    )
-
-    try:
-        result = execute_yq(
-            expression,
-            input_file=path,
-            input_format=input_format,
-            output_format=output_format_value,
-        )
-        return _build_query_response(result, output_format_value, path, cursor)
-
-    except YQExecutionError as e:
-        # Auto-fallback to JSON if TOML output was auto-selected and yq can't encode nested structures
-        if (
-            not output_format_explicit
-            and output_format_value == FormatType.TOML
-            and input_format == FormatType.TOML
-            and "only scalars" in str(e.stderr)
-        ):
-            # Retry with JSON output format
-            result = execute_yq(
-                expression,
-                input_file=path,
-                input_format=input_format,
-                output_format=FormatType.JSON,
-            )
-            return _build_query_response(result, FormatType.JSON, path, cursor)
-        raise ToolError(f"Query failed: {e}") from e
-
-
-@mcp.tool()
-def data(
-    file_path: Annotated[str, Field(description="Path to file")],
-    operation: Annotated[
-        Literal["get", "set", "delete"],
-        Field(description="Operation: 'get', 'set', or 'delete'"),
-    ],
-    key_path: Annotated[
-        str | None,
-        Field(
-            description="Dot-separated key path (required for set/delete, optional for get)"
-        ),
-    ] = None,
-    value: Annotated[
-        str | None,
-        Field(description="Value to set as JSON string (required for operation='set')"),
-    ] = None,
-    value_type: Annotated[
-        Literal["string", "number", "boolean", "null", "json"] | None,
-        Field(
-            description="How to interpret the value parameter for SET operations. "
-            "'string': treat value as literal string (no JSON parsing). "
-            "'number': parse value as JSON number. "
-            "'boolean': parse value as JSON boolean. "
-            "'null': set to null/None (value parameter ignored). "
-            "'json' or None (default): parse value as JSON (current behavior, maintains backward compatibility)."
-        ),
-    ] = None,
-    data_type: Annotated[
-        Literal["data", "schema"], Field(description="Type for get: 'data' or 'schema'")
-    ] = "data",
-    return_type: Annotated[
-        Literal["keys", "all"],
-        Field(
-            description="Return type for get: 'keys' (structure) or 'all' (full data)"
-        ),
-    ] = "all",
-    output_format: Annotated[
-        Literal["json", "yaml", "toml"] | None, Field(description="Output format")
-    ] = None,
-    cursor: Annotated[str | None, Field(description="Pagination cursor")] = None,
-) -> dict[str, Any]:
-    """Get, set, or delete data in JSON, YAML, or TOML files.
-
-    Use when you need to get, set, or delete specific values or entire sections in a structured data file.
-
-    Output contract: Returns {"success": bool, "result": Any, "file": str, ...}.
-    Side effects: Modifies file on disk if operation is 'set' or 'delete'.
-    Failure modes: FileNotFoundError if file missing. ToolError if format disabled or invalid JSON.
-
-    Operations:
-    - get: Retrieve data, schema, or structure
-    - set: Update/create value at key_path (always writes to file)
-    - delete: Remove key/element at key_path (always writes to file)
-    """
-    path = Path(file_path).expanduser().resolve()
-
-    if not path.exists():
-        raise ToolError(f"File not found: {file_path}")
-
-    schema_info = schema_manager.get_schema_info_for_file(path)
-
-    match operation:
-        case "get":
-            return _dispatch_get_operation(
-                path,
-                data_type,
-                return_type,
-                key_path,
-                output_format,
-                cursor,
-                schema_info,
-                schema_manager,
-            )
-        case "set":
-            return _dispatch_set_operation(
-                path, key_path, value, value_type, schema_info, schema_manager
-            )
-        case "delete":
-            return _dispatch_delete_operation(
-                path, key_path, schema_info, schema_manager
-            )
-        case _:
-            assert_never(operation)
-    return None
-
-
-def _handle_schema_validate(
-    file_path: str | None, schema_path: str | None
-) -> dict[str, Any]:
-    """Handle validate action."""
-    if not file_path:
-        raise ToolError("file_path required for validate action")
-    file_path_obj = Path(file_path).expanduser().resolve()
-    if not file_path_obj.exists():
-        raise ToolError(f"File not found: {file_path}")
-
-    input_format = _detect_file_format(file_path_obj)
-    if not is_format_enabled(input_format):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
-
-    validation_results: dict[str, Any] = {
-        "file": str(file_path_obj),
-        "format": input_format,
-        "syntax_valid": False,
-        "schema_validated": False,
-    }
-
-    try:
-        result = execute_yq(
-            ".",
-            input_file=file_path_obj,
-            input_format=input_format,
-            output_format=FormatType.JSON,
-        )
-        validation_results["syntax_valid"] = True
-        validation_results["syntax_message"] = "Syntax is valid"
-
-        schema_file: Path | None = None
-        if schema_path:
-            schema_file = Path(schema_path).expanduser().resolve()
-            if not schema_file.exists():
-                raise ToolError(f"Schema file not found: {schema_path}")
-        else:
-            # Try to get cached schema path from SchemaManager
-            schema_file = schema_manager.get_schema_path_for_file(file_path_obj)
-
-        if schema_file:
-            validation_results["schema_file"] = str(schema_file)
-            is_valid, message = _validate_against_schema(result.data, schema_file)
-            validation_results["schema_validated"] = is_valid
-            validation_results["schema_message"] = message
-        else:
-            validation_results["schema_message"] = "No schema file found or provided"
-
-        validation_results["overall_valid"] = validation_results["syntax_valid"] and (
-            validation_results["schema_validated"] if schema_file else True
-        )
-    except YQExecutionError as e:
-        validation_results["syntax_message"] = f"Syntax error: {e}"
-        validation_results["overall_valid"] = False
-
-    return validation_results
-
-
-def _handle_schema_scan(
-    search_paths: list[str] | None, max_depth: int
-) -> dict[str, Any]:
-    """Handle scan action."""
-    if not search_paths:
-        raise ToolError("search_paths required for scan action")
-    paths = [Path(p).expanduser().resolve() for p in search_paths]
-    discovered = schema_manager.scan_for_schema_dirs(paths, max_depth=max_depth)
-    return {
-        "success": True,
-        "action": "scan",
-        "discovered_count": len(discovered),
-        "discovered_dirs": [str(p) for p in discovered],
-    }
-
-
-def _handle_schema_add_dir(path: str | None) -> dict[str, Any]:
-    """Handle add_dir action."""
-    if not path:
-        raise ToolError("path required for add_dir action")
-    dir_path = Path(path).expanduser().resolve()
-    if not dir_path.exists():
-        raise ToolError(f"Directory not found: {path}")
-    if not dir_path.is_dir():
-        raise ToolError(f"Not a directory: {path}")
-
-    schema_manager.add_custom_dir(dir_path)
-    return {
-        "success": True,
-        "action": "add_dir",
-        "directory": str(dir_path),
-        "message": "Directory added to schema cache locations",
-    }
-
-
-def _handle_schema_add_catalog(name: str | None, uri: str | None) -> dict[str, Any]:
-    """Handle add_catalog action."""
-    if not name or not uri:
-        raise ToolError("name and uri required for add_catalog action")
-    schema_manager.add_custom_catalog(name, uri)
-    return {
-        "success": True,
-        "action": "add_catalog",
-        "name": name,
-        "uri": uri,
-        "message": "Custom catalog added",
-    }
-
-
-def _handle_schema_associate(
-    file_path: str | None, schema_url: str | None, schema_name: str | None
-) -> dict[str, Any]:
-    """Handle associate action."""
-    if not file_path:
-        raise ToolError("file_path required for associate action")
-    file_path_obj = Path(file_path).expanduser().resolve()
-    if not file_path_obj.exists():
-        raise ToolError(f"File not found: {file_path}")
-
-    url = schema_url
-    name = schema_name
-
-    if not url and schema_name:
-        catalog = schema_manager.get_catalog()
-        if catalog:
-            for schema_entry in catalog.schemas:
-                if schema_entry.name == schema_name:
-                    url = schema_entry.url
-                    break
-        if not url:
-            raise ToolError(f"Schema '{schema_name}' not found in catalog")
-
-    if not url:
-        raise ToolError("Either schema_url or schema_name must be provided")
-
-    schema_manager.add_file_association(file_path_obj, url, name)
-    return {
-        "success": True,
-        "action": "associate",
-        "file": str(file_path_obj),
-        "schema_name": name or "unknown",
-        "schema_url": url,
-        "message": "File associated with schema",
-    }
-
-
-def _handle_schema_disassociate(file_path: str | None) -> dict[str, Any]:
-    """Handle disassociate action."""
-    if not file_path:
-        raise ToolError("file_path required for disassociate action")
-    file_path_obj = Path(file_path).expanduser().resolve()
-    removed = schema_manager.remove_file_association(file_path_obj)
-    return {
-        "success": True,
-        "action": "disassociate",
-        "file": str(file_path_obj),
-        "removed": removed,
-        "message": "Association removed" if removed else "No association found",
-    }
-
-
-def _handle_schema_list() -> dict[str, Any]:
-    """Handle list action."""
-    config = schema_manager.get_config()
-    return {"success": True, "action": "list", "config": config}
-
-
-@mcp.tool()
-def data_schema(
-    action: Annotated[
-        Literal[
-            "validate",
-            "scan",
-            "add_dir",
-            "add_catalog",
-            "associate",
-            "disassociate",
-            "list",
-        ],
-        Field(
-            description="Action: validate, scan, add_dir, add_catalog, associate, disassociate, or list"
-        ),
-    ],
-    file_path: Annotated[
-        str | None,
-        Field(description="Path to file (for validate/associate/disassociate actions)"),
-    ] = None,
-    schema_path: Annotated[
-        str | None, Field(description="Path to schema file (for validate action)")
-    ] = None,
-    schema_url: Annotated[
-        str | None, Field(description="Schema URL (for associate action)")
-    ] = None,
-    schema_name: Annotated[
-        str | None, Field(description="Schema name from catalog (for associate action)")
-    ] = None,
-    search_paths: Annotated[
-        list[str] | None, Field(description="Paths to scan (for scan action)")
-    ] = None,
-    path: Annotated[
-        str | None, Field(description="Directory path (for add_dir action)")
-    ] = None,
-    name: Annotated[
-        str | None, Field(description="Catalog name (for add_catalog action)")
-    ] = None,
-    uri: Annotated[
-        str | None, Field(description="Catalog URI (for add_catalog action)")
-    ] = None,
-    max_depth: Annotated[
-        int, Field(description="Max search depth (for scan action)")
-    ] = 5,
-) -> dict[str, Any]:
-    """Unified schema operations tool.
-
-    Actions:
-    - validate: Validate file syntax and optionally against schema
-    - scan: Recursively search for schema directories
-    - add_dir: Add custom schema directory
-    - add_catalog: Add custom schema catalog
-    - associate: Bind file to schema URL or name
-    - disassociate: Remove file-to-schema association
-    - list: Show current schema configuration
-
-    Examples:
-      - action="validate", file_path="config.json"
-      - action="associate", file_path=".gitlab-ci.yml", schema_name="gitlab-ci"
-      - action="disassociate", file_path=".gitlab-ci.yml"
-      - action="list"
-    """
-    handlers: dict[str, Callable[[], dict[str, Any]]] = {
-        "validate": lambda: _handle_schema_validate(file_path, schema_path),
-        "scan": lambda: _handle_schema_scan(search_paths, max_depth),
-        "add_dir": lambda: _handle_schema_add_dir(path),
-        "add_catalog": lambda: _handle_schema_add_catalog(name, uri),
-        "associate": lambda: _handle_schema_associate(
-            file_path, schema_url, schema_name
-        ),
-        "disassociate": lambda: _handle_schema_disassociate(file_path),
-        "list": _handle_schema_list,
-    }
-    return handlers[action]()
-
-
-@mcp.tool(annotations={"readOnlyHint": True})
-def data_convert(
-    file_path: Annotated[str, Field(description="Path to source file")],
-    output_format: Annotated[
-        Literal["json", "yaml", "toml"],
-        Field(description="Target format to convert to"),
-    ],
-    output_file: Annotated[
-        str | None,
-        Field(
-            description="Optional output file path (if not provided, returns converted content)"
-        ),
-    ] = None,
-) -> dict[str, Any]:
-    """Convert file format.
-
-    Use when you need to transform a file from one format (JSON, YAML, TOML) to another.
-
-    Output contract: Returns {"success": bool, "result": str, ...} or writes to file.
-    Side effects: Writes to output_file if provided.
-    Failure modes: FileNotFoundError if input missing. ToolError if formats same or conversion fails.
-    """
-    path = Path(file_path).expanduser().resolve()
-
-    if not path.exists():
-        raise ToolError(f"File not found: {file_path}")
-
-    # Detect input format
-    input_format = _detect_file_format(path)
-    if not is_format_enabled(input_format):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Input format '{input_format}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
-
-    # Validate output format
-    output_fmt: FormatType = validate_format(output_format)
-
-    if input_format == output_fmt:
-        raise ToolError(f"Input and output formats are the same: {input_format}")
-
-    # JSON/YAML to TOML conversion is not supported due to yq limitations
-    # yq's TOML encoder only supports scalar values, not complex nested structures
-    if output_fmt == FormatType.TOML and input_format in {
-        FormatType.JSON,
-        FormatType.YAML,
-    }:
-        raise ToolError(
-            f"Conversion from {input_format.upper()} to TOML is not supported. "
-            "The underlying yq tool cannot encode complex nested structures to TOML format. "
-            "Supported conversions: JSON↔YAML, TOML→JSON, TOML→YAML."
-        )
-
-    try:
-        # Convert
-        result = execute_yq(
-            ".", input_file=path, input_format=input_format, output_format=output_fmt
-        )
-
-        # Write to file if requested
-        if output_file:
-            out_path = Path(output_file).expanduser().resolve()
-            out_path.write_text(result.stdout, encoding="utf-8")
-            return {
-                "success": True,
-                "input_file": str(path),
-                "output_file": str(out_path),
-                "input_format": input_format,
-                "output_format": output_fmt,
-                "message": f"Converted {input_format} to {output_fmt}",
-            }
-        return {
-            "success": True,
-            "input_file": str(path),
-            "input_format": input_format,
-            "output_format": output_fmt,
-            "result": result.stdout,
-        }
-
-    except YQExecutionError as e:
-        raise ToolError(f"Conversion failed: {e}") from e
-
-
-@mcp.tool(annotations={"readOnlyHint": True})
-def data_merge(
-    file_path1: Annotated[str, Field(description="Path to first file (base)")],
-    file_path2: Annotated[str, Field(description="Path to second file (overlay)")],
-    output_format: Annotated[
-        Literal["json", "yaml", "toml"] | None,
-        Field(description="Output format (defaults to format of first file)"),
-    ] = None,
-    output_file: Annotated[
-        str | None,
-        Field(
-            description="Optional output file path (if not provided, returns merged content)"
-        ),
-    ] = None,
-) -> dict[str, Any]:
-    """Merge two files into a single deep-merged configuration.
-
-    Performs a deep merge where values from the second (overlay) file override or extend
-    those in the first (base) file. If output_file is provided the merged result is written
-    to that path; otherwise the merged content is returned in the response.
-
-    Parameters:
-        file_path1 (str): Path to the base file.
-        file_path2 (str): Path to the overlay file whose values override the base.
-        output_format (str | None): Desired output format: "json", "yaml", or "toml". Defaults to the format of the first file.
-        output_file (str | None): Optional path to write the merged output. When omitted, merged content is returned.
-
-    Returns:
-        dict: A payload describing the merge. On success includes "success": True, "file1", "file2",
-        "output_format", and either "result" (merged content) or "output_file" (written path).
-
-    Raises:
-        ToolError: If an input file is missing, its format is not enabled, the output format is invalid, or the merge fails.
-    """
-    path1 = Path(file_path1).expanduser().resolve()
-    path2 = Path(file_path2).expanduser().resolve()
-
-    if not path1.exists():
-        raise ToolError(f"First file not found: {file_path1}")
-    if not path2.exists():
-        raise ToolError(f"Second file not found: {file_path2}")
-
-    # Detect formats
-    format1 = _detect_file_format(path1)
-    format2 = _detect_file_format(path2)
-
-    if not is_format_enabled(format1):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format of first file '{format1}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
-    if not is_format_enabled(format2):
-        enabled = parse_enabled_formats()
-        raise ToolError(
-            f"Format of second file '{format2}' is not enabled. Enabled formats: {', '.join(f.value for f in enabled)}"
-        )
-
-    # Determine output format
-    output_fmt = validate_format(output_format or format1.value)
-
-    try:
-        # Read both files into JSON for merging
-        result1 = execute_yq(
-            ".", input_file=path1, input_format=format1, output_format=FormatType.JSON
-        )
-        result2 = execute_yq(
-            ".", input_file=path2, input_format=format2, output_format=FormatType.JSON
-        )
-
-        # Merge using yq's multiply operator (*)
-        # This does a deep merge
-        merged_json = orjson.dumps(result1.data).decode() if result1.data else "{}"
-        overlay_json = orjson.dumps(result2.data).decode() if result2.data else "{}"
-
-        # Use yq to merge
-        merge_expression = f". * {overlay_json}"
-        merge_result = execute_yq(
-            merge_expression,
-            input_data=merged_json,
-            input_format=FormatType.JSON,
-            output_format=output_fmt,
-        )
-
-        # Write to file if requested
-        if output_file:
-            out_path = Path(output_file).expanduser().resolve()
-            out_path.write_text(merge_result.stdout, encoding="utf-8")
-            return {
-                "success": True,
-                "file1": str(path1),
-                "file2": str(path2),
-                "output_file": str(out_path),
-                "output_format": output_fmt,
-                "message": "Files merged successfully",
-            }
-        return {
-            "success": True,
-            "file1": str(path1),
-            "file2": str(path2),
-            "output_format": output_fmt,
-            "result": merge_result.stdout,
-        }
-
-    except YQExecutionError as e:
-        raise ToolError(f"Merge failed: {e}") from e
-
-
-# =============================================================================
-# LMQL Constraint Resources and Tools
-# =============================================================================
-
-
-@mcp.resource("lmql://constraints")
-def list_all_constraints() -> dict[str, Any]:
-    """Provide metadata and definitions for all registered LMQL constraints.
-
-    Returns:
-        A dictionary with:
-        - "constraints": a mapping of all constraint definitions keyed by name.
-        - "description": a short human-readable description of the constraint collection.
-        - "usage": a brief usage note for applying these constraints in constrained generation.
-    """
-    return {
-        "constraints": ConstraintRegistry.get_all_definitions(),
-        "description": "LMQL-style constraints for validating tool inputs",
-        "usage": "Use these constraints with LMQL or similar tools for constrained generation",
-    }
-
-
-@mcp.resource("lmql://constraints/{name}")
-def get_constraint_definition(name: str) -> dict[str, Any]:
-    """Retrieve the definition of a named LMQL constraint.
-
-    Raises:
-        ToolError: If the constraint name is not registered; the error message lists available constraints.
-
-    Returns:
-        dict: Constraint definition containing fields such as pattern, examples, and LMQL syntax.
-    """
-    constraint = ConstraintRegistry.get(name)
-    if not constraint:
-        available = ConstraintRegistry.list_constraints()
-        raise ToolError(
-            f"Unknown constraint: '{name}'. Available: {', '.join(available)}"
-        )
-    return constraint.get_definition()
-
-
-@mcp.tool(annotations={"readOnlyHint": True})
-def constraint_validate(
-    constraint_name: Annotated[
-        str,
-        Field(
-            description="Name of the constraint to validate against (e.g., 'YQ_PATH', 'CONFIG_FORMAT', 'INT')"
-        ),
-    ],
-    value: Annotated[str, Field(description="Value to validate")],
-) -> dict[str, Any]:
-    """Validate a value against an LMQL-style constraint.
-
-    Use this tool to check if a value satisfies a constraint before using it
-    in other operations. Supports partial validation - can tell if an incomplete
-    input could still become valid.
-
-    Output contract: Returns {"valid": bool, "error": str?, "is_partial": bool?, ...}.
-    Side effects: None (read-only validation).
-    Failure modes: ToolError if constraint name unknown.
-
-    Available constraints:
-    - YQ_PATH: Valid yq path (e.g., '.users[0].name')
-    - YQ_EXPRESSION: Valid yq expression with pipes (e.g., '.items | length')
-    - CONFIG_FORMAT: Valid format ('json', 'yaml', 'toml', 'xml')
-    - KEY_PATH: Dot-separated key path (e.g., 'config.database.host')
-    - INT: Valid integer
-    - JSON_VALUE: Valid JSON syntax
-    - FILE_PATH: Valid file path syntax
-    """
-    result = validate_tool_input(constraint_name, value)
-    response = result.to_dict()
-    response["constraint"] = constraint_name
-    response["value"] = value
-
-    # Add hint for invalid values
-    if not result.valid:
-        hint = get_constraint_hint(constraint_name, value)
-        if hint:
-            response["hint"] = hint
-
-    return response
-
-
-@mcp.tool(annotations={"readOnlyHint": True})
-def constraint_list() -> dict[str, Any]:
-    """Return a list of all registered LMQL constraints with their metadata.
-
-    Returns:
-        result (dict): A dictionary with keys:
-            - "constraints": a list of constraint objects; each object includes a "name" key and the constraint's definition fields (e.g., "description", any other metadata).
-            - "usage": a string describing how to validate a value against a constraint (e.g., call `constraint_validate(constraint_name, value)`).
-    """
-    definitions = ConstraintRegistry.get_all_definitions()
-    return {
-        "constraints": [{"name": name, **defn} for name, defn in definitions.items()],
-        "usage": (
-            "Use constraint_validate(constraint_name, value) to validate inputs. "
-            "Access constraint definitions via lmql://constraints/{name} resource."
-        ),
-    }
-
-
-@mcp.prompt()
-def explain_config(file_path: str) -> str:
-    """Produce a natural-language prompt that requests an analysis of a configuration file.
-
-    The generated prompt asks an assistant to:
-    1. Identify the file format (JSON, YAML, TOML).
-    2. Summarize the file's key sections and their purpose.
-    3. Highlight critical settings and potential misconfigurations.
-    4. Check adherence to an available schema, if one exists.
-
-    Parameters:
-        file_path (str): Path to the configuration file to be analyzed.
-
-    Returns:
-        prompt (str): A formatted prompt string referring to the provided file path.
-    """
-    return f"""Please analyze and explain the configuration file at '{file_path}'.
-
-    1. Identify the file format (JSON, YAML, TOML).
-    2. Summarize the key sections and their purpose.
-    3. Highlight any critical settings or potential misconfigurations.
-    4. If a schema is available, check if the config adheres to it.
-    """
-
-
-@mcp.prompt()
-def suggest_improvements(file_path: str) -> str:
-    """Generate a prompt to suggest improvements for a configuration file."""
-    return f"""Please review the configuration file at '{file_path}' and suggest improvements.
-
-    Consider:
-    1. Security best practices (e.g., exposed secrets).
-    2. Performance optimizations.
-    3. Readability and structure (e.g., comments, organization).
-    4. Redundant or deprecated settings.
-    """
-
-
-@mcp.prompt()
-def convert_to_schema(file_path: str) -> str:
-    """Generate a prompt to create a JSON schema from a configuration file."""
-    return f"""Please generate a JSON schema based on the configuration file at '{file_path}'.
-
-    1. Infer types for all fields.
-    2. Mark fields as required or optional based on common patterns.
-    3. Add descriptions for fields where the purpose is clear.
-    4. Use standard JSON Schema Draft 7 or later.
-    """
-
-
+from mcp_json_yaml_toml.tools.constraints import (  # noqa: E402
+    constraint_list,
+    constraint_validate,
+    convert_to_schema,
+    explain_config,
+    get_constraint_definition,
+    list_all_constraints,
+    suggest_improvements,
+)
+from mcp_json_yaml_toml.tools.convert import data_convert, data_merge  # noqa: E402
+from mcp_json_yaml_toml.tools.data import data  # noqa: E402
+from mcp_json_yaml_toml.tools.query import data_query  # noqa: E402
+from mcp_json_yaml_toml.tools.schema import data_schema  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Explicit exports — tells mypy these names are part of the public API.
+# ---------------------------------------------------------------------------
+__all__ = [
+    # Pagination re-exports (backward compat)
+    "ADVISORY_PAGE_THRESHOLD",
+    "MAX_PRIMITIVE_DISPLAY_LENGTH",
+    "PAGE_SIZE_CHARS",
+    # Models
+    "SchemaResponse",
+    # Service re-exports (backward compat)
+    "_build_query_response",
+    "_decode_cursor",
+    "_dispatch_delete_operation",
+    "_dispatch_get_operation",
+    "_dispatch_set_operation",
+    "_encode_cursor",
+    "_get_pagination_hint",
+    "_paginate_result",
+    "_summarize_structure",
+    "_validate_and_write_content",
+    "constraint_list",
+    "constraint_validate",
+    "convert_to_schema",
+    # Tools
+    "data",
+    "data_convert",
+    "data_merge",
+    "data_query",
+    "data_schema",
+    # Prompts
+    "explain_config",
+    "get_constraint_definition",
+    "is_schema",
+    # Resources
+    "list_all_constraints",
+    "main",
+    # Core objects
+    "mcp",
+    "schema_manager",
+    "suggest_improvements",
+]
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 def main() -> None:  # pragma: no cover
     """Entry point for the MCP server."""
     mcp.run()
