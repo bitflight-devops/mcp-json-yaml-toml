@@ -87,11 +87,13 @@ Plans:
 2. config.py caches parsed environment configuration (no repeated parsing)
 3. yaml_optimizer.py validates environment input instead of crashing at import
 4. logging.debug() uses lazy %-formatting throughout codebase
-   **Plans**: TBD
+
+**Plans**: 2 plans
 
 Plans:
 
-- [ ] 06-01: TBD
+- [ ] 06-01: binary_manager.py print() to logging migration
+- [ ] 06-02: Config caching, env validation, lazy log formatting
 
 #### Phase 7: Architecture Refactoring
 
