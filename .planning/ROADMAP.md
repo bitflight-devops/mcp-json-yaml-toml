@@ -76,11 +76,13 @@ Plans:
 3. Long-running tools have timeout protection (timeout parameter set on decorators)
 4. All tools return structured output (outputSchema auto-generated from Pydantic models)
 5. JSON Schema validator defaults to Draft 2020-12 (upgraded from Draft 7)
-   **Plans**: TBD
+
+**Plans:** 2 plans
 
 Plans:
 
-- [ ] TBD - Will be defined during `/gsd:plan-phase 3`
+- [ ] 03-01-PLAN.md -- FastMCP 3.x dependency upgrade and import compatibility (FMCP-01, FMCP-02)
+- [ ] 03-02-PLAN.md -- Tool timeouts, Draft 2020-12 default, and outputSchema verification (FMCP-03, SAFE-02)
 
 ### Phase 4: Competitive Features
 
@@ -108,5 +110,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | --------------------------- | -------------- | ----------- | ---------- |
 | 1. Architectural Foundation | 4/4            | ✓ Complete  | 2026-02-14 |
 | 2. Tool Layer Refactoring   | 4/4            | ✓ Complete  | 2026-02-14 |
-| 3. FastMCP 3.x Migration    | 0/TBD          | Not started | -          |
+| 3. FastMCP 3.x Migration    | 0/2            | Not started | -          |
 | 4. Competitive Features     | 0/TBD          | Not started | -          |
