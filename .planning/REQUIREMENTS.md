@@ -3,35 +3,53 @@
 **Defined:** 2026-02-14
 **Core Value:** AI assistants can safely read and modify structured configuration files without destroying formatting, comments, or file structure.
 
-## v1 Requirements
+## v1.0 Requirements (Complete)
 
-Requirements for this milestone. Each maps to roadmap phases.
+All v1.0 requirements shipped. See MILESTONES.md for details.
 
-### Architecture
+- [x] **ARCH-01** through **ARCH-05**: Architecture extraction and layering — Done
+- [x] **FMCP-01** through **FMCP-05**: FastMCP 3.x migration and structured output — Done
+- [x] **SAFE-01**, **SAFE-02**: ruamel.yaml pin and Draft 2020-12 — Done
+- [x] **FEAT-01**, **FEAT-02**: Config diffing and OpenTelemetry — Done
 
-- [x] **ARCH-01**: Extract pagination utilities from server.py into dedicated module
-- [x] **ARCH-02**: Extract format detection and value parsing from server.py into dedicated module
-- [x] **ARCH-03**: Decouple yq binary lifecycle management from query execution in yq_wrapper.py
-- [x] **ARCH-04**: Create backend abstraction layer with pluggable execution engine interface
-- [x] **ARCH-05**: Reduce server.py to tool registration and dispatch only
+## v1.1 Requirements
 
-### FastMCP
+Requirements for internal quality milestone. Derived from code review findings (2026-02-15).
 
-- [x] **FMCP-01**: Migrate from FastMCP 2.x to FastMCP 3.x with all tests passing
-- [x] **FMCP-02**: Leverage automatic threadpool for sync yq subprocess calls
-- [x] **FMCP-03**: Add tool timeout support for long-running operations
-- [x] **FMCP-04**: Create Pydantic response models for all tool outputs (structured output)
-- [x] **FMCP-05**: Add complete tool annotations (readOnlyHint, destructiveHint, idempotentHint) to all tools
+### Type Safety (TYPE)
 
-### Safety
+- [ ] **TYPE-01**: All service handler functions return typed Pydantic response models instead of dict[str, Any]
+- [ ] **TYPE-02**: Format comparison uses FormatType enum consistently (no mixed string/enum checks)
+- [ ] **TYPE-03**: Exception handling uses specific exception types, not broad except Exception with isinstance guards
 
-- [x] **SAFE-01**: Pin ruamel.yaml to >=0.18.0,<0.19 to prevent 0.19 deployment failures
-- [x] **SAFE-02**: Upgrade JSON Schema default validator to Draft 2020-12
+### DRY Compliance (DRY)
 
-### Features
+- [ ] **DRY-01**: Format-enable check extracted to single require_format_enabled() function (eliminates 9 duplicate sites)
+- [ ] **DRY-02**: TOML fallback logic extracted to shared helper (eliminates 2 duplicate sites)
+- [ ] **DRY-03**: File path resolution and existence checking extracted to shared utility
 
-- [ ] **FEAT-01**: Add config file diff tool to compare two configuration files
-- [ ] **FEAT-02**: Add OpenTelemetry instrumentation for monitoring and debugging
+### Operational Safety (OPS)
+
+- [ ] **OPS-01**: binary_manager.py uses logging module instead of print() to stderr (16 sites)
+- [ ] **OPS-02**: config.py caches parsed environment configuration (functools.cache)
+- [ ] **OPS-03**: yaml_optimizer.py environment config validates input instead of crashing at import
+- [ ] **OPS-04**: logging.debug() uses lazy %-formatting instead of f-strings (3 sites in schemas.py)
+
+### Architecture (ARCH)
+
+- [ ] **ARCH-06**: data_operations.py split into focused service modules (get, mutation, query)
+- [ ] **ARCH-07**: schemas.py split into focused sub-modules (loading, IDE cache, scanning)
+- [ ] **ARCH-08**: Production imports migrated from deprecated yq_wrapper.py shim to backends modules
+- [ ] **ARCH-09**: server.py **all** cleaned — private symbols removed, tests import from originating modules
+- [ ] **ARCH-10**: tools/schema.py handler functions accept schema_manager as parameter (not module singleton)
+
+### Test Quality (TEST)
+
+- [ ] **TEST-01**: Private method tests refactored to test through public API
+- [ ] **TEST-02**: Test naming standardized to behavioral pattern (test_what_when_condition_then_outcome)
+- [ ] **TEST-03**: Edge case coverage added: permissions, malformed input, resource cleanup
+- [ ] **TEST-04**: Repetitive test data converted to @pytest.mark.parametrize
+- [ ] **TEST-05**: verify_features.py test_hints() has proper assertions
 
 ## v2 Requirements
 
@@ -49,44 +67,77 @@ Deferred to future release. Tracked but not in current roadmap.
 - **PROT-02**: Async task primitives for long-running operations
 - **PROT-03**: Multi-file query support (query across multiple config files)
 
+### Additional Refactoring
+
+- **REFACT-01**: Split schemas.py SchemaManager into separate provider classes
+- **REFACT-02**: ThreadPoolExecutor shared at instance level instead of per-call creation
+- **REFACT-03**: Defer SchemaManager initialization to first access (lazy init)
+- **REFACT-04**: Remove unused FormatType enum members (CSV, TSV, PROPS) or document as reserved
+- **REFACT-05**: Fix FilePathConstraint.validate dead regex (always returns valid=True)
+
+### Test Expansion
+
+- **TEXP-01**: Split oversized test files (test_yq_wrapper.py, test_set_type_preservation.py)
+- **TEXP-02**: Add concurrent access tests for config.py and schemas.py
+- **TEXP-03**: Add property-based testing with hypothesis for format parsing
+- **TEXP-04**: Create tests/helpers.py with shared assertion patterns
+
 ## Out of Scope
 
-| Feature                                 | Reason                                                                                        |
-| --------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Switch from yq to dasel                 | Dasel destroys YAML/TOML comments on write and expands anchors — violates core differentiator |
-| Rewrite in non-Python language          | Python ecosystem constraint; existing architecture is sound                                   |
-| Change existing MCP tool names          | Production clients depend on data, data_query, data_schema, data_convert, data_merge          |
-| Native MCP from CLI tools               | yq/dasel are stateless CLI tools with no protocol awareness — Python wrapper IS the server    |
-| New file format support (XML, CSV, INI) | Not the focus of this milestone                                                               |
+| Feature                        | Reason                                                         |
+| ------------------------------ | -------------------------------------------------------------- |
+| New MCP tool features          | v1.1 is internal quality only                                  |
+| API breaking changes           | Production clients depend on current interface                 |
+| Switch from yq to dasel        | Dasel destroys comments/anchors — violates core differentiator |
+| Rewrite in non-Python language | Python ecosystem constraint                                    |
+| Change existing MCP tool names | Production clients depend on current API surface               |
+| New file format support        | Not the focus of this milestone                                |
 
 ## Traceability
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-| Requirement | Phase   | Status  |
-| ----------- | ------- | ------- |
-| ARCH-01     | Phase 1 | Done    |
-| ARCH-02     | Phase 1 | Done    |
-| ARCH-03     | Phase 1 | Done    |
-| ARCH-04     | Phase 1 | Done    |
-| SAFE-01     | Phase 1 | Done    |
-| ARCH-05     | Phase 2 | Done    |
-| FMCP-04     | Phase 2 | Done    |
-| FMCP-05     | Phase 2 | Done    |
-| FMCP-01     | Phase 3 | Done    |
-| FMCP-02     | Phase 3 | Done    |
-| FMCP-03     | Phase 3 | Done    |
-| SAFE-02     | Phase 3 | Done    |
-| FEAT-01     | Phase 4 | Pending |
-| FEAT-02     | Phase 4 | Pending |
+### v1.0 (Complete)
+
+| Requirement             | Phase      | Status |
+| ----------------------- | ---------- | ------ |
+| ARCH-01 through ARCH-05 | Phase 1-2  | Done   |
+| FMCP-01 through FMCP-05 | Phase 2-3  | Done   |
+| SAFE-01, SAFE-02        | Phase 1, 3 | Done   |
+| FEAT-01, FEAT-02        | Phase 4    | Done   |
+
+### v1.1 (Active)
+
+| Requirement | Phase | Status  |
+| ----------- | ----- | ------- |
+| TYPE-01     | —     | Pending |
+| TYPE-02     | —     | Pending |
+| TYPE-03     | —     | Pending |
+| DRY-01      | —     | Pending |
+| DRY-02      | —     | Pending |
+| DRY-03      | —     | Pending |
+| OPS-01      | —     | Pending |
+| OPS-02      | —     | Pending |
+| OPS-03      | —     | Pending |
+| OPS-04      | —     | Pending |
+| ARCH-06     | —     | Pending |
+| ARCH-07     | —     | Pending |
+| ARCH-08     | —     | Pending |
+| ARCH-09     | —     | Pending |
+| ARCH-10     | —     | Pending |
+| TEST-01     | —     | Pending |
+| TEST-02     | —     | Pending |
+| TEST-03     | —     | Pending |
+| TEST-04     | —     | Pending |
+| TEST-05     | —     | Pending |
 
 **Coverage:**
 
-- v1 requirements: 14 total
-- Mapped to phases: 14
-- Unmapped: 0
+- v1.1 requirements: 20 total
+- Mapped to phases: 0
+- Unmapped: 20 ⚠️
 
 ---
 
 _Requirements defined: 2026-02-14_
-_Last updated: 2026-02-14 after Phase 2 completion_
+_Last updated: 2026-02-15 after v1.1 milestone definition_
