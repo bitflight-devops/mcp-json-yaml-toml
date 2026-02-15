@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Architectural Foundation** - Extract backend abstraction, utilities, and format handlers (2026-02-14)
 - [x] **Phase 2: Tool Layer Refactoring** - Split server.py into thin tool decorators with Pydantic models (2026-02-14)
-- [ ] **Phase 3: FastMCP 3.x Migration** - Upgrade framework and adopt new capabilities
+- [x] **Phase 3: FastMCP 3.x Migration** - Upgrade framework and adopt new capabilities (2026-02-15)
 - [ ] **Phase 4: Competitive Features** - Add config diffing and OpenTelemetry observability
 
 ## Phase Details
@@ -81,8 +81,8 @@ Plans:
 
 Plans:
 
-- [ ] 03-01-PLAN.md -- FastMCP 3.x dependency upgrade and import compatibility (FMCP-01, FMCP-02)
-- [ ] 03-02-PLAN.md -- Tool timeouts, Draft 2020-12 default, and outputSchema verification (FMCP-03, SAFE-02)
+- [x] 03-01-PLAN.md -- FastMCP 3.x dependency upgrade and import compatibility (FMCP-01, FMCP-02)
+- [x] 03-02-PLAN.md -- Tool timeouts, Draft 2020-12 default, and outputSchema verification (FMCP-03, SAFE-02)
 
 ### Phase 4: Competitive Features
 
@@ -110,5 +110,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | --------------------------- | -------------- | ----------- | ---------- |
 | 1. Architectural Foundation | 4/4            | ✓ Complete  | 2026-02-14 |
 | 2. Tool Layer Refactoring   | 4/4            | ✓ Complete  | 2026-02-14 |
-| 3. FastMCP 3.x Migration    | 0/2            | Not started | -          |
+| 3. FastMCP 3.x Migration    | 2/2            | ✓ Complete  | 2026-02-15 |
 | 4. Competitive Features     | 0/TBD          | Not started | -          |

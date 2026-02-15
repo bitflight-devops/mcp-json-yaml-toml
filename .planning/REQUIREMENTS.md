@@ -17,16 +17,16 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### FastMCP
 
-- [ ] **FMCP-01**: Migrate from FastMCP 2.x to FastMCP 3.x with all tests passing
-- [ ] **FMCP-02**: Leverage automatic threadpool for sync yq subprocess calls
-- [ ] **FMCP-03**: Add tool timeout support for long-running operations
+- [x] **FMCP-01**: Migrate from FastMCP 2.x to FastMCP 3.x with all tests passing
+- [x] **FMCP-02**: Leverage automatic threadpool for sync yq subprocess calls
+- [x] **FMCP-03**: Add tool timeout support for long-running operations
 - [x] **FMCP-04**: Create Pydantic response models for all tool outputs (structured output)
 - [x] **FMCP-05**: Add complete tool annotations (readOnlyHint, destructiveHint, idempotentHint) to all tools
 
 ### Safety
 
 - [x] **SAFE-01**: Pin ruamel.yaml to >=0.18.0,<0.19 to prevent 0.19 deployment failures
-- [ ] **SAFE-02**: Upgrade JSON Schema default validator to Draft 2020-12
+- [x] **SAFE-02**: Upgrade JSON Schema default validator to Draft 2020-12
 
 ### Features
 
@@ -73,10 +73,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARCH-05     | Phase 2 | Done    |
 | FMCP-04     | Phase 2 | Done    |
 | FMCP-05     | Phase 2 | Done    |
-| FMCP-01     | Phase 3 | Pending |
-| FMCP-02     | Phase 3 | Pending |
-| FMCP-03     | Phase 3 | Pending |
-| SAFE-02     | Phase 3 | Pending |
+| FMCP-01     | Phase 3 | Done    |
+| FMCP-02     | Phase 3 | Done    |
+| FMCP-03     | Phase 3 | Done    |
+| SAFE-02     | Phase 3 | Done    |
 | FEAT-01     | Phase 4 | Pending |
 | FEAT-02     | Phase 4 | Pending |
 
