@@ -18,7 +18,11 @@ from mcp_json_yaml_toml.formats.base import (
     _parse_set_value,
     should_fallback_toml_to_json,
 )
-from mcp_json_yaml_toml.models.responses import DataResponse, SchemaResponse
+from mcp_json_yaml_toml.models.responses import (
+    DataResponse,
+    MutationResponse,
+    SchemaResponse,
+)
 from mcp_json_yaml_toml.services.pagination import (
     PAGE_SIZE_CHARS,
     _get_pagination_hint,
@@ -124,7 +128,7 @@ def _handle_data_get_structure(
     input_format: FormatType,
     cursor: str | None,
     schema_info: SchemaInfo | None,
-) -> dict[str, Any]:
+) -> DataResponse:
     """Handle GET operation with return_type='keys'.
 
     Args:
@@ -135,7 +139,7 @@ def _handle_data_get_structure(
         schema_info: Optional schema information
 
     Returns:
-        Response dict with structure summary
+        DataResponse with structure summary
 
     Raises:
         ToolError: If query fails
@@ -152,46 +156,38 @@ def _handle_data_get_structure(
             input_format=input_format,
             output_format=FormatType.JSON,
         )
-        response: dict[str, Any]
         if result.data is None:
-            response = {
-                "success": True,
-                "result": None,
-                "format": "json",
-                "file": str(path),
-                "structure_summary": "Empty or invalid data",
-            }
-            if schema_info:
-                response["schema_info"] = schema_info
-            return response
+            return DataResponse(
+                success=True,
+                result=None,
+                format="json",
+                file=str(path),
+                structure_summary="Empty or invalid data",
+                schema_info=schema_info,
+            )
 
         summary = _summarize_structure(result.data, max_depth=1, full_keys_mode=True)
         summary_str = orjson.dumps(summary, option=orjson.OPT_INDENT_2).decode()
 
         if len(summary_str) > PAGE_SIZE_CHARS or cursor is not None:
             pagination = _paginate_result(summary_str, cursor)
-            response = {
-                "success": True,
-                "result": pagination["data"],
-                "format": "json",
-                "file": str(path),
-                "paginated": True,
-            }
-            if "nextCursor" in pagination:
-                response["nextCursor"] = pagination["nextCursor"]
-            return response
-        response = {
-            "success": True,
-            "result": summary,
-            "format": "json",
-            "file": str(path),
-        }
-        if schema_info:
-            response["schema_info"] = schema_info
+            return DataResponse(
+                success=True,
+                result=pagination["data"],
+                format="json",
+                file=str(path),
+                paginated=True,
+                nextCursor=pagination.get("nextCursor"),
+            )
+        return DataResponse(
+            success=True,
+            result=summary,
+            format="json",
+            file=str(path),
+            schema_info=schema_info,
+        )
     except YQExecutionError as e:
         raise ToolError(f"Query failed: {e}") from e
-    else:
-        return response
 
 
 def _handle_data_get_value(
@@ -202,7 +198,7 @@ def _handle_data_get_value(
     cursor: str | None,
     schema_info: SchemaInfo | None,
     output_format_explicit: bool = True,
-) -> dict[str, Any]:
+) -> DataResponse:
     """Handle GET operation with return_type='all' for data values.
 
     Args:
@@ -215,7 +211,7 @@ def _handle_data_get_value(
         output_format_explicit: Whether output format was explicitly specified
 
     Returns:
-        Response dict with data value
+        DataResponse with data value
 
     Raises:
         ToolError: If query fails
@@ -231,7 +227,7 @@ def _handle_data_get_value(
         )
         result_str = (
             result.stdout
-            if output_fmt != "json"
+            if output_fmt != FormatType.JSON
             else orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
         )
 
@@ -243,26 +239,22 @@ def _handle_data_get_value(
                 hint = "Result is an object. Use '.key' to select or '. | keys' to list keys."
 
             pagination = _paginate_result(result_str, cursor, advisory_hint=hint)
-            response = {
-                "success": True,
-                "result": pagination["data"],
-                "format": output_fmt,
-                "file": str(path),
-                "paginated": True,
-            }
-            if "nextCursor" in pagination:
-                response["nextCursor"] = pagination["nextCursor"]
-            if "advisory" in pagination:
-                response["advisory"] = pagination["advisory"]
-            return response
-        response = {
-            "success": True,
-            "result": result_str if output_fmt != "json" else result.data,
-            "format": output_fmt,
-            "file": str(path),
-        }
-        if schema_info:
-            response["schema_info"] = schema_info
+            return DataResponse(
+                success=True,
+                result=pagination["data"],
+                format=output_fmt,
+                file=str(path),
+                paginated=True,
+                nextCursor=pagination.get("nextCursor"),
+                advisory=pagination.get("advisory"),
+            )
+        return DataResponse(
+            success=True,
+            result=result_str if output_fmt != FormatType.JSON else result.data,
+            format=output_fmt,
+            file=str(path),
+            schema_info=schema_info,
+        )
     except YQExecutionError as e:
         if should_fallback_toml_to_json(
             e, output_format_explicit, output_fmt, input_format
@@ -277,8 +269,6 @@ def _handle_data_get_value(
                 output_format_explicit=True,
             )
         raise ToolError(f"Query failed: {e}") from e
-    else:
-        return response
 
 
 def _set_toml_value_handler(
@@ -287,7 +277,7 @@ def _set_toml_value_handler(
     parsed_value: Any,
     schema_info: SchemaInfo | None,
     schema_path: Path | None = None,
-) -> dict[str, Any]:
+) -> MutationResponse:
     """Handle TOML set operation.
 
     Args:
@@ -298,25 +288,20 @@ def _set_toml_value_handler(
         schema_path: Optional path to schema file for validation
 
     Returns:
-        Response dict with operation result
+        MutationResponse with operation result
     """
     try:
         modified_toml = set_toml_value(path, key_path, parsed_value)
-        _validate_and_write_content(path, modified_toml, schema_path, "toml")
-
-        response = {
-            "success": True,
-            "result": "File modified successfully",
-            "file": str(path),
-        }
-        if schema_info:
-            response["schema_info"] = schema_info
-    except Exception as e:
-        if isinstance(e, ToolError):
-            raise
+        _validate_and_write_content(path, modified_toml, schema_path, FormatType.TOML)
+    except (KeyError, TypeError, ValueError, OSError) as e:
         raise ToolError(f"TOML set operation failed: {e}") from e
     else:
-        return response
+        return MutationResponse(
+            success=True,
+            result="File modified successfully",
+            file=str(path),
+            schema_info=schema_info,
+        )
 
 
 def _optimize_yaml_if_needed(path: Path) -> bool:
@@ -356,7 +341,7 @@ def _handle_data_set(
     input_format: FormatType,
     schema_info: SchemaInfo | None,
     schema_manager: SchemaManager | None = None,
-) -> dict[str, Any]:
+) -> MutationResponse:
     """Handle SET operation.
 
     Args:
@@ -369,7 +354,7 @@ def _handle_data_set(
         schema_manager: Schema manager instance for schema path lookup
 
     Returns:
-        Response dict with operation result
+        MutationResponse with operation result
 
     Raises:
         ToolError: If operation fails
@@ -381,7 +366,7 @@ def _handle_data_set(
     if schema_info and schema_manager is not None:
         schema_path = schema_manager.get_schema_path_for_file(path)
 
-    if input_format == "toml":
+    if input_format == FormatType.TOML:
         return _set_toml_value_handler(
             path, key_path, parsed_value, schema_info, schema_path
         )
@@ -408,34 +393,28 @@ def _handle_data_set(
 
     except YQExecutionError as e:
         raise ToolError(f"Set operation failed: {e}") from e
-    except Exception as e:
-        if isinstance(e, ToolError):
-            raise
+    except (TypeError, ValueError, OSError) as e:
         raise ToolError(f"Set operation failed: {e}") from e
     else:
         optimized = False
-        if input_format == "yaml":
+        if input_format == FormatType.YAML:
             optimized = _optimize_yaml_if_needed(path)
 
-        response = {
-            "success": True,
-            "result": "File modified successfully",
-            "file": str(path),
-        }
-
-        if optimized:
-            response["optimized"] = True
-            response["message"] = "File modified and optimized with YAML anchors"
-
-        if schema_info:
-            response["schema_info"] = schema_info
-
-        return response
+        return MutationResponse(
+            success=True,
+            result="File modified successfully",
+            file=str(path),
+            optimized=optimized,
+            message="File modified and optimized with YAML anchors"
+            if optimized
+            else None,
+            schema_info=schema_info,
+        )
 
 
 def _delete_toml_key_handler(
     path: Path, key_path: str, schema_path: Path | None, schema_info: SchemaInfo | None
-) -> dict[str, Any]:
+) -> MutationResponse:
     """Handle TOML delete operation.
 
     Args:
@@ -445,29 +424,25 @@ def _delete_toml_key_handler(
         schema_info: Optional schema information
 
     Returns:
-        Response dict with operation result
+        MutationResponse with operation result
 
     Raises:
         ToolError: If operation fails
     """
     try:
         modified_toml = delete_toml_key(path, key_path)
-        _validate_and_write_content(path, modified_toml, schema_path, "toml")
+        _validate_and_write_content(path, modified_toml, schema_path, FormatType.TOML)
     except KeyError as e:
         raise ToolError(f"TOML delete operation failed: {e}") from e
-    except ToolError:
-        raise
-    except Exception as e:
+    except (TypeError, ValueError, OSError) as e:
         raise ToolError(f"TOML delete operation failed: {e}") from e
 
-    response: dict[str, Any] = {
-        "success": True,
-        "result": "File modified successfully",
-        "file": str(path),
-    }
-    if schema_info:
-        response["schema_info"] = schema_info
-    return response
+    return MutationResponse(
+        success=True,
+        result="File modified successfully",
+        file=str(path),
+        schema_info=schema_info,
+    )
 
 
 def _delete_yq_key_handler(
@@ -476,7 +451,7 @@ def _delete_yq_key_handler(
     input_format: FormatType,
     schema_path: Path | None,
     schema_info: SchemaInfo | None,
-) -> dict[str, Any]:
+) -> MutationResponse:
     """Handle YAML/JSON delete operation using yq.
 
     Args:
@@ -487,7 +462,7 @@ def _delete_yq_key_handler(
         schema_info: Optional schema information
 
     Returns:
-        Response dict with operation result
+        MutationResponse with operation result
 
     Raises:
         ToolError: If operation fails
@@ -507,19 +482,15 @@ def _delete_yq_key_handler(
         _validate_and_write_content(path, result.stdout, schema_path, input_format)
     except YQExecutionError as e:
         raise ToolError(f"Delete operation failed: {e}") from e
-    except ToolError:
-        raise
-    except Exception as e:
+    except (TypeError, ValueError, OSError) as e:
         raise ToolError(f"Delete operation failed: {e}") from e
 
-    response: dict[str, Any] = {
-        "success": True,
-        "result": "File modified successfully",
-        "file": str(path),
-    }
-    if schema_info:
-        response["schema_info"] = schema_info
-    return response
+    return MutationResponse(
+        success=True,
+        result="File modified successfully",
+        file=str(path),
+        schema_info=schema_info,
+    )
 
 
 def _handle_data_delete(
@@ -528,7 +499,7 @@ def _handle_data_delete(
     input_format: FormatType,
     schema_info: SchemaInfo | None,
     schema_manager: SchemaManager | None = None,
-) -> dict[str, Any]:
+) -> MutationResponse:
     """Handle DELETE operation.
 
     Args:
@@ -539,7 +510,7 @@ def _handle_data_delete(
         schema_manager: Schema manager instance for schema path lookup
 
     Returns:
-        Response dict with operation result
+        MutationResponse with operation result
 
     Raises:
         ToolError: If operation fails
@@ -548,7 +519,7 @@ def _handle_data_delete(
     if schema_info and schema_manager is not None:
         schema_path = schema_manager.get_schema_path_for_file(path)
 
-    if input_format == "toml":
+    if input_format == FormatType.TOML:
         return _delete_toml_key_handler(path, key_path, schema_path, schema_info)
 
     return _delete_yq_key_handler(
@@ -565,7 +536,7 @@ def _dispatch_get_operation(
     cursor: str | None,
     schema_info: SchemaInfo | None,
     schema_manager: SchemaManager | None = None,
-) -> dict[str, Any]:
+) -> DataResponse | SchemaResponse:
     """Dispatch GET operation to appropriate handler.
 
     Args:
@@ -579,7 +550,7 @@ def _dispatch_get_operation(
         schema_manager: Schema manager instance for schema operations
 
     Returns:
-        Response dict from handler
+        DataResponse or SchemaResponse from handler
 
     Raises:
         ToolError: If format disabled or validation fails
@@ -587,10 +558,7 @@ def _dispatch_get_operation(
     if data_type == "schema":
         if schema_manager is None:
             raise ToolError("schema_manager is required for schema operations")
-        # Return dict representation of Pydantic model
-        return _handle_data_get_schema(path, schema_manager).model_dump(
-            exclude_none=True, by_alias=True
-        )
+        return _handle_data_get_schema(path, schema_manager)
 
     input_format = _detect_file_format(path)
     require_format_enabled(input_format)
@@ -631,7 +599,7 @@ def _dispatch_set_operation(
     value_type: Literal["string", "number", "boolean", "null", "json"] | None,
     schema_info: SchemaInfo | None,
     schema_manager: SchemaManager | None = None,
-) -> dict[str, Any]:
+) -> MutationResponse:
     """Dispatch SET operation to handler.
 
     Args:
@@ -643,7 +611,7 @@ def _dispatch_set_operation(
         schema_manager: Schema manager instance for schema path lookup
 
     Returns:
-        Response dict from handler
+        MutationResponse from handler
 
     Raises:
         ToolError: If validation fails or format disabled
@@ -668,7 +636,7 @@ def _dispatch_delete_operation(
     key_path: str | None,
     schema_info: SchemaInfo | None,
     schema_manager: SchemaManager | None = None,
-) -> dict[str, Any]:
+) -> MutationResponse:
     """Dispatch DELETE operation to handler.
 
     Args:
@@ -678,7 +646,7 @@ def _dispatch_delete_operation(
         schema_manager: Schema manager instance for schema path lookup
 
     Returns:
-        Response dict from handler
+        MutationResponse from handler
 
     Raises:
         ToolError: If validation fails or format disabled
@@ -710,7 +678,7 @@ def _build_query_response(
     """
     result_str = (
         result.stdout
-        if output_format != "json"
+        if output_format != FormatType.JSON
         else orjson.dumps(result.data, option=orjson.OPT_INDENT_2).decode()
     )
 
@@ -729,7 +697,7 @@ def _build_query_response(
 
     return DataResponse(
         success=True,
-        result=result_str if output_format != "json" else result.data,
+        result=result_str if output_format != FormatType.JSON else result.data,
         format=output_format,
         file=str(path),
     )

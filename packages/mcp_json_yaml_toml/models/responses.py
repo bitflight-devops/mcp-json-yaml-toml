@@ -25,25 +25,43 @@ class _DictAccessMixin:
     Supports ``model["key"]``, ``"key" in model``, and ``model.get(key, default)``.
     Keys whose value is ``None`` are treated as absent (matching the dict behaviour
     of the prior ``exclude_none=True`` pattern).
+
+    Alias-aware: if a key matches a field's alias (e.g. ``"schema"`` for field
+    ``schema_``), the field value is returned instead of an unrelated attribute.
     """
 
+    def _resolve_field_name(self, key: str) -> str:
+        """Resolve an alias to its field name, or return key unchanged."""
+        # Fast path: key is a direct model field
+        fields: dict[str, Any] = getattr(self, "model_fields", {})
+        if key in fields:
+            return key
+        # Check aliases
+        for name, field_info in fields.items():
+            if field_info.alias == key:
+                return str(name)
+        return key
+
     def __getitem__(self, key: str) -> Any:
+        resolved = self._resolve_field_name(key)
         try:
-            return getattr(self, key)
+            return getattr(self, resolved)
         except AttributeError:
             raise KeyError(key) from None
 
     def __contains__(self, key: object) -> bool:
         if not isinstance(key, str):
             return False
+        resolved = self._resolve_field_name(key)
         try:
-            return getattr(self, key) is not None
+            return getattr(self, resolved) is not None
         except AttributeError:
             return False
 
     def get(self, key: str, default: Any = None) -> Any:
+        resolved = self._resolve_field_name(key)
         try:
-            val = getattr(self, key)
+            val = getattr(self, resolved)
         except AttributeError:
             return default
         return val if val is not None else default
@@ -162,7 +180,7 @@ class ConstraintListResponse(_DictAccessMixin, BaseModel):
     usage: str = ""
 
 
-class SchemaResponse(BaseModel):
+class SchemaResponse(_DictAccessMixin, BaseModel):
     """Response format for schema retrieval.
 
     Moved from server.py -- preserves the alias for 'schema' field

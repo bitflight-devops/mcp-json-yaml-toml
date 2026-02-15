@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, assert_never
+from typing import Annotated, Literal, assert_never
 
 from pydantic import Field
 
 from mcp_json_yaml_toml.formats.base import resolve_file_path
+from mcp_json_yaml_toml.models.responses import (  # noqa: TC001 — FastMCP resolves return type at runtime
+    DataResponse,
+    MutationResponse,
+    SchemaResponse,
+)
 from mcp_json_yaml_toml.server import mcp, schema_manager
 from mcp_json_yaml_toml.services.data_operations import (
     _dispatch_delete_operation,
@@ -64,7 +69,7 @@ def data(
         Literal["json", "yaml", "toml"] | None, Field(description="Output format")
     ] = None,
     cursor: Annotated[str | None, Field(description="Pagination cursor")] = None,
-) -> dict[str, Any]:
+) -> DataResponse | SchemaResponse | MutationResponse:
     """Get, set, or delete data in JSON, YAML, or TOML files.
 
     Use when you need to get, set, or delete specific values or entire sections in a structured data file.
