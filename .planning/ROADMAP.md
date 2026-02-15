@@ -54,11 +54,15 @@ Plans:
 3. All tool return types use Pydantic response models (foundation for structured output in Phase 3)
 4. All tools have complete annotations (readOnlyHint, destructiveHint, idempotentHint where applicable)
 5. Existing tool names unchanged (data, data_query, data_schema, data_convert, data_merge remain stable)
-   **Plans**: TBD
+
+**Plans:** 4 plans
 
 Plans:
 
-- [ ] TBD - Will be defined during `/gsd:plan-phase 2`
+- [ ] 02-01-PLAN.md -- Response models and schema validation service extraction
+- [ ] 02-02-PLAN.md -- Data operations service layer extraction
+- [ ] 02-03-PLAN.md -- Tool layer split into tools/ directory
+- [ ] 02-04-PLAN.md -- Pydantic return types and complete tool annotations
 
 ### Phase 3: FastMCP 3.x Migration
 
@@ -103,6 +107,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase                       | Plans Complete | Status      | Completed  |
 | --------------------------- | -------------- | ----------- | ---------- |
 | 1. Architectural Foundation | 4/4            | ✓ Complete  | 2026-02-14 |
-| 2. Tool Layer Refactoring   | 0/TBD          | Not started | -          |
+| 2. Tool Layer Refactoring   | 0/4            | Not started | -          |
 | 3. FastMCP 3.x Migration    | 0/TBD          | Not started | -          |
 | 4. Competitive Features     | 0/TBD          | Not started | -          |
