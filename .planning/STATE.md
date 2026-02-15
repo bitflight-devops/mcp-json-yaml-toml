@@ -5,24 +5,24 @@
 See: .planning/PROJECT.md (updated 2026-02-14)
 
 **Core value:** AI assistants can safely read and modify structured configuration files without destroying formatting, comments, or file structure.
-**Current focus:** Phase 4 in progress — Competitive Features
+**Current focus:** Phase 4 complete — Competitive Features
 
 ## Current Position
 
 Phase: 4 of 4 (Competitive Features)
-Plan: 1/2 complete
-Status: Plan 04-01 complete
-Last activity: 2026-02-15 — Plan 04-01 complete (data_diff tool with DeepDiff cross-format comparison)
+Plan: 2/2 complete
+Status: Phase 04 complete
+Last activity: 2026-02-15 — Plan 04-02 complete (OpenTelemetry optional extras and custom yq.execute spans)
 
-Progress: [████████░░] 83% (3 phases + 1 plan complete)
+Progress: [██████████] 100% (4 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 11
+- Total plans completed: 12
 - Average duration: 9min
-- Total execution time: 103min
+- Total execution time: 110min
 
 **By Phase:**
 
@@ -31,12 +31,12 @@ Progress: [████████░░] 83% (3 phases + 1 plan complete)
 | 01    | 4     | 26min | 7min     |
 | 02    | 4     | 48min | 12min    |
 | 03    | 2     | 11min | 6min     |
-| 04    | 1     | 18min | 18min    |
+| 04    | 2     | 25min | 13min    |
 
 **Recent Trend:**
 
-- Last 5 plans: 02-04 (17min), 03-01 (7min), 03-02 (4min), 04-01 (18min)
-- Trend: First Phase 4 plan -- new dependency + tool + tests + mypy resolution
+- Last 5 plans: 02-04 (17min), 03-01 (7min), 03-02 (4min), 04-01 (18min), 04-02 (7min)
+- Trend: Phase 4 complete -- telemetry plan faster due to smaller scope
 
 _Updated after each plan completion_
 
@@ -75,6 +75,8 @@ Recent decisions affecting current work:
 - [Phase 04]: DeepDiff verbose_level=2 for detailed old/new value reporting in diff output
 - [Phase 04]: cast() alias pattern for mypy FunctionTool-not-callable when prek checks tool+test files together
 - [Phase 04]: Import tool functions from server module in tests (not tools/) to avoid circular import through mcp object
+- [Phase 04]: Monkeypatch get_tracer in tests instead of global TracerProvider (OTEL set_tracer_provider only works once per process)
+- [Phase 04]: opentelemetry-api is transitive dep of FastMCP, only SDK and exporter in optional-dependencies
 
 ### Pending Todos
 
@@ -86,13 +88,14 @@ None yet.
 
 **Research findings:**
 
-- FastMCP 3.0.0rc2 installed and all 410 tests passing (Phase 4 plan 01 complete)
+- FastMCP 3.0.0rc2 installed and all 415 tests passing (Phase 4 complete)
 - ruamel.yaml pinned <0.19 (SAFE-01 complete in Plan 01-01)
 - Dasel comment/anchor destruction eliminates backend migration path (architectural constraint confirmed)
 - deepdiff 8.6.1 installed with orderly-set dependency
+- opentelemetry-sdk 1.39.1 as optional telemetry extra, API available as FastMCP transitive dep
 
 ## Session Continuity
 
-Last session: 2026-02-15 (phase 4 plan 01 execution)
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-02-15 (phase 4 plan 02 execution)
+Stopped at: Completed 04-02-PLAN.md -- Phase 4 complete
 Resume file: None
