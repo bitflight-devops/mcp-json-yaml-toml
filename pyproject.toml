@@ -34,7 +34,7 @@ dependencies = [
     "lmql>=0.7.3",
     "orjson>=3.11.6",
     "portalocker>=3.1.1", # Cross-platform file locking for binary downloads
-    "ruamel.yaml>=0.18.0", # 0.19.x has different API - keep 0.18 for stability
+    "ruamel.yaml>=0.18.0,<0.19",  # 0.19.x requires zig compiler for ruamel.yaml.clibz
     "tomlkit>=0.14.0",
 ]
 

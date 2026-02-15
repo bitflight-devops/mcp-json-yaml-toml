@@ -1350,7 +1350,7 @@ requires-dist = [
     { name = "lmql", specifier = ">=0.7.3" },
     { name = "orjson", specifier = ">=3.11.6" },
     { name = "portalocker", specifier = ">=3.1.1" },
-    { name = "ruamel-yaml", specifier = ">=0.18.0" },
+    { name = "ruamel-yaml", specifier = ">=0.18.0,<0.19" },
     { name = "tomlkit", specifier = ">=0.14.0" },
 ]
 
