@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from mcp_json_yaml_toml.schemas import (
     SchemaManager,
+    _build_ide_schema_index,
     _expand_ide_patterns,
     _get_ide_schema_locations,
     _load_default_ide_patterns,
@@ -333,12 +334,10 @@ class TestSchemaManagerFetchFromIdeCache:
 
 
 class TestParseExtensionSchemas:
-    """Tests for _parse_extension_schemas function."""
+    """Tests for extension schema parsing through _build_ide_schema_index public API."""
 
     def test_parses_json_validation(self, tmp_path: Path) -> None:
-        """Verify jsonValidation entries are parsed correctly."""
-        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
-
+        """Verify jsonValidation entries are parsed correctly via _build_ide_schema_index."""
         ext_dir = tmp_path / "my.extension-1.0.0"
         ext_dir.mkdir()
 
@@ -360,17 +359,15 @@ class TestParseExtensionSchemas:
             })
         )
 
-        mappings = _parse_extension_schemas(ext_dir)
+        index = _build_ide_schema_index([tmp_path])
 
-        assert len(mappings) == 1
-        assert mappings[0].file_match == [".myconfig.json"]
-        assert mappings[0].schema_path == str(schema_file.resolve())
-        assert mappings[0].extension_id == "testpub.my-extension"
+        assert len(index.mappings) == 1
+        assert index.mappings[0].file_match == [".myconfig.json"]
+        assert index.mappings[0].schema_path == str(schema_file.resolve())
+        assert index.mappings[0].extension_id == "testpub.my-extension"
 
     def test_handles_array_file_match(self, tmp_path: Path) -> None:
-        """Verify fileMatch arrays are preserved."""
-        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
-
+        """Verify fileMatch arrays are preserved via _build_ide_schema_index."""
         ext_dir = tmp_path / "ext"
         ext_dir.mkdir()
         (ext_dir / "schema.json").write_text("{}")
@@ -389,15 +386,13 @@ class TestParseExtensionSchemas:
             })
         )
 
-        mappings = _parse_extension_schemas(ext_dir)
+        index = _build_ide_schema_index([tmp_path])
 
-        assert len(mappings) == 1
-        assert mappings[0].file_match == [".config1.json", ".config2.json"]
+        assert len(index.mappings) == 1
+        assert index.mappings[0].file_match == [".config1.json", ".config2.json"]
 
     def test_skips_missing_schema_file(self, tmp_path: Path) -> None:
-        """Verify mappings to non-existent schema files are skipped."""
-        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
-
+        """Verify mappings to non-existent schema files are skipped via _build_ide_schema_index."""
         ext_dir = tmp_path / "ext"
         ext_dir.mkdir()
         # No schema file created
@@ -413,14 +408,12 @@ class TestParseExtensionSchemas:
             })
         )
 
-        mappings = _parse_extension_schemas(ext_dir)
+        index = _build_ide_schema_index([tmp_path])
 
-        assert len(mappings) == 0
+        assert len(index.mappings) == 0
 
     def test_handles_yaml_validation(self, tmp_path: Path) -> None:
-        """Verify yamlValidation entries are also parsed."""
-        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
-
+        """Verify yamlValidation entries are also parsed via _build_ide_schema_index."""
         ext_dir = tmp_path / "ext"
         ext_dir.mkdir()
         (ext_dir / "schema.json").write_text("{}")
@@ -436,10 +429,10 @@ class TestParseExtensionSchemas:
             })
         )
 
-        mappings = _parse_extension_schemas(ext_dir)
+        index = _build_ide_schema_index([tmp_path])
 
-        assert len(mappings) == 1
-        assert mappings[0].file_match == [".myconfig.yaml"]
+        assert len(index.mappings) == 1
+        assert index.mappings[0].file_match == [".myconfig.yaml"]
 
 
 class TestLookupIdeSchema:

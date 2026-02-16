@@ -3,51 +3,42 @@
 This module contains verification tests for data_query tool and pagination hints.
 """
 
-from pathlib import Path
-from typing import Any
+from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
+
+from mcp_json_yaml_toml.models.responses import DataResponse
 from mcp_json_yaml_toml.server import data_query
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
-def call_tool(tool: object, *args: Any, **kwargs: Any) -> dict[str, Any]:
-    """Call a FastMCP tool function, extracting .fn if present.
 
-    Args:
-        tool: Either a FastMCP FunctionTool wrapper or a callable function.
-        *args: Positional arguments to pass to the tool function.
-        **kwargs: Keyword arguments to pass to the tool function.
-
-    Returns:
-        The dictionary result from calling the tool function.
-
-    Raises:
-        TypeError: If the tool is not callable.
-    """
-    # FastMCP wraps tools in FunctionTool which has .fn attribute
-    # If no .fn attribute, assume tool is already callable
-    fn_attr = getattr(tool, "fn", None)
-    func = fn_attr if fn_attr is not None else tool
-    if not callable(func):
-        raise TypeError(f"Tool {tool!r} is not callable and has no .fn attribute")
-    result = func(*args, **kwargs)
-    if not isinstance(result, dict):
-        raise TypeError(f"Expected dict result, got {type(result)}")
-    return result
+# FastMCP 3.x: decorators return the original function directly.
+_data_query = cast("Callable[..., DataResponse]", data_query)
 
 
 def test_hints() -> None:
-    """Test pagination hints with a large file query."""
-    print("\nTesting hints...")
-    # Query that returns the whole file (which is large)
-    github_test_yml = Path(".github/workflows/test.yml")
-    print(f"Querying {github_test_yml} as JSON to trigger pagination")
-    result = call_tool(data_query, str(github_test_yml), ".", output_format="json")
+    """Test pagination hints with a large file query.
 
-    if result.get("paginated"):
-        print("Pagination active")
-        print("Advisory:", result.get("advisory"))
+    Verifies that data_query returns a properly structured DataResponse,
+    and validates pagination fields when the response is paginated.
+    """
+    github_test_yml = Path(".github/workflows/test.yml")
+    result = _data_query(str(github_test_yml), ".", output_format="json")
+
+    assert isinstance(result, DataResponse)
+    assert result.success is True
+
+    if result.paginated:
+        assert result.advisory is not None, "Paginated response must include advisory"
+        assert result.nextCursor is not None, (
+            "Paginated response must include nextCursor"
+        )
     else:
-        print("Result was not paginated (size:", len(str(result.get("result"))), ")")
+        assert result.result is not None, "Non-paginated response must include result"
+        assert len(str(result.result)) > 0, "Result must be non-empty"
 
 
 if __name__ == "__main__":
