@@ -14,7 +14,7 @@ import tomlkit
 from fastmcp.exceptions import ToolError
 from ruamel.yaml import YAML
 
-from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError
+from mcp_json_yaml_toml.backends.base import FormatType, YQExecutionError
 
 
 def _detect_file_format(file_path: str | Path) -> FormatType:

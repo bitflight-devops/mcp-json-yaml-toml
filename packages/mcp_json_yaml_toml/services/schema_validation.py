@@ -14,11 +14,12 @@ from jsonschema.exceptions import SchemaError, ValidationError
 from referencing import Registry, Resource
 from referencing.exceptions import NoSuchResource
 
+from mcp_json_yaml_toml.backends.base import FormatType, YQError
+from mcp_json_yaml_toml.backends.yq import execute_yq
 from mcp_json_yaml_toml.formats.base import (
     _detect_file_format,
     _parse_content_for_validation,
 )
-from mcp_json_yaml_toml.yq_wrapper import FormatType, YQError, execute_yq
 
 if TYPE_CHECKING:
     from pathlib import Path

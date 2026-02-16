@@ -13,7 +13,7 @@ import os
 
 from fastmcp.exceptions import ToolError
 
-from mcp_json_yaml_toml.yq_wrapper import FormatType
+from mcp_json_yaml_toml.backends.base import FormatType
 
 __all__ = [
     "DEFAULT_FORMATS",

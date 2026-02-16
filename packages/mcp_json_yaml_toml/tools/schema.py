@@ -8,11 +8,12 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from fastmcp.exceptions import ToolError
 from pydantic import Field
 
+from mcp_json_yaml_toml.backends.base import FormatType, YQExecutionError
+from mcp_json_yaml_toml.backends.yq import execute_yq
 from mcp_json_yaml_toml.config import require_format_enabled
 from mcp_json_yaml_toml.formats.base import _detect_file_format, resolve_file_path
 from mcp_json_yaml_toml.server import mcp, schema_manager
 from mcp_json_yaml_toml.services.schema_validation import _validate_against_schema
-from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_yq
 
 if TYPE_CHECKING:
     from collections.abc import Callable

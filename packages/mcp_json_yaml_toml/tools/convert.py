@@ -9,11 +9,12 @@ import orjson
 from fastmcp.exceptions import ToolError
 from pydantic import Field
 
+from mcp_json_yaml_toml.backends.base import FormatType, YQExecutionError
+from mcp_json_yaml_toml.backends.yq import execute_yq
 from mcp_json_yaml_toml.config import require_format_enabled, validate_format
 from mcp_json_yaml_toml.formats.base import _detect_file_format, resolve_file_path
 from mcp_json_yaml_toml.models.responses import ConvertResponse, MergeResponse
 from mcp_json_yaml_toml.server import mcp
-from mcp_json_yaml_toml.yq_wrapper import FormatType, YQExecutionError, execute_yq
 
 
 @mcp.tool(
