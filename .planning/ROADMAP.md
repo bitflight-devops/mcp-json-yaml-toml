@@ -73,8 +73,8 @@ Plans:
 
 Plans:
 
-- [ ] 05-01: DRY utility extraction (require_format_enabled, resolve_file_path, TOML fallback, navigate_to_parent)
-- [ ] 05-02: Type safety (Pydantic returns, FormatType enum consistency, specific exception catches)
+- [x] 05-01: DRY utility extraction (require_format_enabled, resolve_file_path, TOML fallback, navigate_to_parent)
+- [x] 05-02: Type safety (Pydantic returns, FormatType enum consistency, specific exception catches)
 
 #### Phase 6: Operational Safety
 
@@ -92,8 +92,8 @@ Plans:
 
 Plans:
 
-- [ ] 06-01: binary_manager.py print() to logging migration
-- [ ] 06-02: Config caching, env validation, lazy log formatting
+- [x] 06-01: binary_manager.py print() to logging migration
+- [x] 06-02: Config caching, env validation, lazy log formatting
 
 #### Phase 7: Architecture Refactoring
 
@@ -111,8 +111,8 @@ Plans:
 
 Plans:
 
-- [ ] 07-01: data_operations.py split and yq_wrapper import migration
-- [ ] 07-02: schemas.py split, server.py **all** cleanup, schema_manager parameterization
+- [x] 07-01: data_operations.py split and yq_wrapper import migration
+- [x] 07-02: schemas.py split, server.py **all** cleanup, schema_manager parameterization
 
 #### Phase 8: Test Quality
 
@@ -143,7 +143,7 @@ Phases execute in numeric order: 5 → 6 → 7 → 8
 | 2. Tool Layer Refactoring         | v1.0      | 2/2            | Complete    | 2026-02-14 |
 | 3. FastMCP 3.x Migration          | v1.0      | 2/2            | Complete    | 2026-02-14 |
 | 4. Feature Integration            | v1.0      | 1/1            | Complete    | 2026-02-14 |
-| 5. Type Safety and DRY Foundation | v1.1      | 0/TBD          | Not started | -          |
-| 6. Operational Safety             | v1.1      | 0/TBD          | Not started | -          |
-| 7. Architecture Refactoring       | v1.1      | 0/TBD          | Not started | -          |
+| 5. Type Safety and DRY Foundation | v1.1      | 2/2            | Complete    | 2026-02-15 |
+| 6. Operational Safety             | v1.1      | 2/2            | Complete    | 2026-02-15 |
+| 7. Architecture Refactoring       | v1.1      | 2/2            | Complete    | 2026-02-15 |
 | 8. Test Quality                   | v1.1      | 0/TBD          | Not started | -          |
