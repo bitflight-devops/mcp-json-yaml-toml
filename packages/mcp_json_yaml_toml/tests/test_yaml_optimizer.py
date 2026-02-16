@@ -1,5 +1,7 @@
 """Tests for YAML optimizer module."""
 
+from __future__ import annotations
+
 from mcp_json_yaml_toml.yaml_optimizer import (
     assign_anchors,
     find_duplicates,
@@ -11,7 +13,7 @@ from mcp_json_yaml_toml.yaml_optimizer import (
 class TestFindDuplicates:
     """Test duplicate structure detection."""
 
-    def test_find_duplicates_simple_dict(self) -> None:
+    def test_find_duplicates_when_simple_dict_then_detects(self) -> None:
         """Test finding duplicate dict structures."""
         data = {
             "job1": {
@@ -40,7 +42,7 @@ class TestFindDuplicates:
         paths = {path for path, _ in duplicate_group}
         assert paths == {"job1", "job2"}
 
-    def test_find_duplicates_nested(self) -> None:
+    def test_find_duplicates_when_nested_then_detects(self) -> None:
         """Test finding nested duplicate structures."""
         data = {
             "services": {
@@ -54,7 +56,7 @@ class TestFindDuplicates:
         # Should find duplicate service configs
         assert len(duplicates) >= 1
 
-    def test_find_duplicates_below_threshold(self) -> None:
+    def test_find_duplicates_when_below_threshold_then_ignores(self) -> None:
         """Test that small structures below threshold are not flagged."""
         data = {
             "job1": {"name": "test"},  # Only 1 key, below default threshold of 3
@@ -66,7 +68,7 @@ class TestFindDuplicates:
         # Should not find duplicates (below size threshold)
         assert len(duplicates) == 0
 
-    def test_find_duplicates_single_occurrence(self) -> None:
+    def test_find_duplicates_when_single_occurrence_then_ignores(self) -> None:
         """Test that single occurrences are not flagged."""
         data = {
             "job1": {"image": "node:22", "cache": {"paths": ["node_modules/"]}},
@@ -78,7 +80,7 @@ class TestFindDuplicates:
         # Should not find duplicates (each structure is unique)
         assert len(duplicates) == 0
 
-    def test_find_duplicates_list_structures(self) -> None:
+    def test_find_duplicates_when_list_structures_then_detects(self) -> None:
         """Test finding duplicate list structures."""
         data = {
             "workflow1": {
@@ -102,7 +104,7 @@ class TestFindDuplicates:
 class TestAssignAnchors:
     """Test anchor name assignment."""
 
-    def test_assign_anchors_simple(self) -> None:
+    def test_assign_anchors_when_simple_then_assigns(self) -> None:
         """Test basic anchor assignment."""
         duplicates = {
             "hash1": [("job1", {"image": "node:22"}), ("job2", {"image": "node:22"})]
@@ -114,7 +116,7 @@ class TestAssignAnchors:
         assert "job1" in anchors
         assert anchors["job1"] == "job1"
 
-    def test_assign_anchors_sanitization(self) -> None:
+    def test_assign_anchors_when_special_chars_then_sanitizes(self) -> None:
         """Test anchor name sanitization."""
         duplicates = {
             "hash1": [
@@ -130,7 +132,7 @@ class TestAssignAnchors:
         assert first_anchor is not None
         assert "-" not in first_anchor  # Hyphens should be replaced
 
-    def test_assign_anchors_collision_handling(self) -> None:
+    def test_assign_anchors_when_collisions_then_deduplicates(self) -> None:
         """Test handling of anchor name collisions."""
         duplicates = {
             "hash1": [("config", {"a": 1}), ("other.config", {"a": 1})],
@@ -147,7 +149,7 @@ class TestAssignAnchors:
 class TestOptimizeYaml:
     """Test YAML optimization."""
 
-    def test_optimize_yaml_creates_anchors(self) -> None:
+    def test_optimize_yaml_when_duplicates_then_creates_anchors(self) -> None:
         """Test that optimization creates anchors and aliases."""
         data = {
             "default_config": {
@@ -176,7 +178,7 @@ class TestOptimizeYaml:
         assert "&" in result  # Anchor marker
         assert "*" in result  # Alias marker
 
-    def test_optimize_yaml_no_duplicates(self) -> None:
+    def test_optimize_yaml_when_no_duplicates_then_returns_none(self) -> None:
         """Test that optimization returns None when no duplicates found."""
         data = {
             "job1": {"image": "node:22", "script": ["npm test"]},
@@ -188,7 +190,7 @@ class TestOptimizeYaml:
         # Should return None (no optimization needed)
         assert result is None
 
-    def test_optimize_yaml_preserves_data(self) -> None:
+    def test_optimize_yaml_when_optimized_then_preserves_data(self) -> None:
         """Test that optimization preserves all data."""
         data = {
             "config": {
@@ -229,7 +231,7 @@ class TestOptimizeYaml:
 class TestGetOptimizationStats:
     """Test optimization statistics."""
 
-    def test_get_optimization_stats(self) -> None:
+    def test_get_optimization_stats_when_duplicates_then_reports(self) -> None:
         """Test getting optimization statistics."""
         data = {
             "job1": {
