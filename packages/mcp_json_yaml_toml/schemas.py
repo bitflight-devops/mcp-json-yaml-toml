@@ -287,7 +287,7 @@ def _load_default_ide_patterns() -> list[str]:
         JsonTypeError,
         JsonValueError,
     ) as e:
-        logging.debug(f"Failed to load default IDE patterns: {e}")
+        logging.debug("Failed to load default IDE patterns: %s", e)
     return []
 
 
@@ -669,7 +669,7 @@ class SchemaManager:
                 JsonTypeError,
                 JsonValueError,
             ) as e:
-                logging.debug(f"Failed to load schema config: {e}")
+                logging.debug("Failed to load schema config: %s", e)
 
         # Return default empty config
         return SchemaConfig()
@@ -692,7 +692,7 @@ class SchemaManager:
         try:
             return json_to_object(SchemaCatalog, raw_catalog)
         except (JsonKeyError, JsonTypeError, JsonValueError) as e:
-            logging.debug(f"Failed to parse catalog as SchemaCatalog: {e}")
+            logging.debug("Failed to parse catalog as SchemaCatalog: %s", e)
             return None
 
     def get_ide_provider(self) -> IDESchemaProvider:
