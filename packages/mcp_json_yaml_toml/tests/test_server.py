@@ -9,6 +9,7 @@ In 2.x, .fn was needed to access the underlying function; in 3.x it's not.
 from __future__ import annotations
 
 import json
+import time
 import unittest.mock
 from typing import TYPE_CHECKING, Any, cast
 
@@ -17,6 +18,7 @@ from fastmcp.exceptions import ToolError
 
 from mcp_json_yaml_toml import server
 from mcp_json_yaml_toml.lmql_constraints import ConstraintRegistry
+from mcp_json_yaml_toml.models.responses import ServerInfoResponse
 from mcp_json_yaml_toml.yq_wrapper import FormatType
 
 if TYPE_CHECKING:
@@ -1249,3 +1251,88 @@ class TestEdgeCases:
         except ToolError:
             # ToolError is also acceptable for empty files
             pass
+
+
+class TestDataMeta:
+    """Test data_type='meta' server info path."""
+
+    @pytest.mark.integration
+    def test_data_when_meta_type_then_returns_server_info(self) -> None:
+        """Test data returns server metadata for data_type='meta'.
+
+        Tests: Meta data type returns server info
+        How: Call data with data_type='meta' and verify response fields
+        Why: Verify server introspection through unified data tool
+        """
+        # Arrange - no file needed for meta
+        # Act - request server info
+        result = data_fn(file_path="-", operation="get", data_type="meta")
+
+        # Assert - returns complete server info
+        assert result.success is True
+        assert result.file == "-"
+        assert isinstance(result.version, str)
+        assert len(result.version) > 0
+        assert result.uptime_seconds >= 0
+        assert result.start_time_epoch > 0
+        assert isinstance(result, ServerInfoResponse)
+
+    @pytest.mark.integration
+    def test_data_when_meta_type_then_no_file_resolution(self) -> None:
+        """Test data_type='meta' bypasses file resolution.
+
+        Tests: Short-circuit before resolve_file_path
+        How: Patch resolve_file_path to raise, verify meta still succeeds
+        Why: Verify no file I/O occurs for meta requests
+        """
+        # Arrange - patch resolve_file_path to fail
+        with unittest.mock.patch(
+            "mcp_json_yaml_toml.tools.data.resolve_file_path",
+            side_effect=AssertionError("should not be called"),
+        ):
+            # Act - request meta (should short-circuit before resolve_file_path)
+            result = data_fn(file_path="-", operation="get", data_type="meta")
+
+        # Assert - succeeds without touching file resolution
+        assert result.success is True
+        assert isinstance(result, ServerInfoResponse)
+
+    @pytest.mark.integration
+    def test_data_when_meta_type_then_uptime_increases_over_time(self) -> None:
+        """Test uptime_seconds increases between successive meta calls.
+
+        Tests: Uptime reflects real elapsed time
+        How: Call meta twice with a small sleep, compare uptime values
+        Why: Verify uptime is computed dynamically, not cached
+        """
+        # Arrange - first call
+        result1 = data_fn(file_path="-", operation="get", data_type="meta")
+
+        # Act - wait briefly and call again
+        time.sleep(0.05)
+        result2 = data_fn(file_path="-", operation="get", data_type="meta")
+
+        # Assert - uptime increased
+        assert result2.uptime_seconds > result1.uptime_seconds
+
+    @pytest.mark.integration
+    def test_data_when_data_type_unchanged_then_still_works(
+        self, sample_json_config: Path
+    ) -> None:
+        """Test existing data_type='data' operations are unaffected.
+
+        Tests: Regression -- existing behavior preserved
+        How: Call data with data_type='data' and return_type='keys'
+        Why: Verify adding 'meta' didn't break existing code paths
+        """
+        # Arrange - sample JSON config
+        # Act - use existing data_type='data' path
+        result = data_fn(
+            str(sample_json_config),
+            operation="get",
+            data_type="data",
+            return_type="keys",
+        )
+
+        # Assert - existing behavior works
+        assert result["success"] is True
