@@ -231,6 +231,59 @@ graph TD
 
 ---
 
+## Token Efficiency Experiment
+
+Two identical Claude Code sub-agents were given the same task: read `~/.claude.json` and report every MCP server listed, including command, args, and env vars.
+
+### Setup
+
+- **Agent A** — standard prompt, used the built-in `Read` tool
+- **Agent B** — same prompt with one line appended: `You must use the mcp__json-yaml-toml for all file interactions.`
+
+Both agents used the `sonnet` model.
+
+### Prompts
+
+**Agent A prompt:**
+
+```text
+Read the file ~/.claude.json and report back:
+1. Every MCP server listed in the mcpServers section
+2. For each server: the command, args, and any env vars configured
+
+Just report the raw findings. Do not summarize or interpret.
+```
+
+**Agent B prompt:**
+
+```text
+Read the file ~/.claude.json and report back:
+1. Every MCP server listed in the mcpServers section
+2. For each server: the command, args, and any env vars configured
+
+You must use the mcp__json-yaml-toml for all file interactions.
+
+Just report the raw findings. Do not summarize or interpret.
+```
+
+### Results
+
+Both agents returned identical findings (8 MCP servers with correct configs).
+
+| Metric           | Agent A (Read tool) | Agent B (mcp-json-yaml-toml) |
+| ---------------- | ------------------- | ---------------------------- |
+| **Total tokens** | 37,119              | 28,734                       |
+| **Tool uses**    | 4                   | 2                            |
+| **Duration**     | 29.3s               | 12.7s                        |
+
+Agent B used **22.6% fewer tokens** and completed in **43% of the time** with half the tool calls.
+
+### Why
+
+The `Read` tool loads the entire file into context. `~/.claude.json` is a large file — the agent had to consume all of it to find the `mcpServers` section. The MCP server's `data_query` tool extracted just the `mcpServers` section directly, keeping the context window small.
+
+---
+
 <p align="center">
   Built with <a href="https://github.com/jlowin/fastmcp">FastMCP</a>, <a href="https://github.com/mikefarah/yq">yq</a>, and <a href="https://github.com/eth-sri/lmql">LMQL</a>
 </p>

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from mcp_json_yaml_toml.schemas import (
     SchemaManager,
+    _build_ide_schema_index,
     _expand_ide_patterns,
     _get_ide_schema_locations,
     _load_default_ide_patterns,
@@ -21,7 +22,9 @@ if TYPE_CHECKING:
 class TestLoadDefaultIdePatterns:
     """Tests for _load_default_ide_patterns function."""
 
-    def test_loads_patterns_from_bundled_file(self) -> None:
+    def test_load_default_ide_patterns_when_called_then_returns_nonempty_list(
+        self,
+    ) -> None:
         """Verify patterns are loaded from default_schema_stores.json."""
         patterns = _load_default_ide_patterns()
 
@@ -31,7 +34,9 @@ class TestLoadDefaultIdePatterns:
         # All patterns should be strings
         assert all(isinstance(p, str) for p in patterns)
 
-    def test_patterns_contain_home_expansion(self) -> None:
+    def test_load_default_ide_patterns_when_called_then_contains_home_expansion(
+        self,
+    ) -> None:
         """Verify patterns use ~ for home directory."""
         patterns = _load_default_ide_patterns()
 
@@ -43,7 +48,9 @@ class TestLoadDefaultIdePatterns:
 class TestExpandIdePatterns:
     """Tests for _expand_ide_patterns function."""
 
-    def test_returns_empty_when_no_matching_paths(self, tmp_path: Path) -> None:
+    def test_expand_ide_patterns_when_no_matching_paths_then_returns_list(
+        self, tmp_path: Path
+    ) -> None:
         """Verify empty list when no IDE paths exist."""
         # The default patterns won't match in a fresh tmp_path
         # This tests the function doesn't crash when paths don't exist
@@ -53,7 +60,7 @@ class TestExpandIdePatterns:
         # All returned items should be Path objects
         assert all(isinstance(p, Path) for p in locations)
 
-    def test_expands_glob_patterns(
+    def test_expand_ide_patterns_when_glob_pattern_then_expands_correctly(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify glob patterns are expanded correctly."""
@@ -64,7 +71,7 @@ class TestExpandIdePatterns:
         # Mock _load_default_ide_patterns to return our test pattern
         test_pattern = str(tmp_path / "schemas")
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._load_default_ide_patterns",
+            "mcp_json_yaml_toml.schemas.scanning._load_default_ide_patterns",
             lambda: [test_pattern],
         )
 
@@ -72,7 +79,7 @@ class TestExpandIdePatterns:
 
         assert schema_dir in locations
 
-    def test_expands_wildcard_patterns(
+    def test_expand_ide_patterns_when_wildcard_then_matches_multiple(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify wildcard patterns match multiple directories."""
@@ -83,7 +90,7 @@ class TestExpandIdePatterns:
         # Pattern with wildcard
         test_pattern = str(tmp_path / "schema*")
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._load_default_ide_patterns",
+            "mcp_json_yaml_toml.schemas.scanning._load_default_ide_patterns",
             lambda: [test_pattern],
         )
 
@@ -95,7 +102,7 @@ class TestExpandIdePatterns:
 class TestGetIdeSchemaLocations:
     """Tests for _get_ide_schema_locations function."""
 
-    def test_includes_env_var_paths(
+    def test_get_ide_schema_locations_when_env_var_set_then_includes_paths(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify MCP_SCHEMA_CACHE_DIRS paths are included."""
@@ -104,13 +111,15 @@ class TestGetIdeSchemaLocations:
 
         monkeypatch.setenv("MCP_SCHEMA_CACHE_DIRS", str(schema_dir))
         # Clear IDE patterns to isolate env var behavior
-        monkeypatch.setattr("mcp_json_yaml_toml.schemas._expand_ide_patterns", list)
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas.scanning._expand_ide_patterns", list
+        )
 
         locations = _get_ide_schema_locations()
 
         assert schema_dir in locations
 
-    def test_includes_multiple_env_var_paths(
+    def test_get_ide_schema_locations_when_multiple_env_paths_then_includes_all(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify multiple paths separated by os.pathsep are all included."""
@@ -121,27 +130,31 @@ class TestGetIdeSchemaLocations:
 
         # Use os.pathsep for cross-platform compatibility (: on Unix, ; on Windows)
         monkeypatch.setenv("MCP_SCHEMA_CACHE_DIRS", f"{dir1}{os.pathsep}{dir2}")
-        monkeypatch.setattr("mcp_json_yaml_toml.schemas._expand_ide_patterns", list)
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas.scanning._expand_ide_patterns", list
+        )
 
         locations = _get_ide_schema_locations()
 
         assert dir1 in locations
         assert dir2 in locations
 
-    def test_ignores_nonexistent_env_paths(
+    def test_get_ide_schema_locations_when_nonexistent_path_then_ignores(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify nonexistent paths from env var are ignored."""
         nonexistent = tmp_path / "does_not_exist"
 
         monkeypatch.setenv("MCP_SCHEMA_CACHE_DIRS", str(nonexistent))
-        monkeypatch.setattr("mcp_json_yaml_toml.schemas._expand_ide_patterns", list)
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas.scanning._expand_ide_patterns", list
+        )
 
         locations = _get_ide_schema_locations()
 
         assert nonexistent not in locations
 
-    def test_loads_from_config_file(
+    def test_get_ide_schema_locations_when_config_file_exists_then_loads_paths(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify paths are loaded from schema_config.json."""
@@ -161,7 +174,9 @@ class TestGetIdeSchemaLocations:
         # Mock Path.home() to return tmp_path
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.delenv("MCP_SCHEMA_CACHE_DIRS", raising=False)
-        monkeypatch.setattr("mcp_json_yaml_toml.schemas._expand_ide_patterns", list)
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas.scanning._expand_ide_patterns", list
+        )
 
         locations = _get_ide_schema_locations()
 
@@ -171,7 +186,7 @@ class TestGetIdeSchemaLocations:
 class TestSchemaManagerFetchFromIdeCache:
     """Tests for SchemaManager._fetch_from_ide_cache method."""
 
-    def test_finds_schema_in_ide_cache(
+    def test_fetch_from_ide_cache_when_schema_present_then_returns_schema(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify schema is found when present in IDE cache."""
@@ -185,7 +200,8 @@ class TestSchemaManagerFetchFromIdeCache:
 
         # Mock _get_ide_schema_locations to return our cache dir
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
@@ -194,7 +210,7 @@ class TestSchemaManagerFetchFromIdeCache:
         assert result is not None
         assert result["type"] == "object"
 
-    def test_returns_none_when_schema_not_found(
+    def test_fetch_from_ide_cache_when_schema_missing_then_returns_none(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify None returned when schema not in any cache."""
@@ -202,7 +218,8 @@ class TestSchemaManagerFetchFromIdeCache:
         cache_dir.mkdir()
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
@@ -210,7 +227,7 @@ class TestSchemaManagerFetchFromIdeCache:
 
         assert result is None
 
-    def test_handles_invalid_json_in_cache(
+    def test_fetch_from_ide_cache_when_invalid_json_then_returns_none(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify invalid JSON files are skipped gracefully."""
@@ -222,7 +239,8 @@ class TestSchemaManagerFetchFromIdeCache:
         bad_schema.write_text("{ not valid json")
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
@@ -231,7 +249,7 @@ class TestSchemaManagerFetchFromIdeCache:
         # Should return None, not raise
         assert result is None
 
-    def test_searches_multiple_cache_directories(
+    def test_fetch_from_ide_cache_when_multiple_dirs_then_searches_all(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify all cache directories are searched."""
@@ -246,7 +264,7 @@ class TestSchemaManagerFetchFromIdeCache:
         (cache2 / "found.schema.json").write_text(json.dumps(schema_data))
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations",
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
             lambda: [cache1, cache2],
         )
 
@@ -256,7 +274,7 @@ class TestSchemaManagerFetchFromIdeCache:
         assert result is not None
         assert result["type"] == "string"
 
-    def test_finds_schema_by_id_with_domain_variant(
+    def test_fetch_from_ide_cache_when_domain_variant_then_finds_by_id(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify schema found when $id uses different domain than query URL."""
@@ -274,7 +292,8 @@ class TestSchemaManagerFetchFromIdeCache:
         schema_file.write_text(json.dumps(schema_data))
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
@@ -289,7 +308,7 @@ class TestSchemaManagerFetchFromIdeCache:
         assert result["$id"] == "https://json.schemastore.org/github-workflow.json"
         assert result["type"] == "object"
 
-    def test_finds_schema_by_filename_fallback(
+    def test_fetch_from_ide_cache_when_different_domain_then_finds_by_filename(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify schema found by filename when domains differ completely."""
@@ -305,7 +324,8 @@ class TestSchemaManagerFetchFromIdeCache:
         schema_file.write_text(json.dumps(schema_data))
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
@@ -320,12 +340,12 @@ class TestSchemaManagerFetchFromIdeCache:
 
 
 class TestParseExtensionSchemas:
-    """Tests for _parse_extension_schemas function."""
+    """Tests for extension schema parsing through _build_ide_schema_index public API."""
 
-    def test_parses_json_validation(self, tmp_path: Path) -> None:
-        """Verify jsonValidation entries are parsed correctly."""
-        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
-
+    def test_build_ide_schema_index_when_json_validation_then_parses_correctly(
+        self, tmp_path: Path
+    ) -> None:
+        """Verify jsonValidation entries are parsed correctly via _build_ide_schema_index."""
         ext_dir = tmp_path / "my.extension-1.0.0"
         ext_dir.mkdir()
 
@@ -347,17 +367,17 @@ class TestParseExtensionSchemas:
             })
         )
 
-        mappings = _parse_extension_schemas(ext_dir)
+        index = _build_ide_schema_index([tmp_path])
 
-        assert len(mappings) == 1
-        assert mappings[0].file_match == [".myconfig.json"]
-        assert mappings[0].schema_path == str(schema_file.resolve())
-        assert mappings[0].extension_id == "testpub.my-extension"
+        assert len(index.mappings) == 1
+        assert index.mappings[0].file_match == [".myconfig.json"]
+        assert index.mappings[0].schema_path == str(schema_file.resolve())
+        assert index.mappings[0].extension_id == "testpub.my-extension"
 
-    def test_handles_array_file_match(self, tmp_path: Path) -> None:
-        """Verify fileMatch arrays are preserved."""
-        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
-
+    def test_build_ide_schema_index_when_array_file_match_then_preserves_array(
+        self, tmp_path: Path
+    ) -> None:
+        """Verify fileMatch arrays are preserved via _build_ide_schema_index."""
         ext_dir = tmp_path / "ext"
         ext_dir.mkdir()
         (ext_dir / "schema.json").write_text("{}")
@@ -376,15 +396,15 @@ class TestParseExtensionSchemas:
             })
         )
 
-        mappings = _parse_extension_schemas(ext_dir)
+        index = _build_ide_schema_index([tmp_path])
 
-        assert len(mappings) == 1
-        assert mappings[0].file_match == [".config1.json", ".config2.json"]
+        assert len(index.mappings) == 1
+        assert index.mappings[0].file_match == [".config1.json", ".config2.json"]
 
-    def test_skips_missing_schema_file(self, tmp_path: Path) -> None:
-        """Verify mappings to non-existent schema files are skipped."""
-        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
-
+    def test_build_ide_schema_index_when_missing_schema_file_then_skips(
+        self, tmp_path: Path
+    ) -> None:
+        """Verify mappings to non-existent schema files are skipped via _build_ide_schema_index."""
         ext_dir = tmp_path / "ext"
         ext_dir.mkdir()
         # No schema file created
@@ -400,14 +420,14 @@ class TestParseExtensionSchemas:
             })
         )
 
-        mappings = _parse_extension_schemas(ext_dir)
+        index = _build_ide_schema_index([tmp_path])
 
-        assert len(mappings) == 0
+        assert len(index.mappings) == 0
 
-    def test_handles_yaml_validation(self, tmp_path: Path) -> None:
-        """Verify yamlValidation entries are also parsed."""
-        from mcp_json_yaml_toml.schemas import _parse_extension_schemas
-
+    def test_build_ide_schema_index_when_yaml_validation_then_parses_correctly(
+        self, tmp_path: Path
+    ) -> None:
+        """Verify yamlValidation entries are also parsed via _build_ide_schema_index."""
         ext_dir = tmp_path / "ext"
         ext_dir.mkdir()
         (ext_dir / "schema.json").write_text("{}")
@@ -423,16 +443,16 @@ class TestParseExtensionSchemas:
             })
         )
 
-        mappings = _parse_extension_schemas(ext_dir)
+        index = _build_ide_schema_index([tmp_path])
 
-        assert len(mappings) == 1
-        assert mappings[0].file_match == [".myconfig.yaml"]
+        assert len(index.mappings) == 1
+        assert index.mappings[0].file_match == [".myconfig.yaml"]
 
 
 class TestLookupIdeSchema:
     """Tests for IDESchemaProvider.lookup_schema method."""
 
-    def test_exact_filename_match(
+    def test_lookup_schema_when_exact_filename_then_returns_match(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify exact filename matching works."""
@@ -462,7 +482,7 @@ class TestLookupIdeSchema:
         assert result.url == "file:///path/to/schema.json"
         assert result.source == "ide"
 
-    def test_no_match_returns_none(
+    def test_lookup_schema_when_no_match_then_returns_none(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify None is returned when no patterns match."""
@@ -480,7 +500,7 @@ class TestLookupIdeSchema:
 class TestIdeSchemaIntegration:
     """Integration tests for IDE schema discovery with SchemaManager."""
 
-    def test_ide_schema_in_lookup_chain(
+    def test_get_schema_info_when_ide_mapping_exists_then_finds_schema(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify IDE schema is found in get_schema_info_for_file lookup chain."""

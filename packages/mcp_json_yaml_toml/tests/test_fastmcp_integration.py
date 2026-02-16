@@ -3,18 +3,23 @@
 These tests verify the server's behavior through the FastMCP client interface.
 """
 
+from __future__ import annotations
+
 import json
-from collections.abc import AsyncGenerator
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import pytest_asyncio
 from fastmcp import Client
-from fastmcp.client.client import CallToolResult
 from mcp.types import TextContent
 
 from mcp_json_yaml_toml.server import mcp
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+    from pathlib import Path
+
+    from fastmcp.client.client import CallToolResult
 
 
 def extract_text_response(result: CallToolResult) -> dict[str, Any]:
@@ -49,7 +54,9 @@ async def client() -> AsyncGenerator[Client[Any], None]:
 
 
 @pytest.mark.asyncio
-async def test_data_query_json(client: Client[Any], tmp_path: Path) -> None:
+async def test_data_query_when_json_via_mcp_protocol_then_returns_result(
+    client: Client[Any], tmp_path: Path
+) -> None:
     """Test data_query tool with a JSON file."""
     # Setup
     test_file = tmp_path / "test.json"
@@ -71,7 +78,9 @@ async def test_data_query_json(client: Client[Any], tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_data_set_json(client: Client[Any], tmp_path: Path) -> None:
+async def test_data_set_when_json_via_mcp_protocol_then_modifies_file(
+    client: Client[Any], tmp_path: Path
+) -> None:
     """Test data tool (set operation) with a JSON file."""
     # Setup
     test_file = tmp_path / "config.json"
@@ -100,7 +109,9 @@ async def test_data_set_json(client: Client[Any], tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_data_delete_json(client: Client[Any], tmp_path: Path) -> None:
+async def test_data_delete_when_json_via_mcp_protocol_then_removes_key(
+    client: Client[Any], tmp_path: Path
+) -> None:
     """Test data tool (delete operation) with a JSON file."""
     # Setup
     test_file = tmp_path / "data.json"
@@ -128,7 +139,9 @@ async def test_data_delete_json(client: Client[Any], tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_error_handling_missing_file(client: Client[Any]) -> None:
+async def test_data_query_when_missing_file_via_mcp_protocol_then_returns_error(
+    client: Client[Any],
+) -> None:
     """Test error handling for missing file."""
     with pytest.raises(Exception) as excinfo:
         await client.call_tool(

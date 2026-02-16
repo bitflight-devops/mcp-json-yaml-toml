@@ -4,14 +4,16 @@ Tests binary detection, subprocess execution, error handling, and output parsing
 Includes both unit tests with mocked subprocess and integration tests with real yq.
 """
 
+from __future__ import annotations
+
 import os
 import platform
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import Mock
 
 import pytest
-from pytest_mock import MockerFixture
 
 from mcp_json_yaml_toml.yq_wrapper import (
     DEFAULT_YQ_CHECKSUMS,
@@ -36,11 +38,14 @@ from mcp_json_yaml_toml.yq_wrapper import (
     validate_yq_binary,
 )
 
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
+
 
 class TestGetYQBinaryPath:
     """Test get_yq_binary_path function."""
 
-    def test_get_yq_binary_path_returns_path(self) -> None:
+    def test_get_yq_binary_path_when_called_then_returns_path(self) -> None:
         """Test get_yq_binary_path returns a Path object.
 
         Tests: Binary path resolution
@@ -55,7 +60,7 @@ class TestGetYQBinaryPath:
         assert isinstance(result, Path)
         assert result.exists()
 
-    def test_get_yq_binary_path_executable_exists(self) -> None:
+    def test_get_yq_binary_path_when_called_then_executable_exists(self) -> None:
         """Test get_yq_binary_path returns existing executable.
 
         Tests: Executable existence verification
@@ -71,7 +76,7 @@ class TestGetYQBinaryPath:
         assert binary_path.is_file()
 
     @pytest.mark.integration
-    def test_get_yq_binary_path_is_executable(self) -> None:
+    def test_get_yq_binary_path_when_called_then_is_executable(self) -> None:
         """Test binary at returned path is executable.
 
         Tests: Binary execution permission
@@ -92,7 +97,7 @@ class TestGetYQBinaryPath:
 class TestParseYQError:
     """Test parse_yq_error function."""
 
-    def test_parse_yq_error_empty_string(self) -> None:
+    def test_parse_yq_error_when_empty_string_then_returns_default(self) -> None:
         """Test parse_yq_error handles empty stderr.
 
         Tests: Empty error message handling
@@ -108,7 +113,7 @@ class TestParseYQError:
         # Assert - returns default message
         assert result == "Unknown error (no stderr output)"
 
-    def test_parse_yq_error_strips_error_prefix(self) -> None:
+    def test_parse_yq_error_when_error_prefix_then_strips(self) -> None:
         """Test parse_yq_error removes 'Error: ' prefix.
 
         Tests: Error message cleaning
@@ -125,7 +130,7 @@ class TestParseYQError:
         assert result == "invalid expression '.bad['"
         assert not result.startswith("Error: ")
 
-    def test_parse_yq_error_single_line(self) -> None:
+    def test_parse_yq_error_when_single_line_then_returns_cleaned(self) -> None:
         """Test parse_yq_error with single line error.
 
         Tests: Single line error parsing
@@ -141,7 +146,7 @@ class TestParseYQError:
         # Assert - returns cleaned error
         assert result == "invalid syntax"
 
-    def test_parse_yq_error_multiline_includes_context(self) -> None:
+    def test_parse_yq_error_when_multiline_then_includes_context(self) -> None:
         """Test parse_yq_error includes context from additional lines.
 
         Tests: Multiline error context
@@ -158,7 +163,7 @@ class TestParseYQError:
         assert "bad expression" in result
         assert "Context: line 1" in result
 
-    def test_parse_yq_error_whitespace_only_returns_default(self) -> None:
+    def test_parse_yq_error_when_whitespace_only_then_returns_default(self) -> None:
         """Test parse_yq_error handles whitespace-only input.
 
         Tests: Whitespace handling
@@ -178,7 +183,7 @@ class TestParseYQError:
 class TestYQResult:
     """Test YQResult model."""
 
-    def test_yqresult_default_values(self) -> None:
+    def test_yqresult_when_minimal_fields_then_defaults_set(self) -> None:
         """Test YQResult has correct default values.
 
         Tests: Model defaults
@@ -194,7 +199,7 @@ class TestYQResult:
         assert result.returncode == 0
         assert result.data is None
 
-    def test_yqresult_with_all_fields(self) -> None:
+    def test_yqresult_when_all_fields_then_accepts(self) -> None:
         """Test YQResult accepts all fields.
 
         Tests: Complete model construction
@@ -217,7 +222,9 @@ class TestExecuteYQ:
     """Test execute_yq function."""
 
     @pytest.mark.unit
-    def test_execute_yq_with_input_data(self, mocker: MockerFixture) -> None:
+    def test_execute_yq_when_input_data_then_passes_to_subprocess(
+        self, mocker: MockerFixture
+    ) -> None:
         """Test execute_yq with input_data parameter.
 
         Tests: Input data processing
@@ -245,7 +252,7 @@ class TestExecuteYQ:
         assert result.data == {"name": "test"}
 
     @pytest.mark.unit
-    def test_execute_yq_argument_validation_both_inputs(self) -> None:
+    def test_execute_yq_when_both_inputs_then_raises_valueerror(self) -> None:
         """Test execute_yq rejects both input_data and input_file.
 
         Tests: Argument validation
@@ -260,7 +267,7 @@ class TestExecuteYQ:
             execute_yq(".", input_data="test", input_file=Path("test.json"))
 
     @pytest.mark.unit
-    def test_execute_yq_argument_validation_in_place_without_file(self) -> None:
+    def test_execute_yq_when_in_place_without_file_then_raises_valueerror(self) -> None:
         """Test execute_yq rejects in_place without input_file.
 
         Tests: In-place edit validation
@@ -273,7 +280,7 @@ class TestExecuteYQ:
             execute_yq(".", input_data="test", in_place=True)
 
     @pytest.mark.unit
-    def test_execute_yq_argument_validation_null_input_with_data(self) -> None:
+    def test_execute_yq_when_null_input_with_data_then_raises_valueerror(self) -> None:
         """Test execute_yq rejects null_input with input data.
 
         Tests: Null input validation
@@ -288,7 +295,9 @@ class TestExecuteYQ:
             execute_yq(".", input_data="test", null_input=True)
 
     @pytest.mark.unit
-    def test_execute_yq_handles_execution_error(self, mocker: MockerFixture) -> None:
+    def test_execute_yq_when_execution_fails_then_raises_execution_error(
+        self, mocker: MockerFixture
+    ) -> None:
         """Test execute_yq raises YQExecutionError on failure.
 
         Tests: Error handling for failed execution
@@ -307,7 +316,9 @@ class TestExecuteYQ:
             execute_yq(".", input_data='{"test": "data"}')
 
     @pytest.mark.unit
-    def test_execute_yq_timeout_handling(self, mocker: MockerFixture) -> None:
+    def test_execute_yq_when_timeout_then_raises_execution_error(
+        self, mocker: MockerFixture
+    ) -> None:
         """Test execute_yq handles subprocess timeout.
 
         Tests: Timeout error handling
@@ -322,7 +333,9 @@ class TestExecuteYQ:
             execute_yq(".", input_data='{"test": "data"}')
 
     @pytest.mark.unit
-    def test_execute_yq_oserror_handling(self, mocker: MockerFixture) -> None:
+    def test_execute_yq_when_oserror_then_raises_execution_error(
+        self, mocker: MockerFixture
+    ) -> None:
         """Test execute_yq handles OSError.
 
         Tests: OS-level error handling
@@ -337,7 +350,9 @@ class TestExecuteYQ:
             execute_yq(".", input_data='{"test": "data"}')
 
     @pytest.mark.unit
-    def test_execute_yq_json_parse_warning(self, mocker: MockerFixture) -> None:
+    def test_execute_yq_when_invalid_json_output_then_warns(
+        self, mocker: MockerFixture
+    ) -> None:
         """Test execute_yq handles JSON parse errors gracefully.
 
         Tests: Invalid JSON output handling
@@ -361,7 +376,9 @@ class TestExecuteYQ:
         assert "Warning: Failed to parse JSON" in result.stderr
 
     @pytest.mark.integration
-    def test_execute_yq_with_real_binary(self, sample_json_config: Path) -> None:
+    def test_execute_yq_when_real_binary_then_queries_successfully(
+        self, sample_json_config: Path
+    ) -> None:
         """Test execute_yq with real yq binary.
 
         Tests: Integration with real yq
@@ -382,7 +399,7 @@ class TestExecuteYQ:
         assert result.data == "test-app"
 
     @pytest.mark.integration
-    def test_execute_yq_with_yaml_to_json_conversion(
+    def test_execute_yq_when_yaml_to_json_then_converts(
         self, sample_yaml_config: Path
     ) -> None:
         """Test execute_yq converts YAML to JSON.
@@ -409,7 +426,7 @@ class TestExecuteYQ:
 class TestValidateYQBinary:
     """Test validate_yq_binary function."""
 
-    def test_validate_yq_binary_success(self) -> None:
+    def test_validate_yq_binary_when_valid_then_succeeds(self) -> None:
         """Test validate_yq_binary succeeds with valid binary.
 
         Tests: Binary validation success case
@@ -425,7 +442,7 @@ class TestValidateYQBinary:
         assert "yq binary found and working" in message
         assert "yq" in message.lower()
 
-    def test_validate_yq_binary_includes_version(self) -> None:
+    def test_validate_yq_binary_when_valid_then_includes_version(self) -> None:
         """Test validate_yq_binary includes version in success message.
 
         Tests: Version information in validation
@@ -445,7 +462,7 @@ class TestValidateYQBinary:
 class TestYQError:
     """Test YQError exception classes."""
 
-    def test_yqerror_base_exception(self) -> None:
+    def test_yqerror_when_created_then_is_base_exception(self) -> None:
         """Test YQError is base exception class.
 
         Tests: Exception hierarchy
@@ -459,7 +476,7 @@ class TestYQError:
         assert isinstance(error, Exception)
         assert str(error) == "test error"
 
-    def test_yqbinarynotfounderror_inherits_yqerror(self) -> None:
+    def test_yqbinarynotfounderror_when_created_then_inherits_yqerror(self) -> None:
         """Test YQBinaryNotFoundError inherits from YQError.
 
         Tests: Binary error inheritance
@@ -473,7 +490,7 @@ class TestYQError:
         assert isinstance(error, YQError)
         assert isinstance(error, Exception)
 
-    def test_yqexecutionerror_stores_details(self) -> None:
+    def test_yqexecutionerror_when_created_then_stores_details(self) -> None:
         """Test YQExecutionError stores stderr and returncode.
 
         Tests: Execution error details
@@ -492,7 +509,7 @@ class TestYQError:
 class TestVerifyChecksum:
     """Tests for _verify_checksum function."""
 
-    def test_verify_checksum_returns_true_for_matching_hash(
+    def test_verify_checksum_when_matching_hash_then_returns_true(
         self, tmp_path: Path
     ) -> None:
         """Verify checksum returns True when hash matches."""
@@ -510,7 +527,9 @@ class TestVerifyChecksum:
 
         assert result is True
 
-    def test_verify_checksum_returns_false_for_wrong_hash(self, tmp_path: Path) -> None:
+    def test_verify_checksum_when_wrong_hash_then_returns_false(
+        self, tmp_path: Path
+    ) -> None:
         """Verify checksum returns False when hash does not match."""
         test_file = tmp_path / "test_file.bin"
         test_file.write_bytes(b"Hello, World!")
@@ -521,7 +540,7 @@ class TestVerifyChecksum:
 
         assert result is False
 
-    def test_verify_checksum_handles_empty_file(self, tmp_path: Path) -> None:
+    def test_verify_checksum_when_empty_file_then_handles(self, tmp_path: Path) -> None:
         """Verify checksum works with empty files."""
         test_file = tmp_path / "empty_file.bin"
         test_file.write_bytes(b"")
@@ -533,7 +552,9 @@ class TestVerifyChecksum:
 
         assert result is True
 
-    def test_verify_checksum_handles_binary_content(self, tmp_path: Path) -> None:
+    def test_verify_checksum_when_binary_content_then_handles(
+        self, tmp_path: Path
+    ) -> None:
         """Verify checksum works with binary content."""
         test_file = tmp_path / "binary_file.bin"
         # Binary content with null bytes and high bytes
@@ -553,7 +574,7 @@ class TestVerifyChecksum:
 class TestYQBinaryPathOverride:
     """Tests for YQ_BINARY_PATH environment variable override."""
 
-    def test_yq_binary_path_env_override(
+    def test_yq_binary_path_when_env_set_then_overrides(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test that YQ_BINARY_PATH env var overrides default resolution.
@@ -573,7 +594,7 @@ class TestYQBinaryPathOverride:
         # Assert
         assert result == fake_binary
 
-    def test_yq_binary_path_nonexistent_raises_error(
+    def test_yq_binary_path_when_nonexistent_then_raises_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test that nonexistent YQ_BINARY_PATH raises clear error.
@@ -590,7 +611,7 @@ class TestYQBinaryPathOverride:
         with pytest.raises(YQBinaryNotFoundError, match="does not exist"):
             get_yq_binary_path()
 
-    def test_yq_binary_path_supports_tilde_expansion(
+    def test_yq_binary_path_when_tilde_path_then_expands(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test that YQ_BINARY_PATH supports ~ expansion.
@@ -615,7 +636,9 @@ class TestYQBinaryPathOverride:
 class TestIsMikefarahYQ:
     """Tests for _is_mikefarah_yq detection function."""
 
-    def test_detects_mikefarah_yq(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_is_mikefarah_yq_when_mikefarah_output_then_detects(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test that mikefarah/yq is correctly identified.
 
         Tests: Go-based yq detection
@@ -636,7 +659,9 @@ class TestIsMikefarahYQ:
         # Assert
         assert result is True
 
-    def test_rejects_python_yq(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_is_mikefarah_yq_when_python_yq_then_rejects(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test that Python yq (kislyuk/yq) is rejected.
 
         Tests: Python yq rejection
@@ -657,7 +682,7 @@ class TestIsMikefarahYQ:
         # Assert
         assert result is False
 
-    def test_handles_execution_failure(
+    def test_is_mikefarah_yq_when_execution_fails_then_returns_false(
         self, mocker: MockerFixture, tmp_path: Path
     ) -> None:
         """Test graceful handling when version check fails.
@@ -680,7 +705,9 @@ class TestIsMikefarahYQ:
         # Assert
         assert result is False
 
-    def test_handles_timeout(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_is_mikefarah_yq_when_timeout_then_returns_false(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test graceful handling when version check times out.
 
         Tests: Timeout handling
@@ -698,7 +725,9 @@ class TestIsMikefarahYQ:
         # Assert
         assert result is False
 
-    def test_handles_oserror(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_is_mikefarah_yq_when_oserror_then_returns_false(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test graceful handling when binary cannot be executed.
 
         Tests: OSError handling
@@ -720,43 +749,37 @@ class TestIsMikefarahYQ:
 class TestVersionParsing:
     """Tests for version parsing and comparison functions."""
 
-    def test_parse_version_with_v_prefix(self) -> None:
-        """Test parsing version with v prefix."""
-        assert _parse_version("v4.52.2") == (4, 52, 2)
+    @pytest.mark.parametrize(
+        ("version_str", "expected"),
+        [("v4.52.2", (4, 52, 2)), ("4.52.2", (4, 52, 2)), ("v4.53.0-rc1", (4, 53, 0))],
+    )
+    def test_parse_version_when_version_string_then_returns_tuple(
+        self, version_str: str, expected: tuple[int, ...]
+    ) -> None:
+        """Test version string parsing with various formats."""
+        assert _parse_version(version_str) == expected
 
-    def test_parse_version_without_v_prefix(self) -> None:
-        """Test parsing version without v prefix."""
-        assert _parse_version("4.52.2") == (4, 52, 2)
-
-    def test_parse_version_with_prerelease(self) -> None:
-        """Test parsing version with pre-release suffix."""
-        assert _parse_version("v4.53.0-rc1") == (4, 53, 0)
-
-    def test_version_meets_minimum_exact_match(self) -> None:
-        """Test version check with exact match."""
-        assert _version_meets_minimum("v4.52.2", "v4.52.2") is True
-
-    def test_version_meets_minimum_newer_version(self) -> None:
-        """Test version check with newer system version."""
-        assert _version_meets_minimum("v4.53.0", "v4.52.2") is True
-
-    def test_version_meets_minimum_older_version(self) -> None:
-        """Test version check rejects older system version."""
-        assert _version_meets_minimum("v4.51.0", "v4.52.2") is False
-
-    def test_version_meets_minimum_newer_minor(self) -> None:
-        """Test newer minor version is accepted."""
-        assert _version_meets_minimum("v4.60.0", "v4.52.2") is True
-
-    def test_version_meets_minimum_newer_major(self) -> None:
-        """Test newer major version is accepted."""
-        assert _version_meets_minimum("v5.0.0", "v4.52.2") is True
+    @pytest.mark.parametrize(
+        ("version", "minimum", "expected"),
+        [
+            ("v4.52.2", "v4.52.2", True),  # exact match
+            ("v4.53.0", "v4.52.2", True),  # newer patch
+            ("v4.51.0", "v4.52.2", False),  # older
+            ("v4.60.0", "v4.52.2", True),  # newer minor
+            ("v5.0.0", "v4.52.2", True),  # newer major
+        ],
+    )
+    def test_version_meets_minimum_when_compared_then_evaluates_correctly(
+        self, version: str, minimum: str, expected: bool
+    ) -> None:
+        """Test version comparison against minimum requirement."""
+        assert _version_meets_minimum(version, minimum) is expected
 
 
 class TestSystemYQDetection:
     """Tests for system-installed yq detection."""
 
-    def test_find_system_yq_returns_path_when_version_matches(
+    def test_find_system_yq_when_version_matches_then_returns_path(
         self, mocker: MockerFixture
     ) -> None:
         """Test _find_system_yq returns Path when version matches pinned.
@@ -779,7 +802,7 @@ class TestSystemYQDetection:
         # Assert
         assert result == Path("/usr/local/bin/yq")
 
-    def test_find_system_yq_returns_path_when_version_is_newer(
+    def test_find_system_yq_when_version_is_newer_then_returns_path(
         self, mocker: MockerFixture
     ) -> None:
         """Test _find_system_yq returns Path when system version is newer.
@@ -802,8 +825,8 @@ class TestSystemYQDetection:
         # Assert - newer version should be accepted
         assert result == Path("/usr/local/bin/yq")
 
-    def test_find_system_yq_returns_none_when_version_is_older(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    def test_find_system_yq_when_version_is_older_then_returns_none(
+        self, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test _find_system_yq returns None when system version is older.
 
@@ -819,18 +842,20 @@ class TestSystemYQDetection:
         mocker.patch("subprocess.run", return_value=mock_result)
 
         # Act
-        result = _find_system_yq()
+        with caplog.at_level(
+            "WARNING", logger="mcp_json_yaml_toml.backends.binary_manager"
+        ):
+            result = _find_system_yq()
 
         # Assert
         assert result is None
 
         # Verify warning about version mismatch
-        captured = capsys.readouterr()
-        assert "v4.40.0" in captured.err
-        assert "need >=" in captured.err
+        assert "v4.40.0" in caplog.text
+        assert "need >=" in caplog.text
 
-    def test_find_system_yq_returns_none_when_python_yq_found(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    def test_find_system_yq_when_python_yq_found_then_returns_none(
+        self, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test _find_system_yq returns None when Python yq is found.
 
@@ -846,16 +871,18 @@ class TestSystemYQDetection:
         mocker.patch("subprocess.run", return_value=mock_result)
 
         # Act
-        result = _find_system_yq()
+        with caplog.at_level(
+            "WARNING", logger="mcp_json_yaml_toml.backends.binary_manager"
+        ):
+            result = _find_system_yq()
 
         # Assert
         assert result is None
 
-        # Verify warning message was printed
-        captured = capsys.readouterr()
-        assert "not mikefarah/yq" in captured.err
+        # Verify warning message was logged
+        assert "not mikefarah/yq" in caplog.text
 
-    def test_find_system_yq_returns_none_when_not_found(
+    def test_find_system_yq_when_not_found_then_returns_none(
         self, mocker: MockerFixture
     ) -> None:
         """Test _find_system_yq returns None when yq is not in PATH.
@@ -877,7 +904,7 @@ class TestSystemYQDetection:
 class TestPlatformBinaryInfo:
     """Tests for _get_platform_binary_info helper function."""
 
-    def test_linux_amd64_naming(self) -> None:
+    def test_platform_binary_info_when_linux_amd64_then_correct_naming(self) -> None:
         """Test binary naming for Linux amd64."""
         version = DEFAULT_YQ_VERSION
         platform_prefix, binary_name, github_name = _get_platform_binary_info(
@@ -887,7 +914,7 @@ class TestPlatformBinaryInfo:
         assert binary_name == f"yq-linux-amd64-{version}"
         assert github_name == "yq_linux_amd64"
 
-    def test_darwin_arm64_naming(self) -> None:
+    def test_platform_binary_info_when_darwin_arm64_then_correct_naming(self) -> None:
         """Test binary naming for macOS arm64."""
         version = DEFAULT_YQ_VERSION
         platform_prefix, binary_name, github_name = _get_platform_binary_info(
@@ -897,7 +924,7 @@ class TestPlatformBinaryInfo:
         assert binary_name == f"yq-darwin-arm64-{version}"
         assert github_name == "yq_darwin_arm64"
 
-    def test_windows_amd64_naming(self) -> None:
+    def test_platform_binary_info_when_windows_amd64_then_correct_naming(self) -> None:
         """Test binary naming for Windows amd64."""
         version = DEFAULT_YQ_VERSION
         platform_prefix, binary_name, github_name = _get_platform_binary_info(
@@ -907,7 +934,7 @@ class TestPlatformBinaryInfo:
         assert binary_name == f"yq-windows-amd64-{version}.exe"
         assert github_name == "yq_windows_amd64.exe"
 
-    def test_unsupported_os_raises_error(self) -> None:
+    def test_platform_binary_info_when_unsupported_os_then_raises_error(self) -> None:
         """Test that unsupported OS raises clear error."""
         with pytest.raises(YQBinaryNotFoundError, match="Unsupported operating system"):
             _get_platform_binary_info("freebsd", "amd64", DEFAULT_YQ_VERSION)
@@ -916,7 +943,7 @@ class TestPlatformBinaryInfo:
 class TestBundledChecksums:
     """Tests for bundled checksum functionality."""
 
-    def test_bundled_checksums_exist_for_all_platforms(self) -> None:
+    def test_bundled_checksums_when_checked_then_exist_for_all_platforms(self) -> None:
         """Test that bundled checksums include all supported platforms.
 
         Tests: Completeness of bundled checksums
@@ -934,7 +961,7 @@ class TestBundledChecksums:
         for binary in required_binaries:
             assert binary in DEFAULT_YQ_CHECKSUMS, f"Missing checksum for {binary}"
 
-    def test_bundled_checksums_are_valid_sha256(self) -> None:
+    def test_bundled_checksums_when_checked_then_are_valid_sha256(self) -> None:
         """Test that bundled checksums are valid SHA256 format.
 
         Tests: Checksum format validation
@@ -947,7 +974,7 @@ class TestBundledChecksums:
                 f"Checksum for {binary} contains invalid hex characters"
             )
 
-    def test_get_checksums_returns_bundled_for_default_version(self) -> None:
+    def test_get_checksums_when_default_version_then_returns_bundled(self) -> None:
         """Test that _get_checksums returns bundled checksums for default version.
 
         Tests: Bundled checksum usage
@@ -959,7 +986,7 @@ class TestBundledChecksums:
         # Should return the bundled checksums
         assert checksums == DEFAULT_YQ_CHECKSUMS
 
-    def test_bundled_checksums_match_version(self) -> None:
+    def test_bundled_checksums_when_checked_then_match_version(self) -> None:
         """Test that bundled checksums are for all supported platforms.
 
         Tests: Checksum completeness
@@ -978,7 +1005,7 @@ class TestBundledChecksums:
 class TestGetYQVersion:
     """Tests for get_yq_version function and version pinning."""
 
-    def test_get_yq_version_returns_default(self) -> None:
+    def test_get_yq_version_when_no_env_then_returns_default(self) -> None:
         """Test get_yq_version returns DEFAULT_YQ_VERSION when env var not set.
 
         Tests: Default version behavior
@@ -998,7 +1025,7 @@ class TestGetYQVersion:
             if original is not None:
                 os.environ["YQ_VERSION"] = original
 
-    def test_get_yq_version_respects_env_var(
+    def test_get_yq_version_when_env_set_then_respects(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test get_yq_version uses YQ_VERSION env var when set.
@@ -1016,7 +1043,7 @@ class TestGetYQVersion:
         # Assert
         assert result == "v4.50.0"
 
-    def test_get_yq_version_adds_v_prefix(
+    def test_get_yq_version_when_no_v_prefix_then_adds(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test get_yq_version adds 'v' prefix if missing.
@@ -1035,7 +1062,7 @@ class TestGetYQVersion:
         assert result == "v4.50.0"
         assert result.startswith("v")
 
-    def test_get_yq_version_handles_whitespace(
+    def test_get_yq_version_when_whitespace_then_strips(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test get_yq_version strips whitespace from env var.
@@ -1053,7 +1080,7 @@ class TestGetYQVersion:
         # Assert
         assert result == "v4.50.0"
 
-    def test_get_yq_version_empty_env_uses_default(
+    def test_get_yq_version_when_empty_env_then_uses_default(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test get_yq_version uses default when env var is empty string.
@@ -1090,7 +1117,7 @@ def _is_versioned_binary(binary_path: Path, version: str) -> bool:
 class TestVersionedBinaryNaming:
     """Tests for versioned binary naming conventions."""
 
-    def test_binary_path_includes_version(self) -> None:
+    def test_binary_path_when_versioned_then_includes_version(self) -> None:
         """Test that binary path includes version string.
 
         Tests: Version-aware caching
@@ -1112,7 +1139,9 @@ class TestVersionedBinaryNaming:
             f"Binary name '{binary_path.name}' should include version '{version}'"
         )
 
-    def test_binary_path_format_linux(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_binary_path_when_linux_then_correct_format(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test binary naming format for Linux platform.
 
         Tests: Linux binary naming convention
@@ -1138,7 +1167,7 @@ class TestVersionedBinaryNaming:
         # Should be: yq-linux-amd64-v4.52.2 or yq-linux-arm64-v4.52.2
         assert binary_path.name.count("-") >= 3
 
-    def test_binary_path_format_macos(self) -> None:
+    def test_binary_path_when_macos_then_correct_format(self) -> None:
         """Test binary naming format for macOS platform.
 
         Tests: macOS binary naming convention
@@ -1162,7 +1191,7 @@ class TestVersionedBinaryNaming:
         assert binary_path.name.startswith("yq-darwin-")
         assert version in binary_path.name
 
-    def test_binary_path_format_windows(self) -> None:
+    def test_binary_path_when_windows_then_correct_format(self) -> None:
         """Test binary naming format for Windows platform.
 
         Tests: Windows binary naming convention
@@ -1187,7 +1216,7 @@ class TestVersionedBinaryNaming:
         assert version in binary_path.name
         assert binary_path.name.endswith(".exe")
 
-    def test_different_versions_have_different_paths(
+    def test_binary_path_when_different_versions_then_different_paths(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test that different versions resolve to different binary paths.
@@ -1224,7 +1253,7 @@ class TestVersionedBinaryNaming:
 class TestCleanupOldVersions:
     """Tests for _cleanup_old_versions function."""
 
-    def test_cleanup_removes_old_versions(self, tmp_path: Path) -> None:
+    def test_cleanup_when_old_versions_exist_then_removes(self, tmp_path: Path) -> None:
         """Test that old versioned binaries are removed.
 
         Tests: Old version cleanup
@@ -1248,7 +1277,7 @@ class TestCleanupOldVersions:
         assert not old_binary_2.exists(), "Old v4.51.0 should be removed"
         assert current_binary.exists(), "Current v4.52.2 should be kept"
 
-    def test_cleanup_preserves_current_binary(self, tmp_path: Path) -> None:
+    def test_cleanup_when_current_only_then_preserves(self, tmp_path: Path) -> None:
         """Test that current binary is not removed during cleanup.
 
         Tests: Current version preservation
@@ -1265,7 +1294,9 @@ class TestCleanupOldVersions:
         # Assert
         assert current_binary.exists()
 
-    def test_cleanup_only_affects_matching_platform(self, tmp_path: Path) -> None:
+    def test_cleanup_when_multiple_platforms_then_only_affects_matching(
+        self, tmp_path: Path
+    ) -> None:
         """Test that cleanup only removes binaries for the same platform.
 
         Tests: Platform isolation in cleanup
@@ -1292,7 +1323,7 @@ class TestCleanupOldVersions:
         assert darwin_binary.exists(), "Darwin binary should not be affected"
         assert windows_binary.exists(), "Windows binary should not be affected"
 
-    def test_cleanup_handles_no_old_versions(self, tmp_path: Path) -> None:
+    def test_cleanup_when_no_old_versions_then_handles(self, tmp_path: Path) -> None:
         """Test cleanup handles case when no old versions exist.
 
         Tests: Edge case - no cleanup needed
@@ -1309,7 +1340,7 @@ class TestCleanupOldVersions:
         # Assert
         assert current.exists()
 
-    def test_cleanup_handles_empty_directory(self, tmp_path: Path) -> None:
+    def test_cleanup_when_empty_directory_then_handles(self, tmp_path: Path) -> None:
         """Test cleanup handles empty directory gracefully.
 
         Tests: Edge case - empty directory
@@ -1323,7 +1354,7 @@ class TestCleanupOldVersions:
         # Assert - no files created
         assert list(tmp_path.iterdir()) == []
 
-    def test_cleanup_windows_exe_naming(self, tmp_path: Path) -> None:
+    def test_cleanup_when_windows_exe_then_handles_naming(self, tmp_path: Path) -> None:
         """Test cleanup works with Windows .exe naming convention.
 
         Tests: Windows-specific cleanup
@@ -1344,3 +1375,129 @@ class TestCleanupOldVersions:
         # Assert
         assert not old_exe.exists(), "Old Windows exe should be removed"
         assert current_exe.exists(), "Current Windows exe should be kept"
+
+
+class TestEdgeCases:
+    """Edge case tests for yq wrapper error handling and resource cleanup."""
+
+    @pytest.mark.integration
+    def test_execute_yq_when_very_long_expression_then_handles_gracefully(
+        self, sample_json_config: Path
+    ) -> None:
+        """Test execute_yq handles extremely long expressions.
+
+        Tests: Long expression handling
+        How: Pass an expression with 100 pipe operations
+        Why: Verify no unhandled exceptions from expression length
+        """
+        # Arrange - create very long but syntactically valid expression
+        long_expression = "." + " | ." * 100
+
+        # Act - either succeeds or raises a clear error
+        try:
+            result = execute_yq(
+                long_expression,
+                input_file=sample_json_config,
+                input_format=FormatType.JSON,
+                output_format=FormatType.JSON,
+            )
+            # Assert - if successful, returncode should be 0
+            assert result.returncode == 0
+        except YQExecutionError:
+            # YQExecutionError is acceptable for very long expressions
+            pass
+
+    def test_get_yq_binary_path_when_path_contains_spaces_then_still_works(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test get_yq_binary_path handles paths with spaces.
+
+        Tests: Path with spaces handling
+        How: Create directory with spaces, place fake binary there
+        Why: Verify paths with spaces don't break binary resolution
+        """
+        # Arrange - create directory with spaces
+        spaced_dir = tmp_path / "path with spaces"
+        spaced_dir.mkdir()
+        fake_binary = spaced_dir / "yq-test"
+        fake_binary.write_text("fake binary")
+        monkeypatch.setenv("YQ_BINARY_PATH", str(fake_binary))
+
+        # Act
+        result = get_yq_binary_path()
+
+        # Assert - path resolved correctly despite spaces
+        assert result == fake_binary
+        assert result.exists()
+        assert " " in str(result)
+
+    @pytest.mark.integration
+    def test_execute_yq_when_invalid_expression_then_subprocess_resources_cleaned_up(
+        self, sample_json_config: Path
+    ) -> None:
+        """Test subprocess resources are cleaned up after failed execution.
+
+        Tests: Subprocess resource cleanup
+        How: Execute invalid expression, check for ResourceWarnings
+        Why: Verify no file descriptor or process leaks
+        """
+        import gc
+        import warnings
+
+        # Arrange - deliberately invalid expression
+        # Act - execute and expect error
+        with pytest.raises(YQExecutionError):
+            execute_yq(
+                "invalid[[[",
+                input_file=sample_json_config,
+                input_format=FormatType.JSON,
+                output_format=FormatType.JSON,
+            )
+
+        # Assert - no resource warnings after gc
+        gc.collect()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            gc.collect()
+            resource_warnings = [
+                w for w in caught if issubclass(w.category, ResourceWarning)
+            ]
+            assert len(resource_warnings) == 0, (
+                f"ResourceWarnings detected: {[str(w.message) for w in resource_warnings]}"
+            )
+
+    @pytest.mark.unit
+    def test_execute_yq_when_input_data_provided_then_no_temp_files_remain(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test no temporary files remain after execution with input_data.
+
+        Tests: Temp file cleanup
+        How: Execute with input_data, check temp directory after
+        Why: Verify no file descriptor leaks from temp file usage
+        """
+        import tempfile
+
+        # Arrange - mock subprocess for controlled execution
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = b'{"key": "value"}'
+        mock_result.stderr = b""
+        mocker.patch("subprocess.run", return_value=mock_result)
+
+        # Capture temp dir state before
+        temp_dir = Path(tempfile.gettempdir())
+        before = {f.name for f in temp_dir.iterdir() if "yq" in f.name.lower()}
+
+        # Act - execute with input_data
+        execute_yq(
+            ".",
+            input_data='{"key": "value"}',
+            input_format=FormatType.JSON,
+            output_format=FormatType.JSON,
+        )
+
+        # Assert - no new yq-related temp files remain
+        after = {f.name for f in temp_dir.iterdir() if "yq" in f.name.lower()}
+        new_files = after - before
+        assert len(new_files) == 0, f"Temp files remain after execution: {new_files}"

@@ -4,6 +4,8 @@ Tests configuration format validation, environment variable parsing,
 and default configuration handling.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from mcp_json_yaml_toml.config import (
@@ -19,7 +21,9 @@ from mcp_json_yaml_toml.yq_wrapper import FormatType
 class TestParseEnabledFormats:
     """Test parse_enabled_formats function."""
 
-    def test_parse_enabled_formats_default(self, clean_environment: None) -> None:
+    def test_parse_enabled_formats_when_env_not_set_then_returns_defaults(
+        self, clean_environment: None
+    ) -> None:
         """Test parse_enabled_formats returns defaults when env var not set.
 
         Tests: Default format configuration
@@ -31,13 +35,13 @@ class TestParseEnabledFormats:
         result = parse_enabled_formats()
 
         # Assert - returns default formats
-        assert result == list(DEFAULT_FORMATS)
+        assert result == DEFAULT_FORMATS
         assert len(result) == 3
         assert FormatType.JSON in result
         assert FormatType.YAML in result
         assert FormatType.TOML in result
 
-    def test_parse_enabled_formats_from_env(
+    def test_parse_enabled_formats_when_env_set_then_returns_configured_formats(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test parse_enabled_formats reads from environment variable.
@@ -58,7 +62,7 @@ class TestParseEnabledFormats:
         assert FormatType.TOML in result
         assert FormatType.YAML not in result
 
-    def test_parse_enabled_formats_single_format(
+    def test_parse_enabled_formats_when_single_format_set_then_returns_only_that_format(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test parse_enabled_formats with single format.
@@ -77,7 +81,7 @@ class TestParseEnabledFormats:
         assert len(result) == 1
         assert result[0] == FormatType.YAML
 
-    def test_parse_enabled_formats_case_insensitive(
+    def test_parse_enabled_formats_when_mixed_case_then_returns_normalized_formats(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test parse_enabled_formats is case-insensitive.
@@ -98,7 +102,7 @@ class TestParseEnabledFormats:
         assert FormatType.YAML in result
         assert FormatType.TOML in result
 
-    def test_parse_enabled_formats_whitespace_handling(
+    def test_parse_enabled_formats_when_whitespace_around_values_then_returns_trimmed_formats(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test parse_enabled_formats handles whitespace.
@@ -119,7 +123,7 @@ class TestParseEnabledFormats:
         assert FormatType.YAML in result
         assert FormatType.TOML in result
 
-    def test_parse_enabled_formats_invalid_falls_back(
+    def test_parse_enabled_formats_when_invalid_values_then_returns_defaults(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test parse_enabled_formats falls back to defaults on invalid input.
@@ -135,9 +139,9 @@ class TestParseEnabledFormats:
         result = parse_enabled_formats()
 
         # Assert - returns defaults
-        assert result == list(DEFAULT_FORMATS)
+        assert result == DEFAULT_FORMATS
 
-    def test_parse_enabled_formats_empty_string_returns_default(
+    def test_parse_enabled_formats_when_empty_string_then_returns_defaults(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test parse_enabled_formats returns defaults for empty string.
@@ -153,9 +157,9 @@ class TestParseEnabledFormats:
         result = parse_enabled_formats()
 
         # Assert - returns defaults
-        assert result == list(DEFAULT_FORMATS)
+        assert result == DEFAULT_FORMATS
 
-    def test_parse_enabled_formats_partial_valid(
+    def test_parse_enabled_formats_when_mix_valid_invalid_then_returns_only_valid(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test parse_enabled_formats with mix of valid and invalid formats.
@@ -179,7 +183,9 @@ class TestParseEnabledFormats:
 class TestIsFormatEnabled:
     """Test is_format_enabled function."""
 
-    def test_is_format_enabled_default_json(self, clean_environment: None) -> None:
+    def test_is_format_enabled_when_json_then_returns_true(
+        self, clean_environment: None
+    ) -> None:
         """Test is_format_enabled returns True for default formats.
 
         Tests: Default format checking
@@ -193,7 +199,9 @@ class TestIsFormatEnabled:
         # Assert - json is enabled by default
         assert result is True
 
-    def test_is_format_enabled_default_yaml(self, clean_environment: None) -> None:
+    def test_is_format_enabled_when_yaml_then_returns_true(
+        self, clean_environment: None
+    ) -> None:
         """Test YAML is enabled by default.
 
         Tests: Default YAML support
@@ -207,7 +215,9 @@ class TestIsFormatEnabled:
         # Assert - yaml enabled
         assert result is True
 
-    def test_is_format_enabled_default_toml(self, clean_environment: None) -> None:
+    def test_is_format_enabled_when_toml_then_returns_true(
+        self, clean_environment: None
+    ) -> None:
         """Test TOML is enabled by default.
 
         Tests: Default TOML support
@@ -221,7 +231,9 @@ class TestIsFormatEnabled:
         # Assert - toml enabled
         assert result is True
 
-    def test_is_format_enabled_xml_not_default(self, clean_environment: None) -> None:
+    def test_is_format_enabled_when_xml_then_returns_false(
+        self, clean_environment: None
+    ) -> None:
         """Test XML is not enabled by default.
 
         Tests: Non-default format exclusion
@@ -235,7 +247,9 @@ class TestIsFormatEnabled:
         # Assert - xml not enabled
         assert result is False
 
-    def test_is_format_enabled_case_insensitive(self, clean_environment: None) -> None:
+    def test_is_format_enabled_when_mixed_case_then_returns_true(
+        self, clean_environment: None
+    ) -> None:
         """Test is_format_enabled is case-insensitive.
 
         Tests: Case-insensitive format checking
@@ -250,7 +264,7 @@ class TestIsFormatEnabled:
         assert is_format_enabled("json") is True
         assert is_format_enabled("YAML") is True
 
-    def test_is_format_enabled_respects_env_config(
+    def test_is_format_enabled_when_env_restricts_formats_then_respects_config(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test is_format_enabled respects environment configuration.
@@ -274,7 +288,7 @@ class TestIsFormatEnabled:
 class TestValidateFormat:
     """Test validate_format function."""
 
-    def test_validate_format_valid_json(self) -> None:
+    def test_validate_format_when_json_then_returns_format_type(self) -> None:
         """Test validate_format accepts valid JSON format.
 
         Tests: Valid format validation
@@ -289,7 +303,7 @@ class TestValidateFormat:
         assert result == FormatType.JSON
         assert isinstance(result, FormatType)
 
-    def test_validate_format_valid_yaml(self) -> None:
+    def test_validate_format_when_yaml_then_returns_format_type(self) -> None:
         """Test validate_format accepts valid YAML format.
 
         Tests: YAML validation
@@ -303,7 +317,7 @@ class TestValidateFormat:
         # Assert - returns YAML enum
         assert result == FormatType.YAML
 
-    def test_validate_format_valid_toml(self) -> None:
+    def test_validate_format_when_toml_then_returns_format_type(self) -> None:
         """Test validate_format accepts valid TOML format.
 
         Tests: TOML validation
@@ -317,7 +331,7 @@ class TestValidateFormat:
         # Assert - returns TOML enum
         assert result == FormatType.TOML
 
-    def test_validate_format_valid_xml(self) -> None:
+    def test_validate_format_when_xml_then_returns_format_type(self) -> None:
         """Test validate_format accepts valid XML format.
 
         Tests: XML validation
@@ -331,7 +345,7 @@ class TestValidateFormat:
         # Assert - returns XML enum
         assert result == FormatType.XML
 
-    def test_validate_format_case_insensitive(self) -> None:
+    def test_validate_format_when_mixed_case_then_returns_normalized(self) -> None:
         """Test validate_format is case-insensitive.
 
         Tests: Case-insensitive validation
@@ -346,7 +360,7 @@ class TestValidateFormat:
         assert validate_format("YAML") == FormatType.YAML
         assert validate_format("Yaml") == FormatType.YAML
 
-    def test_validate_format_invalid_raises_valueerror(self) -> None:
+    def test_validate_format_when_invalid_then_raises_valueerror(self) -> None:
         """Test validate_format raises ValueError for invalid format.
 
         Tests: Invalid format rejection
@@ -358,7 +372,9 @@ class TestValidateFormat:
         with pytest.raises(ValueError, match="Invalid format 'invalid'"):
             validate_format("invalid")
 
-    def test_validate_format_invalid_error_message(self) -> None:
+    def test_validate_format_when_invalid_then_error_includes_valid_formats(
+        self,
+    ) -> None:
         """Test validate_format error message includes valid formats.
 
         Tests: Error message quality
@@ -382,7 +398,9 @@ class TestValidateFormat:
 class TestGetEnabledFormatsStr:
     """Test get_enabled_formats_str function."""
 
-    def test_get_enabled_formats_str_default(self, clean_environment: None) -> None:
+    def test_get_enabled_formats_str_when_default_then_returns_all_formats(
+        self, clean_environment: None
+    ) -> None:
         """Test get_enabled_formats_str returns default formats as string.
 
         Tests: Default formats string representation
@@ -396,7 +414,7 @@ class TestGetEnabledFormatsStr:
         # Assert - returns comma-separated default formats
         assert result == "json,yaml,toml"
 
-    def test_get_enabled_formats_str_custom(
+    def test_get_enabled_formats_str_when_custom_config_then_returns_configured(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test get_enabled_formats_str with custom configuration.
@@ -414,7 +432,7 @@ class TestGetEnabledFormatsStr:
         # Assert - returns configured formats
         assert result == "yaml,xml"
 
-    def test_get_enabled_formats_str_single_format(
+    def test_get_enabled_formats_str_when_single_format_then_returns_single(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test get_enabled_formats_str with single format.

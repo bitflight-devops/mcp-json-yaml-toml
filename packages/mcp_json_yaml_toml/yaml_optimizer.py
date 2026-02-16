@@ -4,6 +4,8 @@ This module provides functionality to detect duplicate structures in YAML data
 and optimize them using anchors and aliases to maintain DRY principles.
 """
 
+from __future__ import annotations
+
 import hashlib
 import os
 from collections import defaultdict
@@ -14,11 +16,30 @@ import orjson
 from ruamel.yaml import YAML
 
 # Configuration from environment variables
-YAML_ANCHOR_MIN_SIZE = int(os.getenv("YAML_ANCHOR_MIN_SIZE", "3"))
-YAML_ANCHOR_MIN_DUPLICATES = int(os.getenv("YAML_ANCHOR_MIN_DUPLICATES", "2"))
-YAML_ANCHOR_OPTIMIZATION = (
-    os.getenv("YAML_ANCHOR_OPTIMIZATION", "true").lower() == "true"
-)
+
+
+def _parse_env_int(name: str, default: int) -> int:
+    """Parse an integer from environment variable with fallback."""
+    raw = os.getenv(name, "")
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        return default
+
+
+def _parse_env_bool(name: str, *, default: bool) -> bool:
+    """Parse a boolean from environment variable with fallback."""
+    raw = os.getenv(name, "")
+    if not raw:
+        return default
+    return raw.strip().lower() == "true"
+
+
+YAML_ANCHOR_MIN_SIZE = _parse_env_int("YAML_ANCHOR_MIN_SIZE", 3)
+YAML_ANCHOR_MIN_DUPLICATES = _parse_env_int("YAML_ANCHOR_MIN_DUPLICATES", 2)
+YAML_ANCHOR_OPTIMIZATION = _parse_env_bool("YAML_ANCHOR_OPTIMIZATION", default=True)
 
 
 def _compute_structure_hash(value: Any) -> str | None:

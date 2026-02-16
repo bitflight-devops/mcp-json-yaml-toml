@@ -27,15 +27,22 @@ keywords = [
 ]
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "fastmcp>=2.14.4,<3", # Pin to v2 until v3 is stable (v3.0.0b1 has breaking changes)
+    "deepdiff>=8.0.0",
+    "fastmcp>=3.0.0rc1,<4", # FastMCP 3.x - automatic threadpool, tool timeouts, outputSchema
     "httpx>=0.28.1",
     "json-strong-typing>=0.4.3",
     "jsonschema>=4.26.0",
     "lmql>=0.7.3",
     "orjson>=3.11.6",
     "portalocker>=3.1.1", # Cross-platform file locking for binary downloads
-    "ruamel.yaml>=0.18.0", # 0.19.x has different API - keep 0.18 for stability
+    "ruamel.yaml>=0.18.0,<0.19",  # 0.19.x requires zig compiler for ruamel.yaml.clibz
     "tomlkit>=0.14.0",
+]
+
+[project.optional-dependencies]
+telemetry = [
+    "opentelemetry-sdk>=1.30.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.30.0",
 ]
 
 [project.scripts]
@@ -56,6 +63,7 @@ dev = [
     "hatch-vcs>=0.5.0",
     "hatchling>=1.14.0",
     "mypy>=1.19.1",
+    "opentelemetry-sdk>=1.30.0",
     "prek>=0.2.19",
     "pytest-asyncio>=1.2.0",
     "pytest-cov>=7.0.0",
@@ -91,8 +99,8 @@ source = "vcs"
 addopts = [
     "--cov-report=term-missing",
     "--cov=packages/mcp_json_yaml_toml",
-    "-n",
     "-v",
+    "-n",
     "auto",
 ]
 markers = [
@@ -216,6 +224,9 @@ max-complexity = 12
     "SLF", # Private name imports acceptable for testing internals
     "T", # print() statements are intentional for CI output visibility
 ]
+"packages/**/schemas/*.py" = [
+    "PLC2701", # Intra-package private imports are expected across sub-modules
+]
 "packages/**/version.py" = ["ANN", "PLC"]
 "typings/**" = ["A", "ANN", "N"]
 
@@ -320,8 +331,12 @@ first = [
     "dependencies",
 ]
 
-[tool.tomlsort.overrides."tool.pytest.*"]
+[tool.tomlsort.overrides."tool.pytest"]
 inline_arrays = true
+
+[tool.tomlsort.overrides."tool.pytest.addopts"]
+table_keys = false
+inline_arrays = false
 
 [tool.tomlsort.overrides."tool.ruff"]
 inline_arrays = true

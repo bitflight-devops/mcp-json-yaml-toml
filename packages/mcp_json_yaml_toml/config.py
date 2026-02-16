@@ -6,15 +6,34 @@ This module handles:
 - Default configuration values
 """
 
+from __future__ import annotations
+
+import functools
 import os
 
-from mcp_json_yaml_toml.yq_wrapper import FormatType
+from fastmcp.exceptions import ToolError
+
+from mcp_json_yaml_toml.backends.base import FormatType
+
+__all__ = [
+    "DEFAULT_FORMATS",
+    "get_enabled_formats_str",
+    "is_format_enabled",
+    "parse_enabled_formats",
+    "require_format_enabled",
+    "validate_format",
+]
 
 # Default enabled formats
-DEFAULT_FORMATS: list[FormatType] = [FormatType.JSON, FormatType.YAML, FormatType.TOML]
+DEFAULT_FORMATS: tuple[FormatType, ...] = (
+    FormatType.JSON,
+    FormatType.YAML,
+    FormatType.TOML,
+)
 
 
-def parse_enabled_formats() -> list[FormatType]:
+@functools.lru_cache(maxsize=1)
+def parse_enabled_formats() -> tuple[FormatType, ...]:
     """Parse enabled formats from environment variable.
 
     Reads the MCP_CONFIG_FORMATS environment variable and parses it as a
@@ -22,21 +41,21 @@ def parse_enabled_formats() -> list[FormatType]:
     the environment variable is not set or is invalid.
 
     Returns:
-        List of enabled FormatType values
+        Tuple of enabled FormatType values (immutable for cache safety)
 
     Examples:
         >>> os.environ["MCP_CONFIG_FORMATS"] = "json,yaml"
         >>> parse_enabled_formats()
-        [<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>]
+        (<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>)
 
         >>> os.environ.pop("MCP_CONFIG_FORMATS", None)
         >>> parse_enabled_formats()
-        [<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>, <FormatType.TOML: 'toml'>]
+        (<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>, <FormatType.TOML: 'toml'>)
     """
     env_value = os.environ.get("MCP_CONFIG_FORMATS", "").strip()
 
     if not env_value:
-        return list(DEFAULT_FORMATS)
+        return DEFAULT_FORMATS
 
     # Parse comma-separated list
     format_names = [name.strip().lower() for name in env_value.split(",")]
@@ -50,9 +69,26 @@ def parse_enabled_formats() -> list[FormatType]:
 
     # Fall back to defaults if no valid formats found
     if not enabled_formats:
-        return list(DEFAULT_FORMATS)
+        return DEFAULT_FORMATS
 
-    return enabled_formats
+    return tuple(enabled_formats)
+
+
+def require_format_enabled(format_type: FormatType | str) -> None:
+    """Raise ToolError if the given format is not enabled.
+
+    Args:
+        format_type: The format to check (FormatType enum or string).
+
+    Raises:
+        ToolError: If format is disabled, with message listing enabled formats.
+    """
+    if not is_format_enabled(format_type):
+        enabled = parse_enabled_formats()
+        raise ToolError(
+            f"Format '{format_type}' is not enabled. "
+            f"Enabled formats: {', '.join(f.value for f in enabled)}"
+        )
 
 
 def is_format_enabled(format_name: str) -> bool:

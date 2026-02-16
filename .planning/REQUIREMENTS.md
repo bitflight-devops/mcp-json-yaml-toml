@@ -1,0 +1,143 @@
+# Requirements: mcp-json-yaml-toml
+
+**Defined:** 2026-02-14
+**Core Value:** AI assistants can safely read and modify structured configuration files without destroying formatting, comments, or file structure.
+
+## v1.0 Requirements (Complete)
+
+All v1.0 requirements shipped. See MILESTONES.md for details.
+
+- [x] **ARCH-01** through **ARCH-05**: Architecture extraction and layering — Done
+- [x] **FMCP-01** through **FMCP-05**: FastMCP 3.x migration and structured output — Done
+- [x] **SAFE-01**, **SAFE-02**: ruamel.yaml pin and Draft 2020-12 — Done
+- [x] **FEAT-01**, **FEAT-02**: Config diffing and OpenTelemetry — Done
+
+## v1.1 Requirements
+
+Requirements for internal quality milestone. Derived from code review findings (2026-02-15).
+
+### Type Safety (TYPE)
+
+- [ ] **TYPE-01**: All service handler functions return typed Pydantic response models instead of dict[str, Any]
+- [ ] **TYPE-02**: Format comparison uses FormatType enum consistently (no mixed string/enum checks)
+- [ ] **TYPE-03**: Exception handling uses specific exception types, not broad except Exception with isinstance guards
+
+### DRY Compliance (DRY)
+
+- [ ] **DRY-01**: Format-enable check extracted to single require_format_enabled() function (eliminates 9 duplicate sites)
+- [ ] **DRY-02**: TOML fallback logic extracted to shared helper (eliminates 2 duplicate sites)
+- [ ] **DRY-03**: File path resolution and existence checking extracted to shared utility
+
+### Operational Safety (OPS)
+
+- [ ] **OPS-01**: binary_manager.py uses logging module instead of print() to stderr (16 sites)
+- [ ] **OPS-02**: config.py caches parsed environment configuration (functools.cache)
+- [ ] **OPS-03**: yaml_optimizer.py environment config validates input instead of crashing at import
+- [ ] **OPS-04**: logging.debug() uses lazy %-formatting instead of f-strings (3 sites in schemas.py)
+
+### Architecture (ARCH)
+
+- [ ] **ARCH-06**: data_operations.py split into focused service modules (get, mutation, query)
+- [ ] **ARCH-07**: schemas.py split into focused sub-modules (loading, IDE cache, scanning)
+- [ ] **ARCH-08**: Production imports migrated from deprecated yq_wrapper.py shim to backends modules
+- [ ] **ARCH-09**: server.py **all** cleaned — private symbols removed, tests import from originating modules
+- [ ] **ARCH-10**: tools/schema.py handler functions accept schema_manager as parameter (not module singleton)
+
+### Test Quality (TEST)
+
+- [ ] **TEST-01**: Private method tests refactored to test through public API
+- [ ] **TEST-02**: Test naming standardized to behavioral pattern (test_what_when_condition_then_outcome)
+- [ ] **TEST-03**: Edge case coverage added: permissions, malformed input, resource cleanup
+- [ ] **TEST-04**: Repetitive test data converted to @pytest.mark.parametrize
+- [ ] **TEST-05**: verify_features.py test_hints() has proper assertions
+
+## v2 Requirements
+
+Deferred to future release. Tracked but not in current roadmap.
+
+### Backend Evolution
+
+- **BACK-01**: Evaluate pure-Python execution backend (jmespath + existing libs) to eliminate yq binary entirely
+- **BACK-02**: Implement native Python query execution for simple path traversal patterns
+- **BACK-03**: Tool versioning support via FastMCP 3.x capabilities
+
+### Protocol
+
+- **PROT-01**: Elicitation support for interactive user prompts
+- **PROT-02**: Async task primitives for long-running operations
+- **PROT-03**: Multi-file query support (query across multiple config files)
+
+### Additional Refactoring
+
+- **REFACT-01**: Split schemas.py SchemaManager into separate provider classes
+- **REFACT-02**: ThreadPoolExecutor shared at instance level instead of per-call creation
+- **REFACT-03**: Defer SchemaManager initialization to first access (lazy init)
+- **REFACT-04**: Remove unused FormatType enum members (CSV, TSV, PROPS) or document as reserved
+- **REFACT-05**: Fix FilePathConstraint.validate dead regex (always returns valid=True)
+
+### Test Expansion
+
+- **TEXP-01**: Split oversized test files (test_yq_wrapper.py, test_set_type_preservation.py)
+- **TEXP-02**: Add concurrent access tests for config.py and schemas.py
+- **TEXP-03**: Add property-based testing with hypothesis for format parsing
+- **TEXP-04**: Create tests/helpers.py with shared assertion patterns
+
+## Out of Scope
+
+| Feature                        | Reason                                                         |
+| ------------------------------ | -------------------------------------------------------------- |
+| New MCP tool features          | v1.1 is internal quality only                                  |
+| API breaking changes           | Production clients depend on current interface                 |
+| Switch from yq to dasel        | Dasel destroys comments/anchors — violates core differentiator |
+| Rewrite in non-Python language | Python ecosystem constraint                                    |
+| Change existing MCP tool names | Production clients depend on current API surface               |
+| New file format support        | Not the focus of this milestone                                |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+### v1.0 (Complete)
+
+| Requirement             | Phase      | Status |
+| ----------------------- | ---------- | ------ |
+| ARCH-01 through ARCH-05 | Phase 1-2  | Done   |
+| FMCP-01 through FMCP-05 | Phase 2-3  | Done   |
+| SAFE-01, SAFE-02        | Phase 1, 3 | Done   |
+| FEAT-01, FEAT-02        | Phase 4    | Done   |
+
+### v1.1 (Active)
+
+| Requirement | Phase   | Status  |
+| ----------- | ------- | ------- |
+| TYPE-01     | Phase 5 | Pending |
+| TYPE-02     | Phase 5 | Pending |
+| TYPE-03     | Phase 5 | Pending |
+| DRY-01      | Phase 5 | Pending |
+| DRY-02      | Phase 5 | Pending |
+| DRY-03      | Phase 5 | Pending |
+| OPS-01      | Phase 6 | Pending |
+| OPS-02      | Phase 6 | Pending |
+| OPS-03      | Phase 6 | Pending |
+| OPS-04      | Phase 6 | Pending |
+| ARCH-06     | Phase 7 | Pending |
+| ARCH-07     | Phase 7 | Pending |
+| ARCH-08     | Phase 7 | Pending |
+| ARCH-09     | Phase 7 | Pending |
+| ARCH-10     | Phase 7 | Pending |
+| TEST-01     | Phase 8 | Pending |
+| TEST-02     | Phase 8 | Pending |
+| TEST-03     | Phase 8 | Pending |
+| TEST-04     | Phase 8 | Pending |
+| TEST-05     | Phase 8 | Pending |
+
+**Coverage:**
+
+- v1.1 requirements: 20 total
+- Mapped to phases: 20
+- Unmapped: 0 ✓
+
+---
+
+_Requirements defined: 2026-02-14_
+_Last updated: 2026-02-15 after v1.1 roadmap creation_

@@ -1,10 +1,20 @@
 """Test that tomlkit preserves comments and formatting."""
 
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
 from mcp_json_yaml_toml import server
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+# FastMCP 3.x: decorators return the original function directly (no .fn needed).
+# At runtime these are callable; cast to satisfy mypy's FunctionTool type.
+data_fn = cast("Callable[..., Any]", server.data)
 
 
 @pytest.mark.integration
@@ -23,7 +33,7 @@ name = "myapp"
 """)
 
     # Add a new key
-    result = server.data.fn(
+    result = data_fn(
         file_path=str(test_file),
         operation="set",
         key_path="database.username",
@@ -54,7 +64,7 @@ username = "admin"
 """)
 
     # Delete a key
-    result = server.data.fn(
+    result = data_fn(
         file_path=str(test_file), operation="delete", key_path="database.username"
     )
 
