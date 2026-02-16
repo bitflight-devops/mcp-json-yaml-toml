@@ -1,5 +1,7 @@
 """Tests for LMQL constraint validation."""
 
+from __future__ import annotations
+
 import pytest
 
 from mcp_json_yaml_toml.lmql_constraints import (
@@ -64,24 +66,12 @@ class TestValidationResult:
 class TestYQPathConstraint:
     """Tests for YQ_PATH constraint."""
 
-    def test_valid_simple_path(self) -> None:
-        result = YQPathConstraint.validate(".name")
-        assert result.valid is True
-
-    def test_valid_nested_path(self) -> None:
-        result = YQPathConstraint.validate(".users.name")
-        assert result.valid is True
-
-    def test_valid_array_index(self) -> None:
-        result = YQPathConstraint.validate(".users[0]")
-        assert result.valid is True
-
-    def test_valid_array_wildcard(self) -> None:
-        result = YQPathConstraint.validate(".users[*]")
-        assert result.valid is True
-
-    def test_valid_complex_path(self) -> None:
-        result = YQPathConstraint.validate(".data.users[0].name")
+    @pytest.mark.parametrize(
+        "path",
+        [".name", ".users.name", ".users[0]", ".users[*]", ".data.users[0].name"],
+    )
+    def test_valid_paths(self, path: str) -> None:
+        result = YQPathConstraint.validate(path)
         assert result.valid is True
 
     def test_empty_path(self) -> None:
@@ -119,16 +109,11 @@ class TestYQPathConstraint:
 class TestYQExpressionConstraint:
     """Tests for YQ_EXPRESSION constraint."""
 
-    def test_valid_simple(self) -> None:
-        result = YQExpressionConstraint.validate(".name")
-        assert result.valid is True
-
-    def test_valid_with_pipe(self) -> None:
-        result = YQExpressionConstraint.validate(".items | length")
-        assert result.valid is True
-
-    def test_valid_with_function(self) -> None:
-        result = YQExpressionConstraint.validate(".users | map(name)")
+    @pytest.mark.parametrize(
+        "expression", [".name", ".items | length", ".users | map(name)"]
+    )
+    def test_valid_expressions(self, expression: str) -> None:
+        result = YQExpressionConstraint.validate(expression)
         assert result.valid is True
 
     def test_empty(self) -> None:
@@ -149,20 +134,9 @@ class TestYQExpressionConstraint:
 class TestConfigFormatConstraint:
     """Tests for CONFIG_FORMAT constraint."""
 
-    def test_valid_json(self) -> None:
-        result = ConfigFormatConstraint.validate("json")
-        assert result.valid is True
-
-    def test_valid_yaml(self) -> None:
-        result = ConfigFormatConstraint.validate("yaml")
-        assert result.valid is True
-
-    def test_valid_toml(self) -> None:
-        result = ConfigFormatConstraint.validate("toml")
-        assert result.valid is True
-
-    def test_case_insensitive(self) -> None:
-        result = ConfigFormatConstraint.validate("JSON")
+    @pytest.mark.parametrize("fmt", ["json", "yaml", "toml", "JSON"])
+    def test_valid_formats(self, fmt: str) -> None:
+        result = ConfigFormatConstraint.validate(fmt)
         assert result.valid is True
 
     def test_invalid_format(self) -> None:
@@ -192,29 +166,14 @@ class TestConfigFormatConstraint:
 class TestIntConstraint:
     """Tests for INT constraint."""
 
-    def test_valid_positive(self) -> None:
-        result = IntConstraint.validate("42")
+    @pytest.mark.parametrize("value", ["42", "0", "-123", " 42"])
+    def test_valid_integers(self, value: str) -> None:
+        result = IntConstraint.validate(value)
         assert result.valid is True
 
-    def test_valid_zero(self) -> None:
-        result = IntConstraint.validate("0")
-        assert result.valid is True
-
-    def test_valid_negative(self) -> None:
-        result = IntConstraint.validate("-123")
-        assert result.valid is True
-
-    def test_valid_with_leading_space(self) -> None:
-        """
-        Checks that IntConstraint.validate accepts an integer string with leading whitespace.
-
-        Asserts that the validation result is valid for the input " 42".
-        """
-        result = IntConstraint.validate(" 42")
-        assert result.valid is True
-
-    def test_invalid_float(self) -> None:
-        result = IntConstraint.validate("3.14")
+    @pytest.mark.parametrize("value", ["3.14", "abc"])
+    def test_invalid_values(self, value: str) -> None:
+        result = IntConstraint.validate(value)
         assert result.valid is False
 
     def test_invalid_letters(self) -> None:
@@ -239,20 +198,9 @@ class TestIntConstraint:
 class TestKeyPathConstraint:
     """Tests for KEY_PATH constraint."""
 
-    def test_valid_simple(self) -> None:
-        result = KeyPathConstraint.validate("name")
-        assert result.valid is True
-
-    def test_valid_nested(self) -> None:
-        result = KeyPathConstraint.validate("users.name")
-        assert result.valid is True
-
-    def test_valid_with_number(self) -> None:
-        result = KeyPathConstraint.validate("users.0.name")
-        assert result.valid is True
-
-    def test_with_leading_dot_delegates_to_yq(self) -> None:
-        result = KeyPathConstraint.validate(".name")
+    @pytest.mark.parametrize("key", ["name", "users.name", "users.0.name", ".name"])
+    def test_valid_keys(self, key: str) -> None:
+        result = KeyPathConstraint.validate(key)
         assert result.valid is True
 
     def test_empty(self) -> None:
@@ -264,28 +212,11 @@ class TestKeyPathConstraint:
 class TestJSONValueConstraint:
     """Tests for JSON_VALUE constraint."""
 
-    def test_valid_string(self) -> None:
-        result = JSONValueConstraint.validate('"hello"')
-        assert result.valid is True
-
-    def test_valid_number(self) -> None:
-        result = JSONValueConstraint.validate("42")
-        assert result.valid is True
-
-    def test_valid_boolean(self) -> None:
-        result = JSONValueConstraint.validate("true")
-        assert result.valid is True
-
-    def test_valid_null(self) -> None:
-        result = JSONValueConstraint.validate("null")
-        assert result.valid is True
-
-    def test_valid_array(self) -> None:
-        result = JSONValueConstraint.validate('["a", "b"]')
-        assert result.valid is True
-
-    def test_valid_object(self) -> None:
-        result = JSONValueConstraint.validate('{"key": "value"}')
+    @pytest.mark.parametrize(
+        "value", ['"hello"', "42", "true", "null", '["a", "b"]', '{"key": "value"}']
+    )
+    def test_valid_values(self, value: str) -> None:
+        result = JSONValueConstraint.validate(value)
         assert result.valid is True
 
     def test_incomplete_string(self) -> None:
@@ -318,20 +249,17 @@ class TestJSONValueConstraint:
 class TestFilePathConstraint:
     """Tests for FILE_PATH constraint."""
 
-    def test_valid_simple(self) -> None:
-        result = FilePathConstraint.validate("config.json")
-        assert result.valid is True
-
-    def test_valid_relative(self) -> None:
-        result = FilePathConstraint.validate("./data/settings.yaml")
-        assert result.valid is True
-
-    def test_valid_home(self) -> None:
-        result = FilePathConstraint.validate("~/configs/app.toml")
-        assert result.valid is True
-
-    def test_valid_absolute(self) -> None:
-        result = FilePathConstraint.validate("/etc/config.json")
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "config.json",
+            "./data/settings.yaml",
+            "~/configs/app.toml",
+            "/etc/config.json",
+        ],
+    )
+    def test_valid_paths(self, path: str) -> None:
+        result = FilePathConstraint.validate(path)
         assert result.valid is True
 
     def test_empty(self) -> None:

@@ -725,37 +725,29 @@ class TestIsMikefarahYQ:
 class TestVersionParsing:
     """Tests for version parsing and comparison functions."""
 
-    def test_parse_version_with_v_prefix(self) -> None:
-        """Test parsing version with v prefix."""
-        assert _parse_version("v4.52.2") == (4, 52, 2)
+    @pytest.mark.parametrize(
+        ("version_str", "expected"),
+        [("v4.52.2", (4, 52, 2)), ("4.52.2", (4, 52, 2)), ("v4.53.0-rc1", (4, 53, 0))],
+    )
+    def test_parse_version(self, version_str: str, expected: tuple[int, ...]) -> None:
+        """Test version string parsing with various formats."""
+        assert _parse_version(version_str) == expected
 
-    def test_parse_version_without_v_prefix(self) -> None:
-        """Test parsing version without v prefix."""
-        assert _parse_version("4.52.2") == (4, 52, 2)
-
-    def test_parse_version_with_prerelease(self) -> None:
-        """Test parsing version with pre-release suffix."""
-        assert _parse_version("v4.53.0-rc1") == (4, 53, 0)
-
-    def test_version_meets_minimum_exact_match(self) -> None:
-        """Test version check with exact match."""
-        assert _version_meets_minimum("v4.52.2", "v4.52.2") is True
-
-    def test_version_meets_minimum_newer_version(self) -> None:
-        """Test version check with newer system version."""
-        assert _version_meets_minimum("v4.53.0", "v4.52.2") is True
-
-    def test_version_meets_minimum_older_version(self) -> None:
-        """Test version check rejects older system version."""
-        assert _version_meets_minimum("v4.51.0", "v4.52.2") is False
-
-    def test_version_meets_minimum_newer_minor(self) -> None:
-        """Test newer minor version is accepted."""
-        assert _version_meets_minimum("v4.60.0", "v4.52.2") is True
-
-    def test_version_meets_minimum_newer_major(self) -> None:
-        """Test newer major version is accepted."""
-        assert _version_meets_minimum("v5.0.0", "v4.52.2") is True
+    @pytest.mark.parametrize(
+        ("version", "minimum", "expected"),
+        [
+            ("v4.52.2", "v4.52.2", True),  # exact match
+            ("v4.53.0", "v4.52.2", True),  # newer patch
+            ("v4.51.0", "v4.52.2", False),  # older
+            ("v4.60.0", "v4.52.2", True),  # newer minor
+            ("v5.0.0", "v4.52.2", True),  # newer major
+        ],
+    )
+    def test_version_meets_minimum(
+        self, version: str, minimum: str, expected: bool
+    ) -> None:
+        """Test version comparison against minimum requirement."""
+        assert _version_meets_minimum(version, minimum) is expected
 
 
 class TestSystemYQDetection:

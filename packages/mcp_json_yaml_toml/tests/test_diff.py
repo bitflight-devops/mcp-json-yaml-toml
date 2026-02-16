@@ -177,21 +177,21 @@ class TestDataDiffTool:
         assert result.success is True
         assert result.has_differences is True
 
-    def test_missing_first_file(self, tmp_path: Path) -> None:
-        """Missing first file raises ToolError."""
-        f2 = tmp_path / "b.json"
-        f2.write_text("{}")
+    @pytest.mark.parametrize("missing", ["first", "second"])
+    def test_missing_file_raises_error(self, tmp_path: Path, missing: str) -> None:
+        """Missing file raises ToolError regardless of position."""
+        existing = tmp_path / "exists.json"
+        existing.write_text("{}")
+        nonexistent = str(tmp_path / "nonexistent.json")
+
+        args = (
+            (nonexistent, str(existing))
+            if missing == "first"
+            else (str(existing), nonexistent)
+        )
 
         with pytest.raises(ToolError, match="File not found"):
-            data_diff_fn(str(tmp_path / "nonexistent.json"), str(f2))
-
-    def test_missing_second_file(self, tmp_path: Path) -> None:
-        """Missing second file raises ToolError."""
-        f1 = tmp_path / "a.json"
-        f1.write_text("{}")
-
-        with pytest.raises(ToolError, match="File not found"):
-            data_diff_fn(str(f1), str(tmp_path / "nonexistent.json"))
+            data_diff_fn(*args)
 
     def test_ignore_order_parameter(self, tmp_path: Path) -> None:
         """ignore_order=True makes reordered lists produce no diff."""
