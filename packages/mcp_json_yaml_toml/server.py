@@ -6,6 +6,8 @@ Tool logic lives in ``tools/``, business logic in ``services/``.
 
 from __future__ import annotations
 
+import datetime
+
 from fastmcp import FastMCP
 
 from mcp_json_yaml_toml.schemas import SchemaManager
@@ -16,6 +18,7 @@ from mcp_json_yaml_toml.schemas import SchemaManager
 # ---------------------------------------------------------------------------
 mcp = FastMCP("mcp-json-yaml-toml", mask_error_details=False)
 schema_manager = SchemaManager()
+_SERVER_START_TIME = datetime.datetime.now(datetime.UTC)
 
 # ---------------------------------------------------------------------------
 # Tool imports trigger @mcp.tool / @mcp.resource / @mcp.prompt registration.
@@ -41,6 +44,8 @@ from mcp_json_yaml_toml.tools.schema import data_schema  # noqa: E402
 # Explicit exports — public API only.
 # ---------------------------------------------------------------------------
 __all__ = [
+    # Server state
+    "_SERVER_START_TIME",
     # Models
     "SchemaResponse",
     # Tools

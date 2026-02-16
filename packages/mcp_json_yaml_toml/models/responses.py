@@ -97,6 +97,14 @@ class MutationResponse(ToolResponse):
     schema_info: SchemaInfo | None = None
 
 
+class ServerInfoResponse(ToolResponse):
+    """Response for data_type='meta' server info requests."""
+
+    version: str = ""
+    uptime_seconds: float = 0.0
+    start_time_epoch: float = 0.0
+
+
 class ValidationResponse(ToolResponse):
     """Response for data_schema validate action."""
 
@@ -207,6 +215,7 @@ __all__ = [
     "MutationResponse",
     "SchemaActionResponse",
     "SchemaResponse",
+    "ServerInfoResponse",
     "ToolResponse",
     "ValidationResponse",
 ]
