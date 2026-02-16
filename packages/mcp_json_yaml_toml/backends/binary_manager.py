@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import logging
 import os
 import platform
 import re
 import shutil
 import subprocess
-import sys
 import uuid
 from pathlib import Path
 
@@ -44,6 +44,8 @@ DEFAULT_YQ_CHECKSUMS: dict[str, str] = {
     "yq_windows_amd64.exe": "2b6cd8974004fa0511f6b6b359d2698214fadeb4599f0b00e8d85ae62b3922d4",
 }
 # fmt: on
+
+logger = logging.getLogger(__name__)
 
 
 def get_yq_version() -> str:
@@ -225,12 +227,11 @@ def _cleanup_old_versions(
         if old_binary.name != current_binary:
             try:
                 old_binary.unlink()
-                print(f"Cleaned up old version: {old_binary.name}", file=sys.stderr)
+                logger.info("Cleaned up old version: %s", old_binary.name)
             except OSError as e:
                 # Best effort - don't fail if cleanup fails
-                print(
-                    f"Note: Could not remove old binary {old_binary.name}: {e}",
-                    file=sys.stderr,
+                logger.warning(
+                    "Note: Could not remove old binary %s: %s", old_binary.name, e
                 )
 
 
@@ -275,7 +276,7 @@ def _download_yq_binary(
     """
     # Fast path: check if already exists (no lock needed)
     if dest_path.exists():
-        print(f"Binary already exists at {dest_path}", file=sys.stderr)
+        logger.debug("Binary already exists at %s", dest_path)
         return
 
     # Use a lock file to coordinate between processes
@@ -289,16 +290,15 @@ def _download_yq_binary(
     with portalocker.Lock(lock_path, timeout=lock_timeout) as _lock:
         # Re-check if another process completed the download while we waited
         if dest_path.exists():
-            print(
-                f"Binary already downloaded by another process at {dest_path}",
-                file=sys.stderr,
+            logger.debug(
+                "Binary already downloaded by another process at %s", dest_path
             )
             return
 
-        print(f"Downloading yq {version} for your platform...", file=sys.stderr)
+        logger.info("Downloading yq %s for your platform...", version)
 
         # Get checksums for this version
-        print("Fetching checksums...", file=sys.stderr)
+        logger.info("Fetching checksums...")
         checksums = _get_checksums(version)
 
         if github_name not in checksums:
@@ -310,11 +310,11 @@ def _download_yq_binary(
         try:
             # Download binary to temp file
             url = f"https://github.com/{GITHUB_REPO}/releases/download/{version}/{github_name}"
-            print(f"Downloading {github_name}...", file=sys.stderr)
+            logger.info("Downloading %s...", github_name)
             _download_file(url, temp_path)
 
             # Verify checksum on temp file
-            print("Verifying checksum...", file=sys.stderr)
+            logger.info("Verifying checksum...")
             if not _verify_checksum(temp_path, checksums[github_name]):
                 raise YQError(f"Checksum verification failed for {github_name}")
 
@@ -324,9 +324,7 @@ def _download_yq_binary(
 
             # Atomic rename to final destination
             temp_path.rename(dest_path)
-            print(
-                f"Successfully downloaded and verified {binary_name}", file=sys.stderr
-            )
+            logger.info("Successfully downloaded and verified %s", binary_name)
 
             # Clean up old versions after successful download
             _cleanup_old_versions(dest_path.parent, platform_prefix, binary_name)
@@ -450,10 +448,10 @@ def _find_system_yq() -> Path | None:
         system_version = _get_yq_version_string(path)
         if system_version is None:
             # Found yq but it's Python yq or unrecognized
-            print(
-                f"Found yq at {yq_path} but it's not mikefarah/yq (Go version). "
+            logger.warning(
+                "Found yq at %s but it's not mikefarah/yq (Go version). "
                 "Install the correct yq: brew install yq | choco install yq | snap install yq",
-                file=sys.stderr,
+                yq_path,
             )
             return None
 
@@ -462,10 +460,11 @@ def _find_system_yq() -> Path | None:
             return path
 
         # Found mikefarah/yq but version is too old
-        print(
-            f"Found yq {system_version} at {yq_path} but need >= {pinned_version}. "
-            f"Will download minimum required version.",
-            file=sys.stderr,
+        logger.warning(
+            "Found yq %s at %s but need >= %s. Will download minimum required version.",
+            system_version,
+            yq_path,
+            pinned_version,
         )
     return None
 
@@ -564,24 +563,19 @@ def get_yq_binary_path() -> Path:
     # (homebrew, apt, chocolatey, go install, etc.)
     system_yq = _find_system_yq()
     if system_yq:
-        print(
-            f"Using system-installed yq at: {system_yq}", file=sys.stderr
-        )  # pragma: no cover
+        logger.info("Using system-installed yq at: %s", system_yq)  # pragma: no cover
         return system_yq  # pragma: no cover
 
     # 4. Binary not found - attempt auto-download from GitHub
-    print(
-        f"\nyq binary not found for {system}/{arch}", file=sys.stderr
+    logger.info("yq binary not found for %s/%s", system, arch)  # pragma: no cover
+    logger.info(
+        "Attempting to auto-download from GitHub releases..."
     )  # pragma: no cover
-    print(
-        "Attempting to auto-download from GitHub releases...", file=sys.stderr
+    logger.info(
+        "Tip: Install yq via package manager to avoid downloads:"
     )  # pragma: no cover
-    print(
-        "Tip: Install yq via package manager to avoid downloads:", file=sys.stderr
-    )  # pragma: no cover
-    print(
-        "  macOS: brew install yq | Windows: choco install yq | Linux: snap install yq",
-        file=sys.stderr,
+    logger.info(
+        "  macOS: brew install yq | Windows: choco install yq | Linux: snap install yq"
     )  # pragma: no cover
 
     try:  # pragma: no cover
@@ -592,9 +586,8 @@ def get_yq_binary_path() -> Path:
 
         # Verify it exists and return
         if storage_binary.exists():
-            print(
-                f"Auto-download successful. Binary stored at: {storage_binary}\n",
-                file=sys.stderr,
+            logger.info(
+                "Auto-download successful. Binary stored at: %s", storage_binary
             )
             return storage_binary
 

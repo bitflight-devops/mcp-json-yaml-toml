@@ -4,14 +4,16 @@ Tests binary detection, subprocess execution, error handling, and output parsing
 Includes both unit tests with mocked subprocess and integration tests with real yq.
 """
 
+from __future__ import annotations
+
 import os
 import platform
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import Mock
 
 import pytest
-from pytest_mock import MockerFixture
 
 from mcp_json_yaml_toml.yq_wrapper import (
     DEFAULT_YQ_CHECKSUMS,
@@ -35,6 +37,9 @@ from mcp_json_yaml_toml.yq_wrapper import (
     parse_yq_error,
     validate_yq_binary,
 )
+
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
 
 
 class TestGetYQBinaryPath:
@@ -803,7 +808,7 @@ class TestSystemYQDetection:
         assert result == Path("/usr/local/bin/yq")
 
     def test_find_system_yq_returns_none_when_version_is_older(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+        self, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test _find_system_yq returns None when system version is older.
 
@@ -819,18 +824,20 @@ class TestSystemYQDetection:
         mocker.patch("subprocess.run", return_value=mock_result)
 
         # Act
-        result = _find_system_yq()
+        with caplog.at_level(
+            "WARNING", logger="mcp_json_yaml_toml.backends.binary_manager"
+        ):
+            result = _find_system_yq()
 
         # Assert
         assert result is None
 
         # Verify warning about version mismatch
-        captured = capsys.readouterr()
-        assert "v4.40.0" in captured.err
-        assert "need >=" in captured.err
+        assert "v4.40.0" in caplog.text
+        assert "need >=" in caplog.text
 
     def test_find_system_yq_returns_none_when_python_yq_found(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+        self, mocker: MockerFixture, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Test _find_system_yq returns None when Python yq is found.
 
@@ -846,14 +853,16 @@ class TestSystemYQDetection:
         mocker.patch("subprocess.run", return_value=mock_result)
 
         # Act
-        result = _find_system_yq()
+        with caplog.at_level(
+            "WARNING", logger="mcp_json_yaml_toml.backends.binary_manager"
+        ):
+            result = _find_system_yq()
 
         # Assert
         assert result is None
 
-        # Verify warning message was printed
-        captured = capsys.readouterr()
-        assert "not mikefarah/yq" in captured.err
+        # Verify warning message was logged
+        assert "not mikefarah/yq" in caplog.text
 
     def test_find_system_yq_returns_none_when_not_found(
         self, mocker: MockerFixture

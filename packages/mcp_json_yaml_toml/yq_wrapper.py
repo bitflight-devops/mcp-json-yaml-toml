@@ -14,7 +14,7 @@ from mcp_json_yaml_toml.backends.base import (
     YQExecutionError,
     YQResult,
 )
-from mcp_json_yaml_toml.backends.binary_manager import (  # noqa: F401
+from mcp_json_yaml_toml.backends.binary_manager import (
     DEFAULT_YQ_CHECKSUMS,
     DEFAULT_YQ_VERSION,
     _cleanup_old_versions,
@@ -39,6 +39,14 @@ __all__ = [
     "YQError",
     "YQExecutionError",
     "YQResult",
+    "_cleanup_old_versions",
+    "_find_system_yq",
+    "_get_checksums",
+    "_get_platform_binary_info",
+    "_is_mikefarah_yq",
+    "_parse_version",
+    "_verify_checksum",
+    "_version_meets_minimum",
     "execute_yq",
     "get_yq_binary_path",
     "get_yq_version",
