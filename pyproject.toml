@@ -224,6 +224,9 @@ max-complexity = 12
     "SLF", # Private name imports acceptable for testing internals
     "T", # print() statements are intentional for CI output visibility
 ]
+"packages/**/schemas/*.py" = [
+    "PLC2701", # Intra-package private imports are expected across sub-modules
+]
 "packages/**/version.py" = ["ANN", "PLC"]
 "typings/**" = ["A", "ANN", "N"]
 

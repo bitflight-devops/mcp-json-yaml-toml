@@ -64,7 +64,7 @@ class TestExpandIdePatterns:
         # Mock _load_default_ide_patterns to return our test pattern
         test_pattern = str(tmp_path / "schemas")
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._load_default_ide_patterns",
+            "mcp_json_yaml_toml.schemas.scanning._load_default_ide_patterns",
             lambda: [test_pattern],
         )
 
@@ -83,7 +83,7 @@ class TestExpandIdePatterns:
         # Pattern with wildcard
         test_pattern = str(tmp_path / "schema*")
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._load_default_ide_patterns",
+            "mcp_json_yaml_toml.schemas.scanning._load_default_ide_patterns",
             lambda: [test_pattern],
         )
 
@@ -104,7 +104,9 @@ class TestGetIdeSchemaLocations:
 
         monkeypatch.setenv("MCP_SCHEMA_CACHE_DIRS", str(schema_dir))
         # Clear IDE patterns to isolate env var behavior
-        monkeypatch.setattr("mcp_json_yaml_toml.schemas._expand_ide_patterns", list)
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas.scanning._expand_ide_patterns", list
+        )
 
         locations = _get_ide_schema_locations()
 
@@ -121,7 +123,9 @@ class TestGetIdeSchemaLocations:
 
         # Use os.pathsep for cross-platform compatibility (: on Unix, ; on Windows)
         monkeypatch.setenv("MCP_SCHEMA_CACHE_DIRS", f"{dir1}{os.pathsep}{dir2}")
-        monkeypatch.setattr("mcp_json_yaml_toml.schemas._expand_ide_patterns", list)
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas.scanning._expand_ide_patterns", list
+        )
 
         locations = _get_ide_schema_locations()
 
@@ -135,7 +139,9 @@ class TestGetIdeSchemaLocations:
         nonexistent = tmp_path / "does_not_exist"
 
         monkeypatch.setenv("MCP_SCHEMA_CACHE_DIRS", str(nonexistent))
-        monkeypatch.setattr("mcp_json_yaml_toml.schemas._expand_ide_patterns", list)
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas.scanning._expand_ide_patterns", list
+        )
 
         locations = _get_ide_schema_locations()
 
@@ -161,7 +167,9 @@ class TestGetIdeSchemaLocations:
         # Mock Path.home() to return tmp_path
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         monkeypatch.delenv("MCP_SCHEMA_CACHE_DIRS", raising=False)
-        monkeypatch.setattr("mcp_json_yaml_toml.schemas._expand_ide_patterns", list)
+        monkeypatch.setattr(
+            "mcp_json_yaml_toml.schemas.scanning._expand_ide_patterns", list
+        )
 
         locations = _get_ide_schema_locations()
 
@@ -185,7 +193,8 @@ class TestSchemaManagerFetchFromIdeCache:
 
         # Mock _get_ide_schema_locations to return our cache dir
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
@@ -202,7 +211,8 @@ class TestSchemaManagerFetchFromIdeCache:
         cache_dir.mkdir()
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
@@ -222,7 +232,8 @@ class TestSchemaManagerFetchFromIdeCache:
         bad_schema.write_text("{ not valid json")
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
@@ -246,7 +257,7 @@ class TestSchemaManagerFetchFromIdeCache:
         (cache2 / "found.schema.json").write_text(json.dumps(schema_data))
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations",
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
             lambda: [cache1, cache2],
         )
 
@@ -274,7 +285,8 @@ class TestSchemaManagerFetchFromIdeCache:
         schema_file.write_text(json.dumps(schema_data))
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
@@ -305,7 +317,8 @@ class TestSchemaManagerFetchFromIdeCache:
         schema_file.write_text(json.dumps(schema_data))
 
         monkeypatch.setattr(
-            "mcp_json_yaml_toml.schemas._get_ide_schema_locations", lambda: [cache_dir]
+            "mcp_json_yaml_toml.schemas.manager._get_ide_schema_locations",
+            lambda: [cache_dir],
         )
 
         manager = SchemaManager(cache_dir=tmp_path / "manager_cache")
