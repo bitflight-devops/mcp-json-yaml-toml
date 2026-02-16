@@ -310,3 +310,54 @@ class TestEdgeCases:
             assert len(result["data"]) == 10000
             # Should handle unicode correctly (no broken characters)
             assert isinstance(result["data"], str)
+
+    def test_paginate_when_multibyte_unicode_at_boundary_then_no_corruption(
+        self,
+    ) -> None:
+        """Test pagination preserves multibyte characters at page boundaries.
+
+        Tests: Unicode pagination boundary integrity
+        How: Create string with multibyte chars near page boundary, paginate
+        Why: Verify no character corruption at page splits
+        """
+        # Arrange - fill to near boundary with ASCII, then add multibyte chars
+        # Each emoji is 1 Python char but multiple UTF-8 bytes
+        filler = "x" * 9995
+        multibyte_tail = "🎉🎊🎈🎁🎀🎇🎆🎃🎄🎅🎋"  # 11 emoji chars
+        data = filler + multibyte_tail
+
+        assert len(data) > 10000, "Data should exceed page size"
+
+        # Act - paginate through all pages
+        cursor = None
+        pages = []
+        while True:
+            page = _paginate_result(data, cursor)
+            pages.append(page["data"])
+            if "nextCursor" not in page:
+                break
+            cursor = page["nextCursor"]
+
+        # Assert - reconstructed data matches original
+        reconstructed = "".join(pages)
+        assert reconstructed == data, "Reconstructed data should match original"
+
+    @pytest.mark.parametrize("offset", [999999, 2**31, 2**53])
+    def test_paginate_when_cursor_far_beyond_content_then_raises_error(
+        self, offset: int
+    ) -> None:
+        """Test pagination raises error for cursors beyond content size.
+
+        Tests: Large offset boundary handling
+        How: Encode cursor with offset far beyond data size
+        Why: Verify robust handling of invalid cursor offsets at various scales
+        """
+        from fastmcp.exceptions import ToolError
+
+        # Arrange - small data with large cursor offset
+        data = "test data"
+        cursor = _encode_cursor(offset)
+
+        # Act & Assert - should raise error
+        with pytest.raises(ToolError, match="exceeds result size"):
+            _paginate_result(data, cursor)

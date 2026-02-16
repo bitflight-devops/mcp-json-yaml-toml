@@ -1375,3 +1375,129 @@ class TestCleanupOldVersions:
         # Assert
         assert not old_exe.exists(), "Old Windows exe should be removed"
         assert current_exe.exists(), "Current Windows exe should be kept"
+
+
+class TestEdgeCases:
+    """Edge case tests for yq wrapper error handling and resource cleanup."""
+
+    @pytest.mark.integration
+    def test_execute_yq_when_very_long_expression_then_handles_gracefully(
+        self, sample_json_config: Path
+    ) -> None:
+        """Test execute_yq handles extremely long expressions.
+
+        Tests: Long expression handling
+        How: Pass an expression with 100 pipe operations
+        Why: Verify no unhandled exceptions from expression length
+        """
+        # Arrange - create very long but syntactically valid expression
+        long_expression = "." + " | ." * 100
+
+        # Act - either succeeds or raises a clear error
+        try:
+            result = execute_yq(
+                long_expression,
+                input_file=sample_json_config,
+                input_format=FormatType.JSON,
+                output_format=FormatType.JSON,
+            )
+            # Assert - if successful, returncode should be 0
+            assert result.returncode == 0
+        except YQExecutionError:
+            # YQExecutionError is acceptable for very long expressions
+            pass
+
+    def test_get_yq_binary_path_when_path_contains_spaces_then_still_works(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test get_yq_binary_path handles paths with spaces.
+
+        Tests: Path with spaces handling
+        How: Create directory with spaces, place fake binary there
+        Why: Verify paths with spaces don't break binary resolution
+        """
+        # Arrange - create directory with spaces
+        spaced_dir = tmp_path / "path with spaces"
+        spaced_dir.mkdir()
+        fake_binary = spaced_dir / "yq-test"
+        fake_binary.write_text("fake binary")
+        monkeypatch.setenv("YQ_BINARY_PATH", str(fake_binary))
+
+        # Act
+        result = get_yq_binary_path()
+
+        # Assert - path resolved correctly despite spaces
+        assert result == fake_binary
+        assert result.exists()
+        assert " " in str(result)
+
+    @pytest.mark.integration
+    def test_execute_yq_when_invalid_expression_then_subprocess_resources_cleaned_up(
+        self, sample_json_config: Path
+    ) -> None:
+        """Test subprocess resources are cleaned up after failed execution.
+
+        Tests: Subprocess resource cleanup
+        How: Execute invalid expression, check for ResourceWarnings
+        Why: Verify no file descriptor or process leaks
+        """
+        import gc
+        import warnings
+
+        # Arrange - deliberately invalid expression
+        # Act - execute and expect error
+        with pytest.raises(YQExecutionError):
+            execute_yq(
+                "invalid[[[",
+                input_file=sample_json_config,
+                input_format=FormatType.JSON,
+                output_format=FormatType.JSON,
+            )
+
+        # Assert - no resource warnings after gc
+        gc.collect()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            gc.collect()
+            resource_warnings = [
+                w for w in caught if issubclass(w.category, ResourceWarning)
+            ]
+            assert len(resource_warnings) == 0, (
+                f"ResourceWarnings detected: {[str(w.message) for w in resource_warnings]}"
+            )
+
+    @pytest.mark.unit
+    def test_execute_yq_when_input_data_provided_then_no_temp_files_remain(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test no temporary files remain after execution with input_data.
+
+        Tests: Temp file cleanup
+        How: Execute with input_data, check temp directory after
+        Why: Verify no file descriptor leaks from temp file usage
+        """
+        import tempfile
+
+        # Arrange - mock subprocess for controlled execution
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = b'{"key": "value"}'
+        mock_result.stderr = b""
+        mocker.patch("subprocess.run", return_value=mock_result)
+
+        # Capture temp dir state before
+        temp_dir = Path(tempfile.gettempdir())
+        before = {f.name for f in temp_dir.iterdir() if "yq" in f.name.lower()}
+
+        # Act - execute with input_data
+        execute_yq(
+            ".",
+            input_data='{"key": "value"}',
+            input_format=FormatType.JSON,
+            output_format=FormatType.JSON,
+        )
+
+        # Assert - no new yq-related temp files remain
+        after = {f.name for f in temp_dir.iterdir() if "yq" in f.name.lower()}
+        new_files = after - before
+        assert len(new_files) == 0, f"Temp files remain after execution: {new_files}"

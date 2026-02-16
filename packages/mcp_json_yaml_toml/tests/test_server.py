@@ -1154,3 +1154,98 @@ class TestConstraintResources:
         """
         result = ConstraintRegistry.get("NONEXISTENT")
         assert result is None
+
+
+class TestEdgeCases:
+    """Edge case tests for MCP tool error handling."""
+
+    @pytest.mark.skipif(
+        __import__("os").getuid() == 0, reason="root bypasses permissions"
+    )
+    def test_data_query_when_file_not_readable_then_raises_error(
+        self, tmp_path: Path
+    ) -> None:
+        """Test data_query raises error for unreadable files.
+
+        Tests: Permission error handling
+        How: Create JSON file with 0o000 permissions, attempt query
+        Why: Verify graceful handling of OS-level permission errors
+        """
+        # Arrange - create unreadable file
+        test_file = tmp_path / "unreadable.json"
+        test_file.write_text('{"key": "value"}')
+        test_file.chmod(0o000)
+
+        try:
+            # Act & Assert - should raise error
+            with pytest.raises(ToolError):
+                data_query_fn(str(test_file), ".")
+        finally:
+            # Cleanup - restore permissions so tmp_path can be cleaned
+            test_file.chmod(0o644)
+
+    def test_data_query_when_binary_file_then_handles_gracefully(
+        self, tmp_path: Path
+    ) -> None:
+        """Test data_query handles binary content without crashing.
+
+        Tests: Binary/malformed input handling
+        How: Create file with random binary bytes, give .json extension
+        Why: Verify server doesn't crash on non-text content
+        """
+        # Arrange - create binary file with .json extension
+        binary_file = tmp_path / "binary.json"
+        binary_file.write_bytes(bytes(range(256)))
+
+        # Act - yq may return null result or raise error; either is acceptable
+        try:
+            result = data_query_fn(str(binary_file), ".")
+            # Assert - result exists but may have null data
+            assert result is not None
+        except ToolError:
+            # ToolError is also acceptable for invalid binary input
+            pass
+
+    def test_data_query_when_json_with_bom_then_handles_gracefully(
+        self, tmp_path: Path
+    ) -> None:
+        """Test data_query handles UTF-8 BOM gracefully.
+
+        Tests: BOM marker handling
+        How: Create JSON file with UTF-8 BOM prefix
+        Why: Verify server handles BOM without crashing
+        """
+        # Arrange - create JSON file with BOM
+        bom_file = tmp_path / "bom.json"
+        bom_file.write_bytes(b"\xef\xbb\xbf" + b'{"key": "value"}')
+
+        # Act - either success or clear error is acceptable
+        try:
+            result = data_query_fn(str(bom_file), ".")
+            # Assert - if successful, result should have data
+            assert "result" in result
+        except ToolError:
+            # ToolError is acceptable -- BOM may cause parse failure
+            pass
+
+    def test_data_query_when_empty_file_then_handles_gracefully(
+        self, tmp_path: Path
+    ) -> None:
+        """Test data_query handles empty files without crashing.
+
+        Tests: Empty file handling
+        How: Create 0-byte .json file, attempt query
+        Why: Verify graceful handling of empty input
+        """
+        # Arrange - create empty file
+        empty_file = tmp_path / "empty.json"
+        empty_file.write_text("")
+
+        # Act - yq treats empty file as null; either result or error is acceptable
+        try:
+            result = data_query_fn(str(empty_file), ".")
+            # Assert - result exists but may have null data
+            assert result is not None
+        except ToolError:
+            # ToolError is also acceptable for empty files
+            pass
