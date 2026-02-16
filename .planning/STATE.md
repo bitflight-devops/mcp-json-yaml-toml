@@ -5,24 +5,24 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** AI assistants can safely read and modify structured configuration files without destroying formatting, comments, or file structure.
-**Current focus:** Phase 7 complete, ready for Phase 8
+**Current focus:** Phase 8 in progress -- test quality improvements
 
 ## Current Position
 
-Phase: 7 of 8 (Architecture Refactoring) - COMPLETE
-Plan: 2 of 2 complete
-Status: Phase 07 complete
-Last activity: 2026-02-16 -- Completed 07-02 Schema package split, server cleanup, handler parameterization
+Phase: 8 of 8 (Test Quality)
+Plan: 1 of 2 complete
+Status: 08-01 complete, ready for 08-02
+Last activity: 2026-02-16 -- Completed 08-01 Test assertions, public API tests, parametrize refactoring
 
-Progress: [█████████░] 88% (v1.0 complete: 4 phases, v1.1: 4/4 phases)
+Progress: [█████████░] 94% (v1.0 complete: 4 phases, v1.1: 5/4 phases + 08-01)
 
 ## Performance Metrics
 
 **v1.0 Velocity:**
 
-- Total plans completed: 14 (v1.0) + 7 (v1.1) = 21
+- Total plans completed: 14 (v1.0) + 8 (v1.1) = 22
 - Average duration: 9min
-- Total execution time: 182min
+- Total execution time: 192min
 
 **By Phase (v1.0):**
 
@@ -35,6 +35,7 @@ Progress: [█████████░] 88% (v1.0 complete: 4 phases, v1.1: 4
 | 05    | 2     | 26min | 13min    |
 | 06    | 2     | 11min | 6min     |
 | 07    | 2     | 17min | 9min     |
+| 08    | 1     | 10min | 10min    |
 
 _Updated after each plan completion_
 
@@ -64,6 +65,8 @@ Recent decisions affecting current work:
 - **Package splitting with re-export facade**: schemas/ package with **init**.py re-exporting all symbols for backward compat (v1.1 07-02)
 - **PLC2701 per-file-ignore for intra-package imports**: Intra-package private imports expected after splitting monolith (v1.1 07-02)
 - **Handler dependency injection**: Tool handlers accept schema_manager as parameter for testability (v1.1 07-02)
+- **Callable cast for FastMCP tools in tests**: Use `cast("Callable[..., ResponseType]", tool)` for type-safe tool invocation (v1.1 08-01)
+- **Public API tests for schema parsing**: Route through \_build_ide_schema_index instead of \_parse_extension_schemas (v1.1 08-01)
 
 ### Pending Todos
 
@@ -81,5 +84,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16 (plan execution)
-Stopped at: Completed 07-02-PLAN.md
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
