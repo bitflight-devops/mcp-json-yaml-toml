@@ -74,13 +74,15 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-From .planning/todos/pending/ -- 5 pending todos:
+From .planning/todos/pending/ -- 7 pending todos:
 
 1. **Fix systemic code quality issues** (area: services) -- dict returns, DRY violations, exception patterns, print logging
 2. **Refactor god modules and deprecated shims** (area: services) -- split data_operations.py/schemas.py, migrate yq_wrapper imports
 3. **Improve test quality and coverage gaps** (area: testing) -- private method tests, behavioral naming, edge case coverage
 4. **Integrate loguru for structured logging** (area: services) -- evaluate loguru vs stdlib logging for Phase 6 print() replacement
 5. **Improve schema validation error reporting** (area: services) -- return JSON path, validator keyword, and all errors instead of first-only message string
+6. **Pre-write syntax and schema validation for CRUD operations** (area: services) -- GH#1: validate before writing to disk, add skip_validation param
+7. **Multi-document YAML file handling** (area: services) -- GH#6: parse/query/edit multi-doc YAML, per-document schema validation
 
 ### Blockers/Concerns
 
