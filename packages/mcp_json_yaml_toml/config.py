@@ -8,6 +8,7 @@ This module handles:
 
 from __future__ import annotations
 
+import functools
 import os
 
 from fastmcp.exceptions import ToolError
@@ -24,10 +25,15 @@ __all__ = [
 ]
 
 # Default enabled formats
-DEFAULT_FORMATS: list[FormatType] = [FormatType.JSON, FormatType.YAML, FormatType.TOML]
+DEFAULT_FORMATS: tuple[FormatType, ...] = (
+    FormatType.JSON,
+    FormatType.YAML,
+    FormatType.TOML,
+)
 
 
-def parse_enabled_formats() -> list[FormatType]:
+@functools.lru_cache(maxsize=1)
+def parse_enabled_formats() -> tuple[FormatType, ...]:
     """Parse enabled formats from environment variable.
 
     Reads the MCP_CONFIG_FORMATS environment variable and parses it as a
@@ -35,21 +41,21 @@ def parse_enabled_formats() -> list[FormatType]:
     the environment variable is not set or is invalid.
 
     Returns:
-        List of enabled FormatType values
+        Tuple of enabled FormatType values (immutable for cache safety)
 
     Examples:
         >>> os.environ["MCP_CONFIG_FORMATS"] = "json,yaml"
         >>> parse_enabled_formats()
-        [<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>]
+        (<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>)
 
         >>> os.environ.pop("MCP_CONFIG_FORMATS", None)
         >>> parse_enabled_formats()
-        [<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>, <FormatType.TOML: 'toml'>]
+        (<FormatType.JSON: 'json'>, <FormatType.YAML: 'yaml'>, <FormatType.TOML: 'toml'>)
     """
     env_value = os.environ.get("MCP_CONFIG_FORMATS", "").strip()
 
     if not env_value:
-        return list(DEFAULT_FORMATS)
+        return DEFAULT_FORMATS
 
     # Parse comma-separated list
     format_names = [name.strip().lower() for name in env_value.split(",")]
@@ -63,9 +69,9 @@ def parse_enabled_formats() -> list[FormatType]:
 
     # Fall back to defaults if no valid formats found
     if not enabled_formats:
-        return list(DEFAULT_FORMATS)
+        return DEFAULT_FORMATS
 
-    return enabled_formats
+    return tuple(enabled_formats)
 
 
 def require_format_enabled(format_type: FormatType | str) -> None:

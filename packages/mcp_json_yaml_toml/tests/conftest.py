@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from mcp_json_yaml_toml.config import parse_enabled_formats
 from mcp_json_yaml_toml.tests.mcp_protocol_client import MCPClient
 
 if TYPE_CHECKING:
@@ -315,18 +316,27 @@ def mock_yq_failure(mocker: MockerFixture) -> Any:
 # ==============================================================================
 
 
+@pytest.fixture(autouse=True)
+def _clear_config_cache() -> Generator[None, None, None]:
+    """Clear config cache before and after each test for isolation."""
+    parse_enabled_formats.cache_clear()
+    yield
+    parse_enabled_formats.cache_clear()
+
+
 @pytest.fixture
 def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Clean environment variables for isolated testing.
 
     Tests: Environment variable isolation
-    How: Remove MCP_CONFIG_FORMATS env var
+    How: Remove MCP_CONFIG_FORMATS env var and clear config cache
     Why: Ensure tests don't interfere with each other
 
     Args:
         monkeypatch: Pytest monkeypatch fixture
     """
     monkeypatch.delenv("MCP_CONFIG_FORMATS", raising=False)
+    parse_enabled_formats.cache_clear()
 
 
 @pytest.fixture
@@ -334,13 +344,14 @@ def json_only_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Set environment to enable only JSON format.
 
     Tests: Format filtering via environment
-    How: Set MCP_CONFIG_FORMATS to "json"
+    How: Set MCP_CONFIG_FORMATS to "json" and clear config cache
     Why: Test format-specific behavior
 
     Args:
         monkeypatch: Pytest monkeypatch fixture
     """
     monkeypatch.setenv("MCP_CONFIG_FORMATS", "json")
+    parse_enabled_formats.cache_clear()
 
 
 @pytest.fixture
@@ -348,13 +359,14 @@ def multi_format_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Set environment to enable multiple formats.
 
     Tests: Multiple format configuration
-    How: Set MCP_CONFIG_FORMATS to "json,yaml,toml"
+    How: Set MCP_CONFIG_FORMATS to "json,yaml,toml" and clear config cache
     Why: Test multi-format scenarios
 
     Args:
         monkeypatch: Pytest monkeypatch fixture
     """
     monkeypatch.setenv("MCP_CONFIG_FORMATS", "json,yaml,toml")
+    parse_enabled_formats.cache_clear()
 
 
 # ==============================================================================

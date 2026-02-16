@@ -4,6 +4,8 @@ Tests configuration format validation, environment variable parsing,
 and default configuration handling.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from mcp_json_yaml_toml.config import (
@@ -31,7 +33,7 @@ class TestParseEnabledFormats:
         result = parse_enabled_formats()
 
         # Assert - returns default formats
-        assert result == list(DEFAULT_FORMATS)
+        assert result == DEFAULT_FORMATS
         assert len(result) == 3
         assert FormatType.JSON in result
         assert FormatType.YAML in result
@@ -135,7 +137,7 @@ class TestParseEnabledFormats:
         result = parse_enabled_formats()
 
         # Assert - returns defaults
-        assert result == list(DEFAULT_FORMATS)
+        assert result == DEFAULT_FORMATS
 
     def test_parse_enabled_formats_empty_string_returns_default(
         self, monkeypatch: pytest.MonkeyPatch
@@ -153,7 +155,7 @@ class TestParseEnabledFormats:
         result = parse_enabled_formats()
 
         # Assert - returns defaults
-        assert result == list(DEFAULT_FORMATS)
+        assert result == DEFAULT_FORMATS
 
     def test_parse_enabled_formats_partial_valid(
         self, monkeypatch: pytest.MonkeyPatch
