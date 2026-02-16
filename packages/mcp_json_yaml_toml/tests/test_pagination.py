@@ -1,12 +1,21 @@
 """Tests for pagination functionality in config_query and config_get tools."""
 
+from __future__ import annotations
+
 import base64
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-from mcp_json_yaml_toml.server import _decode_cursor, _encode_cursor, _paginate_result
+from mcp_json_yaml_toml.services.pagination import (
+    _decode_cursor,
+    _encode_cursor,
+    _paginate_result,
+)
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestCursorEncoding:

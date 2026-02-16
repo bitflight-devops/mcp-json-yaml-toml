@@ -18,6 +18,8 @@ from mcp_json_yaml_toml.services.schema_validation import _validate_against_sche
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from mcp_json_yaml_toml.schemas.manager import SchemaManager
+
 
 # ---------------------------------------------------------------------------
 # Schema action handlers
@@ -25,7 +27,7 @@ if TYPE_CHECKING:
 
 
 def _handle_schema_validate(
-    file_path: str | None, schema_path: str | None
+    file_path: str | None, schema_path: str | None, schema_manager: SchemaManager
 ) -> dict[str, Any]:
     """Handle validate action."""
     if not file_path:
@@ -78,7 +80,7 @@ def _handle_schema_validate(
 
 
 def _handle_schema_scan(
-    search_paths: list[str] | None, max_depth: int
+    search_paths: list[str] | None, max_depth: int, schema_manager: SchemaManager
 ) -> dict[str, Any]:
     """Handle scan action."""
     if not search_paths:
@@ -93,7 +95,9 @@ def _handle_schema_scan(
     }
 
 
-def _handle_schema_add_dir(path: str | None) -> dict[str, Any]:
+def _handle_schema_add_dir(
+    path: str | None, schema_manager: SchemaManager
+) -> dict[str, Any]:
     """Handle add_dir action."""
     if not path:
         raise ToolError("path required for add_dir action")
@@ -112,7 +116,9 @@ def _handle_schema_add_dir(path: str | None) -> dict[str, Any]:
     }
 
 
-def _handle_schema_add_catalog(name: str | None, uri: str | None) -> dict[str, Any]:
+def _handle_schema_add_catalog(
+    name: str | None, uri: str | None, schema_manager: SchemaManager
+) -> dict[str, Any]:
     """Handle add_catalog action."""
     if not name or not uri:
         raise ToolError("name and uri required for add_catalog action")
@@ -127,7 +133,10 @@ def _handle_schema_add_catalog(name: str | None, uri: str | None) -> dict[str, A
 
 
 def _handle_schema_associate(
-    file_path: str | None, schema_url: str | None, schema_name: str | None
+    file_path: str | None,
+    schema_url: str | None,
+    schema_name: str | None,
+    schema_manager: SchemaManager,
 ) -> dict[str, Any]:
     """Handle associate action."""
     if not file_path:
@@ -161,7 +170,9 @@ def _handle_schema_associate(
     }
 
 
-def _handle_schema_disassociate(file_path: str | None) -> dict[str, Any]:
+def _handle_schema_disassociate(
+    file_path: str | None, schema_manager: SchemaManager
+) -> dict[str, Any]:
     """Handle disassociate action."""
     if not file_path:
         raise ToolError("file_path required for disassociate action")
@@ -176,7 +187,7 @@ def _handle_schema_disassociate(file_path: str | None) -> dict[str, Any]:
     }
 
 
-def _handle_schema_list() -> dict[str, Any]:
+def _handle_schema_list(schema_manager: SchemaManager) -> dict[str, Any]:
     """Handle list action."""
     config = schema_manager.get_config()
     return {"success": True, "action": "list", "config": config}
@@ -258,14 +269,16 @@ def data_schema(
       - action="list"
     """
     handlers: dict[str, Callable[[], dict[str, Any]]] = {
-        "validate": lambda: _handle_schema_validate(file_path, schema_path),
-        "scan": lambda: _handle_schema_scan(search_paths, max_depth),
-        "add_dir": lambda: _handle_schema_add_dir(path),
-        "add_catalog": lambda: _handle_schema_add_catalog(name, uri),
-        "associate": lambda: _handle_schema_associate(
-            file_path, schema_url, schema_name
+        "validate": lambda: _handle_schema_validate(
+            file_path, schema_path, schema_manager
         ),
-        "disassociate": lambda: _handle_schema_disassociate(file_path),
-        "list": _handle_schema_list,
+        "scan": lambda: _handle_schema_scan(search_paths, max_depth, schema_manager),
+        "add_dir": lambda: _handle_schema_add_dir(path, schema_manager),
+        "add_catalog": lambda: _handle_schema_add_catalog(name, uri, schema_manager),
+        "associate": lambda: _handle_schema_associate(
+            file_path, schema_url, schema_name, schema_manager
+        ),
+        "disassociate": lambda: _handle_schema_disassociate(file_path, schema_manager),
+        "list": lambda: _handle_schema_list(schema_manager),
     }
     return handlers[action]()
