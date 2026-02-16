@@ -20,21 +20,25 @@ from mcp_json_yaml_toml.lmql_constraints import ConstraintRegistry
 from mcp_json_yaml_toml.yq_wrapper import FormatType
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
-# FastMCP 3.x: decorators return the original function directly (no .fn needed)
-data_query_fn = server.data_query
-data_fn = server.data
-data_schema_fn = server.data_schema
-data_convert_fn = server.data_convert
-data_merge_fn = server.data_merge
+# FastMCP 3.x: decorators return the original function directly (no .fn needed).
+# At runtime these are callable; cast to satisfy mypy's FunctionTool type.
+data_query_fn = cast("Callable[..., Any]", server.data_query)
+data_fn = cast("Callable[..., Any]", server.data)
+data_schema_fn = cast("Callable[..., Any]", server.data_schema)
+data_convert_fn = cast("Callable[..., Any]", server.data_convert)
+data_merge_fn = cast("Callable[..., Any]", server.data_merge)
 
 
 class TestDataQuery:
     """Test data_query tool."""
 
     @pytest.mark.integration
-    def test_data_query_json_success(self, sample_json_config: Path) -> None:
+    def test_data_query_when_valid_json_then_returns_result(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data_query successfully queries JSON file.
 
         Tests: JSON querying functionality
@@ -52,7 +56,9 @@ class TestDataQuery:
         assert result["file"] == str(sample_json_config)
 
     @pytest.mark.integration
-    def test_data_query_nested_field(self, sample_json_config: Path) -> None:
+    def test_data_query_when_nested_field_then_returns_value(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data_query queries nested field.
 
         Tests: Nested field access
@@ -68,7 +74,9 @@ class TestDataQuery:
         assert result["result"] == "localhost"
 
     @pytest.mark.integration
-    def test_data_query_array_element(self, sample_json_config: Path) -> None:
+    def test_data_query_when_array_index_then_returns_element(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data_query queries array element.
 
         Tests: Array indexing
@@ -84,7 +92,9 @@ class TestDataQuery:
         assert result["result"] == "server1.example.com"
 
     @pytest.mark.integration
-    def test_data_query_yaml_to_json(self, sample_yaml_config: Path) -> None:
+    def test_data_query_when_yaml_with_json_output_then_converts(
+        self, sample_yaml_config: Path
+    ) -> None:
         """Test data_query converts YAML to JSON output.
 
         Tests: Format conversion in query
@@ -101,7 +111,7 @@ class TestDataQuery:
         assert result["format"] == "json"
 
     @pytest.mark.integration
-    def test_data_query_file_not_found(self) -> None:
+    def test_data_query_when_file_missing_then_raises_tool_error(self) -> None:
         """Test data_query raises error for missing file.
 
         Tests: Missing file handling
@@ -114,7 +124,9 @@ class TestDataQuery:
             data_query_fn("/nonexistent/file.json", ".name")
 
     @pytest.mark.integration
-    def test_data_query_invalid_expression(self, sample_json_config: Path) -> None:
+    def test_data_query_when_invalid_expression_then_raises_tool_error(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data_query raises error for invalid yq expression.
 
         Tests: Invalid expression handling
@@ -126,7 +138,7 @@ class TestDataQuery:
         with pytest.raises(ToolError, match="Query failed"):
             data_query_fn(str(sample_json_config), ".bad[")
 
-    def test_data_query_disabled_format(
+    def test_data_query_when_format_disabled_then_raises_tool_error(
         self, sample_json_config: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test data_query raises error for disabled format.
@@ -149,7 +161,9 @@ class TestData:
     # --- GET Operations ---
 
     @pytest.mark.integration
-    def test_data_get_simple_key(self, sample_json_config: Path) -> None:
+    def test_data_get_when_simple_key_then_returns_value(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data get retrieves simple key.
 
         Tests: Simple key retrieval
@@ -165,7 +179,9 @@ class TestData:
         assert result["result"] == "test-app"
 
     @pytest.mark.integration
-    def test_data_get_nested_key(self, sample_json_config: Path) -> None:
+    def test_data_get_when_nested_key_then_returns_value(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data get retrieves nested key.
 
         Tests: Nested key access
@@ -183,7 +199,9 @@ class TestData:
         assert result["result"] == 5432
 
     @pytest.mark.integration
-    def test_data_get_array_index(self, sample_json_config: Path) -> None:
+    def test_data_get_when_array_index_then_returns_element(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data get retrieves array element.
 
         Tests: Array indexing via get
@@ -201,7 +219,9 @@ class TestData:
         assert result["result"] == "server2.example.com"
 
     @pytest.mark.integration
-    def test_data_get_structure(self, sample_json_config: Path) -> None:
+    def test_data_get_when_return_type_keys_then_returns_structure(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data get retrieves structure (keys only).
 
         Tests: Structure retrieval
@@ -223,7 +243,7 @@ class TestData:
         assert "port" in result["result"]
 
     @pytest.mark.integration
-    def test_data_get_schema(
+    def test_data_get_when_data_type_schema_then_returns_schema(
         self, sample_json_config: Path, sample_json_schema: Path, tmp_path: Path
     ) -> None:
         """Test data get retrieves schema.
@@ -268,7 +288,7 @@ class TestData:
     # --- SET Operations ---
 
     @pytest.mark.integration
-    def test_data_set_simple_value(
+    def test_data_set_when_simple_value_then_updates_file(
         self, sample_json_config: Path, tmp_path: Path
     ) -> None:
         """Test data set modifies value.
@@ -295,7 +315,7 @@ class TestData:
         assert modified_data["name"] == "new-name"
 
     @pytest.mark.integration
-    def test_data_set_nested_value(
+    def test_data_set_when_nested_value_then_updates_file(
         self, sample_json_config: Path, tmp_path: Path
     ) -> None:
         """Test data set modifies nested value.
@@ -322,7 +342,9 @@ class TestData:
         assert modified_data["database"]["port"] == 3306
 
     @pytest.mark.integration
-    def test_data_set_in_place(self, sample_json_config: Path, tmp_path: Path) -> None:
+    def test_data_set_when_in_place_then_modifies_file(
+        self, sample_json_config: Path, tmp_path: Path
+    ) -> None:
         """Test data set modifies file in place.
 
         Tests: In-place file modification
@@ -347,7 +369,7 @@ class TestData:
     # --- DELETE Operations ---
 
     @pytest.mark.integration
-    def test_data_delete_simple_key(
+    def test_data_delete_when_simple_key_then_removes_key(
         self, sample_json_config: Path, tmp_path: Path
     ) -> None:
         """Test data delete removes simple key.
@@ -373,7 +395,7 @@ class TestData:
         assert "name" in modified_data  # Other keys preserved
 
     @pytest.mark.integration
-    def test_data_delete_in_place(
+    def test_data_delete_when_in_place_then_modifies_file(
         self, sample_json_config: Path, tmp_path: Path
     ) -> None:
         """Test data delete modifies file in place.
@@ -399,7 +421,9 @@ class TestData:
     # Note: yq v4.52.2+ supports nested TOML output (earlier versions had scalar-only limitation)
 
     @pytest.mark.integration
-    def test_data_get_toml_nested_succeeds(self, sample_toml_config: Path) -> None:
+    def test_data_get_when_toml_nested_then_succeeds(
+        self, sample_toml_config: Path
+    ) -> None:
         """Test data get succeeds with nested TOML structures.
 
         Tests: yq v4.52.2+ can output nested TOML structures
@@ -418,7 +442,7 @@ class TestData:
         assert "localhost" in result["result"]
 
     @pytest.mark.integration
-    def test_data_get_toml_explicit_format_succeeds(
+    def test_data_get_when_toml_explicit_format_then_succeeds(
         self, sample_toml_config: Path
     ) -> None:
         """Test data get succeeds when TOML output explicitly requested for nested data.
@@ -444,7 +468,9 @@ class TestData:
         assert "localhost" in result["result"]
 
     @pytest.mark.integration
-    def test_data_query_toml_nested_succeeds(self, sample_toml_config: Path) -> None:
+    def test_data_query_when_toml_nested_then_succeeds(
+        self, sample_toml_config: Path
+    ) -> None:
         """Test data_query succeeds with nested TOML structures.
 
         Tests: yq v4.52.2+ can output nested TOML structures
@@ -463,7 +489,7 @@ class TestData:
         assert "localhost" in result["result"]
 
     @pytest.mark.integration
-    def test_data_query_toml_explicit_format_succeeds(
+    def test_data_query_when_toml_explicit_format_then_succeeds(
         self, sample_toml_config: Path
     ) -> None:
         """Test data_query succeeds when TOML output explicitly requested.
@@ -486,7 +512,9 @@ class TestData:
         assert "localhost" in result["result"]
 
     @pytest.mark.integration
-    def test_data_get_toml_scalar_no_fallback(self, sample_toml_config: Path) -> None:
+    def test_data_get_when_toml_scalar_then_no_fallback(
+        self, sample_toml_config: Path
+    ) -> None:
         """Test data get returns TOML for scalar values (no fallback needed).
 
         Tests: TOML output works for scalar values without fallback
@@ -507,7 +535,9 @@ class TestDataSchema:
     """Test unified data_schema tool."""
 
     @pytest.mark.integration
-    def test_data_schema_validate_valid_syntax(self, sample_json_config: Path) -> None:
+    def test_data_schema_when_valid_syntax_then_passes(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data_schema validate passes for valid file.
 
         Tests: Valid file validation
@@ -524,7 +554,7 @@ class TestDataSchema:
         assert "Syntax is valid" in result["syntax_message"]
 
     @pytest.mark.integration
-    def test_data_schema_validate_invalid_syntax(
+    def test_data_schema_when_invalid_syntax_then_fails(
         self, invalid_json_config: Path
     ) -> None:
         """Test data_schema validate fails for invalid syntax.
@@ -543,7 +573,7 @@ class TestDataSchema:
         assert "Syntax error" in result["syntax_message"]
 
     @pytest.mark.integration
-    def test_data_schema_validate_with_schema_success(
+    def test_data_schema_when_valid_against_schema_then_passes(
         self, sample_json_config: Path, sample_json_schema: Path
     ) -> None:
         """Test data_schema validate with matching schema.
@@ -567,7 +597,7 @@ class TestDataSchema:
         assert "Schema validation passed" in result["schema_message"]
 
     @pytest.mark.integration
-    def test_data_schema_scan(self, tmp_path: Path) -> None:
+    def test_data_schema_when_scan_then_finds_schemas(self, tmp_path: Path) -> None:
         """Test data_schema scan finds schemas.
 
         Tests: Schema scanning
@@ -587,7 +617,7 @@ class TestDataSchema:
         assert str(tmp_path) in result["discovered_dirs"]
 
     @pytest.mark.integration
-    def test_data_schema_add_dir(self, tmp_path: Path) -> None:
+    def test_data_schema_when_add_dir_then_registers(self, tmp_path: Path) -> None:
         """Test data_schema add_dir adds directory.
 
         Tests: Add schema directory
@@ -603,7 +633,7 @@ class TestDataSchema:
         assert result["directory"] == str(tmp_path)
 
     @pytest.mark.integration
-    def test_data_schema_add_catalog(self) -> None:
+    def test_data_schema_when_add_catalog_then_registers(self) -> None:
         """Test data_schema add_catalog adds catalog.
 
         Tests: Add schema catalog
@@ -621,7 +651,7 @@ class TestDataSchema:
         assert result["name"] == "test"
 
     @pytest.mark.integration
-    def test_data_schema_list(self) -> None:
+    def test_data_schema_when_list_then_returns_config(self) -> None:
         """Test data_schema list shows config.
 
         Tests: List configuration
@@ -641,7 +671,9 @@ class TestDataConvert:
     """Test data_convert tool."""
 
     @pytest.mark.integration
-    def test_data_convert_json_to_yaml(self, sample_json_config: Path) -> None:
+    def test_data_convert_when_json_to_yaml_then_converts(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data_convert converts JSON to YAML.
 
         Tests: JSON to YAML conversion
@@ -659,7 +691,9 @@ class TestDataConvert:
         assert "name: test-app" in result["result"]
 
     @pytest.mark.integration
-    def test_data_convert_yaml_to_json(self, sample_yaml_config: Path) -> None:
+    def test_data_convert_when_yaml_to_json_then_converts(
+        self, sample_yaml_config: Path
+    ) -> None:
         """Test data_convert converts YAML to JSON.
 
         Tests: YAML to JSON conversion
@@ -679,7 +713,7 @@ class TestDataConvert:
         assert converted_data["name"] == "test-app"
 
     @pytest.mark.integration
-    def test_data_convert_json_to_toml_not_supported(
+    def test_data_convert_when_json_to_toml_then_raises_error(
         self, sample_json_config: Path
     ) -> None:
         """Test data_convert rejects JSON to TOML conversion.
@@ -698,7 +732,7 @@ class TestDataConvert:
         assert "TOML" in error_message
 
     @pytest.mark.integration
-    def test_data_convert_with_output_file(
+    def test_data_convert_when_output_file_then_writes(
         self, sample_json_config: Path, tmp_path: Path
     ) -> None:
         """Test data_convert writes to output file.
@@ -723,7 +757,9 @@ class TestDataConvert:
         assert "name: test-app" in content
 
     @pytest.mark.integration
-    def test_data_convert_same_format_error(self, sample_json_config: Path) -> None:
+    def test_data_convert_when_same_format_then_raises_error(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data_convert rejects same input/output format.
 
         Tests: Format validation
@@ -736,7 +772,7 @@ class TestDataConvert:
             data_convert_fn(str(sample_json_config), "json")
 
     @pytest.mark.integration
-    def test_data_convert_file_not_found(self) -> None:
+    def test_data_convert_when_file_missing_then_raises_error(self) -> None:
         """Test data_convert raises error for missing file.
 
         Tests: Missing file error handling
@@ -753,7 +789,7 @@ class TestDataMerge:
     """Test data_merge tool."""
 
     @pytest.mark.integration
-    def test_data_merge_two_json_files(
+    def test_data_merge_when_two_json_files_then_merges(
         self, sample_json_config: Path, tmp_path: Path
     ) -> None:
         """Test data_merge merges two JSON files.
@@ -779,7 +815,9 @@ class TestDataMerge:
         assert merged_data["author"] == "test"  # Added from file2
 
     @pytest.mark.integration
-    def test_data_merge_deep_merge(self, tmp_path: Path) -> None:
+    def test_data_merge_when_nested_objects_then_deep_merges(
+        self, tmp_path: Path
+    ) -> None:
         """Test data_merge performs deep merge.
 
         Tests: Deep merge strategy
@@ -802,7 +840,7 @@ class TestDataMerge:
         assert merged_data["database"]["user"] == "admin"  # Added
 
     @pytest.mark.integration
-    def test_data_merge_different_formats(
+    def test_data_merge_when_different_formats_then_merges(
         self, sample_json_config: Path, sample_yaml_config: Path
     ) -> None:
         """Test data_merge merges different formats.
@@ -824,7 +862,7 @@ class TestDataMerge:
         assert "database" in merged_data
 
     @pytest.mark.integration
-    def test_data_merge_with_output_file(self, tmp_path: Path) -> None:
+    def test_data_merge_when_output_file_then_writes(self, tmp_path: Path) -> None:
         """Test data_merge writes to output file.
 
         Tests: File output for merge
@@ -850,7 +888,9 @@ class TestDataMerge:
         assert "key2" in merged_data
 
     @pytest.mark.integration
-    def test_data_merge_file1_not_found(self, sample_json_config: Path) -> None:
+    def test_data_merge_when_file_missing_then_raises_error(
+        self, sample_json_config: Path
+    ) -> None:
         """Test data_merge raises error if first file missing.
 
         Tests: First file validation
@@ -866,7 +906,7 @@ class TestDataMerge:
 class TestPrompts:
     """Test prompt templates."""
 
-    def test_explain_config(self) -> None:
+    def test_explain_config_when_called_then_returns_prompt(self) -> None:
         """Test explain_config prompt generation.
 
         Note: FastMCP 3.x decorators return the original function directly,
@@ -874,40 +914,43 @@ class TestPrompts:
         We use cast() to assert the known runtime type.
         """
 
-        prompt = cast("str", server.explain_config("config.json"))
+        explain_fn = cast("Callable[..., Any]", server.explain_config)
+        prompt = cast("str", explain_fn("config.json"))
         assert "analyze and explain" in prompt
         assert "config.json" in prompt
 
-    def test_suggest_improvements(self) -> None:
+    def test_suggest_improvements_when_called_then_returns_prompt(self) -> None:
         """Test suggest_improvements prompt generation.
 
         Note: See test_explain_config docstring for type cast explanation.
         """
 
-        prompt = cast("str", server.suggest_improvements("config.yaml"))
+        suggest_fn = cast("Callable[..., Any]", server.suggest_improvements)
+        prompt = cast("str", suggest_fn("config.yaml"))
         assert "suggest improvements" in prompt
         assert "config.yaml" in prompt
 
-    def test_convert_to_schema(self) -> None:
+    def test_convert_to_schema_when_called_then_returns_prompt(self) -> None:
         """Test convert_to_schema prompt generation.
 
         Note: See test_explain_config docstring for type cast explanation.
         """
 
-        prompt = cast("str", server.convert_to_schema("data.toml"))
+        convert_fn = cast("Callable[..., Any]", server.convert_to_schema)
+        prompt = cast("str", convert_fn("data.toml"))
         assert "generate a JSON schema" in prompt
         assert "data.toml" in prompt
 
 
-# FastMCP 3.x: decorators return the original function directly (no .fn needed)
-constraint_validate_fn = server.constraint_validate
-constraint_list_fn = server.constraint_list
+# FastMCP 3.x: decorators return the original function directly (no .fn needed).
+constraint_validate_fn = cast("Callable[..., Any]", server.constraint_validate)
+constraint_list_fn = cast("Callable[..., Any]", server.constraint_list)
 
 
 class TestConstraintTools:
     """Test LMQL constraint validation tools."""
 
-    def test_constraint_validate_valid_yq_path(self) -> None:
+    def test_constraint_validate_when_valid_yq_path_then_returns_valid(self) -> None:
         """
         Verify that the YQ_PATH constraint accepts a valid yq-style path.
 
@@ -920,7 +963,9 @@ class TestConstraintTools:
         assert result["value"] == ".name"
         assert "error" not in result
 
-    def test_constraint_validate_invalid_yq_path(self) -> None:
+    def test_constraint_validate_when_invalid_yq_path_then_returns_invalid(
+        self,
+    ) -> None:
         """Test constraint_validate with invalid YQ_PATH.
 
         Tests: Invalid constraint validation
@@ -934,7 +979,7 @@ class TestConstraintTools:
         assert "error" in result
         assert ".users" in result.get("suggestions", [])
 
-    def test_constraint_validate_partial_input(self) -> None:
+    def test_constraint_validate_when_partial_input_then_returns_partial(self) -> None:
         """Test constraint_validate with partial input.
 
         Tests: Partial input detection
@@ -947,7 +992,7 @@ class TestConstraintTools:
         assert result["is_partial"] is True
         assert "remaining_pattern" in result
 
-    def test_constraint_validate_config_format(self) -> None:
+    def test_constraint_validate_when_config_format_then_validates(self) -> None:
         """
         Verify CONFIG_FORMAT enum constraint accepts allowed formats and rejects invalid ones.
 
@@ -962,7 +1007,7 @@ class TestConstraintTools:
         result = constraint_validate_fn("CONFIG_FORMAT", "csv")
         assert result["valid"] is False
 
-    def test_constraint_validate_int(self) -> None:
+    def test_constraint_validate_when_int_then_validates(self) -> None:
         """Test constraint_validate with INT constraint.
 
         Tests: Integer constraint validation
@@ -978,7 +1023,7 @@ class TestConstraintTools:
         result = constraint_validate_fn("INT", "3.14")
         assert result["valid"] is False
 
-    def test_constraint_validate_json_value(self) -> None:
+    def test_constraint_validate_when_json_value_then_validates(self) -> None:
         """Test constraint_validate with JSON_VALUE constraint.
 
         Tests: JSON value constraint validation
@@ -995,7 +1040,7 @@ class TestConstraintTools:
         assert result["valid"] is False
         assert result["is_partial"] is True
 
-    def test_constraint_validate_unknown_constraint(self) -> None:
+    def test_constraint_validate_when_unknown_then_returns_error(self) -> None:
         """Test constraint_validate with unknown constraint.
 
         Tests: Unknown constraint handling
@@ -1007,7 +1052,7 @@ class TestConstraintTools:
         assert result["valid"] is False
         assert "Unknown constraint" in result["error"]
 
-    def test_constraint_list_returns_all_constraints(self) -> None:
+    def test_constraint_list_when_called_then_returns_all(self) -> None:
         """Test constraint_list returns all registered constraints.
 
         Tests: Constraint listing
@@ -1028,7 +1073,7 @@ class TestConstraintTools:
         assert "JSON_VALUE" in constraint_names
         assert "FILE_PATH" in constraint_names
 
-    def test_constraint_list_includes_descriptions(self) -> None:
+    def test_constraint_list_when_called_then_includes_descriptions(self) -> None:
         """Test constraint_list includes constraint descriptions.
 
         Tests: Constraint metadata
@@ -1050,7 +1095,7 @@ class TestConstraintResources:
     wrap these functions for client access.
     """
 
-    def test_list_all_constraints_resource(self) -> None:
+    def test_constraint_registry_when_get_all_then_returns_definitions(self) -> None:
         """
         Verify that the constraint registry exposes all expected constraint definitions.
 
@@ -1065,7 +1110,7 @@ class TestConstraintResources:
         assert "JSON_VALUE" in definitions
         assert "FILE_PATH" in definitions
 
-    def test_get_constraint_definition_resource(self) -> None:
+    def test_constraint_definition_when_yq_path_then_returns_complete(self) -> None:
         """
         Verify that the YQ_PATH constraint resource exposes a complete definition.
 
@@ -1080,7 +1125,9 @@ class TestConstraintResources:
         assert "pattern" in result
         assert "examples" in result
 
-    def test_get_constraint_definition_config_format(self) -> None:
+    def test_constraint_definition_when_config_format_then_returns_allowed_values(
+        self,
+    ) -> None:
         """
         Verify that the CONFIG_FORMAT constraint definition exposes the expected allowed formats.
 
@@ -1098,7 +1145,7 @@ class TestConstraintResources:
         assert "yaml" in allowed
         assert "toml" in allowed
 
-    def test_get_constraint_definition_unknown(self) -> None:
+    def test_constraint_registry_when_unknown_then_returns_none(self) -> None:
         """Test unknown constraint returns None.
 
         Tests: Unknown constraint handling in resource
