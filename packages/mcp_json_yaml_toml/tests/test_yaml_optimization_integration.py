@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
 from mcp_json_yaml_toml import server
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
+
+# FastMCP 3.x: decorators return the original function directly (no .fn needed).
+# At runtime these are callable; cast to satisfy mypy's FunctionTool type.
+data_fn = cast("Callable[..., Any]", server.data)
 
 
 class TestYAMLOptimizationIntegration:
@@ -32,7 +37,7 @@ services:
 """)
 
         # Add a third service with the same config
-        result = server.data(
+        result = data_fn(
             file_path=str(test_file),
             operation="set",
             key_path="services.cache",
@@ -70,7 +75,7 @@ job1:
 """)
 
         # Add another job
-        result = server.data(
+        result = data_fn(
             file_path=str(test_file),
             operation="set",
             key_path="job2",
@@ -95,7 +100,7 @@ job1:
         test_file.write_text('{"job1": {"image": "node:22"}}')
 
         # Modify it
-        result = server.data(
+        result = data_fn(
             file_path=str(test_file),
             operation="set",
             key_path="job2",
