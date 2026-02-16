@@ -6,6 +6,7 @@ Extracted from data_operations.py (ARCH-06).
 
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING, Any, Literal, TypeGuard
 
 import orjson
@@ -18,7 +19,11 @@ from mcp_json_yaml_toml.formats.base import (
     _detect_file_format,
     should_fallback_toml_to_json,
 )
-from mcp_json_yaml_toml.models.responses import DataResponse, SchemaResponse
+from mcp_json_yaml_toml.models.responses import (
+    DataResponse,
+    SchemaResponse,
+    ServerInfoResponse,
+)
 from mcp_json_yaml_toml.services.pagination import (
     PAGE_SIZE_CHARS,
     _paginate_result,
@@ -37,8 +42,33 @@ __all__ = [
     "_handle_data_get_schema",
     "_handle_data_get_structure",
     "_handle_data_get_value",
+    "_handle_meta_get",
     "is_schema",
 ]
+
+
+def _handle_meta_get() -> ServerInfoResponse:
+    """Handle GET operation with data_type='meta'.
+
+    Returns server metadata: version, uptime, start time.
+    No file I/O -- entirely in-memory.
+
+    Returns:
+        ServerInfoResponse with version, uptime_seconds, start_time_epoch.
+    """
+    import mcp_json_yaml_toml  # noqa: PLC0415 — lazy to avoid circular: server -> tools/data -> data_operations -> get_operations -> server
+    from mcp_json_yaml_toml.server import _SERVER_START_TIME  # noqa: PLC0415
+
+    now = datetime.datetime.now(datetime.UTC)
+    uptime = (now - _SERVER_START_TIME).total_seconds()
+
+    return ServerInfoResponse(
+        success=True,
+        file="-",
+        version=mcp_json_yaml_toml.__version__,
+        uptime_seconds=round(uptime, 2),
+        start_time_epoch=round(_SERVER_START_TIME.timestamp(), 3),
+    )
 
 
 def is_schema(value: Any) -> TypeGuard[JsonType]:

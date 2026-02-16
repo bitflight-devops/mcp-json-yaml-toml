@@ -15,6 +15,7 @@ from mcp_json_yaml_toml.services.get_operations import (
     _handle_data_get_schema,
     _handle_data_get_structure,
     _handle_data_get_value,
+    _handle_meta_get,
     is_schema,
 )
 from mcp_json_yaml_toml.services.mutation_operations import (
@@ -42,6 +43,7 @@ __all__ = [
     "_handle_data_get_structure",
     "_handle_data_get_value",
     "_handle_data_set",
+    "_handle_meta_get",
     "_optimize_yaml_if_needed",
     "_set_toml_value_handler",
     "_validate_and_write_content",

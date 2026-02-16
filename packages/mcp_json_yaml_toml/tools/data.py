@@ -11,6 +11,7 @@ from mcp_json_yaml_toml.models.responses import (  # noqa: TC001 — FastMCP res
     DataResponse,
     MutationResponse,
     SchemaResponse,
+    ServerInfoResponse,
 )
 from mcp_json_yaml_toml.server import mcp, schema_manager
 from mcp_json_yaml_toml.services.data_operations import (
@@ -57,7 +58,8 @@ def data(
         ),
     ] = None,
     data_type: Annotated[
-        Literal["data", "schema"], Field(description="Type for get: 'data' or 'schema'")
+        Literal["data", "schema", "meta"],
+        Field(description="Type for get: 'data', 'schema', or 'meta' (server info)"),
     ] = "data",
     return_type: Annotated[
         Literal["keys", "all"],
@@ -69,7 +71,7 @@ def data(
         Literal["json", "yaml", "toml"] | None, Field(description="Output format")
     ] = None,
     cursor: Annotated[str | None, Field(description="Pagination cursor")] = None,
-) -> DataResponse | SchemaResponse | MutationResponse:
+) -> DataResponse | SchemaResponse | MutationResponse | ServerInfoResponse:
     """Get, set, or delete data in JSON, YAML, or TOML files.
 
     Use when you need to get, set, or delete specific values or entire sections in a structured data file.
@@ -83,6 +85,13 @@ def data(
     - set: Update/create value at key_path (always writes to file)
     - delete: Remove key/element at key_path (always writes to file)
     """
+    if data_type == "meta":
+        from mcp_json_yaml_toml.services.get_operations import (  # noqa: PLC0415
+            _handle_meta_get,
+        )
+
+        return _handle_meta_get()
+
     path = resolve_file_path(file_path)
 
     schema_info = schema_manager.get_schema_info_for_file(path)
