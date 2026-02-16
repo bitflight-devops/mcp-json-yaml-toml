@@ -126,11 +126,13 @@ Plans:
 3. Edge cases covered: permissions, malformed input, resource cleanup
 4. Repetitive test data converted to parameterized tests
 5. verify_features.py test_hints() contains proper assertions
-   **Plans**: TBD
+
+**Plans**: 2 plans
 
 Plans:
 
-- [ ] 08-01: TBD
+- [ ] 08-01-PLAN.md — Fix assertions, refactor private method tests, convert to parametrize
+- [ ] 08-02-PLAN.md — Standardize test naming and add edge case coverage
 
 ## Progress
 
@@ -146,4 +148,4 @@ Phases execute in numeric order: 5 → 6 → 7 → 8
 | 5. Type Safety and DRY Foundation | v1.1      | 2/2            | Complete    | 2026-02-15 |
 | 6. Operational Safety             | v1.1      | 2/2            | Complete    | 2026-02-15 |
 | 7. Architecture Refactoring       | v1.1      | 2/2            | Complete    | 2026-02-15 |
-| 8. Test Quality                   | v1.1      | 0/TBD          | Not started | -          |
+| 8. Test Quality                   | v1.1      | 0/2            | Not started | -          |
