@@ -29,14 +29,14 @@ def _make_test_provider() -> tuple[TracerProvider, InMemorySpanExporter]:
 class TestGetTracer:
     """Tests for the get_tracer helper."""
 
-    def test_returns_tracer_object(self) -> None:
+    def test_get_tracer_when_called_then_returns_tracer_object(self) -> None:
         """get_tracer returns a tracer instance (no-op when no SDK configured)."""
         tracer = get_tracer()
         assert tracer is not None
         # Should be a proxy tracer or real tracer -- either way it has start_as_current_span
         assert hasattr(tracer, "start_as_current_span")
 
-    def test_tracer_creates_spans_with_sdk(self) -> None:
+    def test_get_tracer_when_sdk_configured_then_records_spans(self) -> None:
         """When SDK is configured, get_tracer returns a tracer that records spans."""
         provider, exporter = _make_test_provider()
         tracer = provider.get_tracer(_TRACER_NAME)
@@ -61,7 +61,7 @@ class TestYqExecuteSpan:
         """Create a test provider and monkeypatch get_tracer to use it."""
         return _make_test_provider()
 
-    def test_execute_yq_emits_span(
+    def test_execute_yq_when_json_query_then_emits_span(
         self, otel_capture: tuple[TracerProvider, InMemorySpanExporter], tmp_path: Path
     ) -> None:
         """execute_yq emits a 'yq.execute' span with expected attributes."""
@@ -100,7 +100,7 @@ class TestYqExecuteSpan:
         assert attrs["yq.returncode"] == 0
         exporter.clear()
 
-    def test_execute_yq_span_with_yaml_input(
+    def test_execute_yq_when_yaml_input_then_records_correct_format(
         self, otel_capture: tuple[TracerProvider, InMemorySpanExporter], tmp_path: Path
     ) -> None:
         """execute_yq records correct format attributes for YAML input."""
@@ -131,7 +131,7 @@ class TestYqExecuteSpan:
         assert attrs["yq.input_format"] == "yaml"
         exporter.clear()
 
-    def test_execute_yq_span_on_error(
+    def test_execute_yq_when_error_then_still_emits_span(
         self, otel_capture: tuple[TracerProvider, InMemorySpanExporter], tmp_path: Path
     ) -> None:
         """execute_yq still emits span even when yq returns an error."""

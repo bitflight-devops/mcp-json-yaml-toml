@@ -34,35 +34,43 @@ data_diff_fn = cast("Callable[..., DiffResponse]", server.data_diff)
 class TestComputeDiff:
     """Tests for the compute_diff service function."""
 
-    def test_identical_dicts_empty_diff(self) -> None:
+    def test_compute_diff_when_identical_dicts_then_returns_empty(self) -> None:
         """Identical dicts produce an empty diff dict."""
         result = compute_diff({"a": 1, "b": "hello"}, {"a": 1, "b": "hello"})
         assert result == {}
 
-    def test_value_changes(self) -> None:
+    def test_compute_diff_when_values_differ_then_returns_values_changed(self) -> None:
         """Changed values appear under values_changed."""
         result = compute_diff({"a": 1, "b": 2}, {"a": 1, "b": 99})
         assert "values_changed" in result
         assert len(result["values_changed"]) == 1
 
-    def test_added_keys(self) -> None:
+    def test_compute_diff_when_keys_added_then_returns_dictionary_item_added(
+        self,
+    ) -> None:
         """New keys in data2 appear under dictionary_item_added."""
         result = compute_diff({"a": 1}, {"a": 1, "b": 2})
         assert "dictionary_item_added" in result
 
-    def test_removed_keys(self) -> None:
+    def test_compute_diff_when_keys_removed_then_returns_dictionary_item_removed(
+        self,
+    ) -> None:
         """Keys absent in data2 appear under dictionary_item_removed."""
         result = compute_diff({"a": 1, "b": 2}, {"a": 1})
         assert "dictionary_item_removed" in result
 
-    def test_ignore_order_true_reordered_lists(self) -> None:
+    def test_compute_diff_when_ignore_order_true_then_reordered_lists_match(
+        self,
+    ) -> None:
         """Reordered lists produce empty diff when ignore_order=True."""
         result = compute_diff(
             {"items": [1, 2, 3]}, {"items": [3, 1, 2]}, ignore_order=True
         )
         assert result == {}
 
-    def test_ignore_order_false_reordered_lists(self) -> None:
+    def test_compute_diff_when_ignore_order_false_then_reordered_lists_differ(
+        self,
+    ) -> None:
         """Reordered lists produce differences when ignore_order=False."""
         result = compute_diff(
             {"items": [1, 2, 3]}, {"items": [3, 1, 2]}, ignore_order=False
@@ -78,7 +86,9 @@ class TestComputeDiff:
 class TestBuildDiffStatistics:
     """Tests for the build_diff_statistics service function."""
 
-    def test_counts_change_types(self) -> None:
+    def test_build_diff_statistics_when_mixed_changes_then_counts_each_type(
+        self,
+    ) -> None:
         """Statistics correctly count each change type."""
         diff_dict = {
             "values_changed": {"root['a']": {"old_value": 1, "new_value": 2}},
@@ -88,7 +98,7 @@ class TestBuildDiffStatistics:
         assert stats["values_changed"] == 1
         assert stats["dictionary_item_added"] == 2
 
-    def test_empty_diff_empty_stats(self) -> None:
+    def test_build_diff_statistics_when_empty_diff_then_returns_empty(self) -> None:
         """Empty diff dict produces empty statistics."""
         stats = build_diff_statistics({})
         assert stats == {}
@@ -102,12 +112,14 @@ class TestBuildDiffStatistics:
 class TestBuildDiffSummary:
     """Tests for the build_diff_summary service function."""
 
-    def test_no_differences(self) -> None:
+    def test_build_diff_summary_when_no_differences_then_says_identical(self) -> None:
         """When has_differences is False, summary says files are identical."""
         summary = build_diff_summary({}, has_differences=False)
         assert summary == "Files are identical"
 
-    def test_human_readable_string(self) -> None:
+    def test_build_diff_summary_when_has_differences_then_returns_readable_string(
+        self,
+    ) -> None:
         """Summary produces a comma-separated human-readable string."""
         stats = {"values_changed": 3, "dictionary_item_added": 1}
         summary = build_diff_summary(stats, has_differences=True)
@@ -123,7 +135,9 @@ class TestBuildDiffSummary:
 class TestDataDiffTool:
     """Tests for the data_diff MCP tool."""
 
-    def test_identical_json_files(self, tmp_path: Path) -> None:
+    def test_data_diff_when_identical_json_files_then_no_differences(
+        self, tmp_path: Path
+    ) -> None:
         """Identical JSON files produce has_differences=False."""
         data = {"server": {"host": "localhost", "port": 8080}}
         f1 = tmp_path / "a.json"
@@ -138,7 +152,9 @@ class TestDataDiffTool:
         assert result.statistics is None
         assert "identical" in result.summary.lower()
 
-    def test_different_json_files(self, tmp_path: Path) -> None:
+    def test_data_diff_when_different_json_files_then_has_differences(
+        self, tmp_path: Path
+    ) -> None:
         """Different JSON files produce has_differences=True with structured diff."""
         f1 = tmp_path / "a.json"
         f2 = tmp_path / "b.json"
@@ -153,7 +169,9 @@ class TestDataDiffTool:
         assert result.statistics.get("values_changed", 0) >= 1
         assert result.statistics.get("dictionary_item_added", 0) >= 1
 
-    def test_cross_format_json_vs_yaml(self, tmp_path: Path) -> None:
+    def test_data_diff_when_cross_format_same_content_then_no_differences(
+        self, tmp_path: Path
+    ) -> None:
         """Cross-format comparison (JSON vs YAML) with same content -> no diff."""
         f_json = tmp_path / "config.json"
         f_yaml = tmp_path / "config.yaml"
@@ -166,7 +184,9 @@ class TestDataDiffTool:
         assert result.file1_format == "json"
         assert result.file2_format == "yaml"
 
-    def test_cross_format_json_vs_yaml_different(self, tmp_path: Path) -> None:
+    def test_data_diff_when_cross_format_different_content_then_has_differences(
+        self, tmp_path: Path
+    ) -> None:
         """Cross-format comparison (JSON vs YAML) with different content -> has diff."""
         f_json = tmp_path / "config.json"
         f_yaml = tmp_path / "config.yaml"
@@ -178,7 +198,9 @@ class TestDataDiffTool:
         assert result.has_differences is True
 
     @pytest.mark.parametrize("missing", ["first", "second"])
-    def test_missing_file_raises_error(self, tmp_path: Path, missing: str) -> None:
+    def test_data_diff_when_missing_file_then_raises_error(
+        self, tmp_path: Path, missing: str
+    ) -> None:
         """Missing file raises ToolError regardless of position."""
         existing = tmp_path / "exists.json"
         existing.write_text("{}")
@@ -193,7 +215,9 @@ class TestDataDiffTool:
         with pytest.raises(ToolError, match="File not found"):
             data_diff_fn(*args)
 
-    def test_ignore_order_parameter(self, tmp_path: Path) -> None:
+    def test_data_diff_when_ignore_order_true_then_reordered_lists_match(
+        self, tmp_path: Path
+    ) -> None:
         """ignore_order=True makes reordered lists produce no diff."""
         f1 = tmp_path / "a.json"
         f2 = tmp_path / "b.json"
