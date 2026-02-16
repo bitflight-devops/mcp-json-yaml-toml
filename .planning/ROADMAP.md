@@ -107,12 +107,12 @@ Plans:
 3. Production code imports from backends modules instead of yq_wrapper.py shim
 4. server.py **all** contains only public API symbols
 5. Tools accept schema_manager as parameter instead of using module singleton
-   **Plans**: TBD
+   **Plans**: 2 plans
 
 Plans:
 
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
+- [ ] 07-01: data_operations.py split and yq_wrapper import migration
+- [ ] 07-02: schemas.py split, server.py **all** cleanup, schema_manager parameterization
 
 #### Phase 8: Test Quality
 
