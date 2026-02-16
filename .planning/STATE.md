@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 Phase: 8 of 8 (Test Quality)
 Plan: 2 of 2 complete
 Status: Phase 08 complete
-Last activity: 2026-02-16 -- Completed 08-02 Test naming standardization and edge cases
+Last activity: 2026-02-16 -- Completed quick task 1: Add data_type=meta support to data tool for server info
 
 Progress: [██████████] 100% (v1.0 complete: 4 phases, v1.1: 5/4 phases + 08 complete)
 
@@ -84,6 +84,12 @@ From .planning/todos/pending/ -- 4 pending todos:
 ### Blockers/Concerns
 
 None yet.
+
+### Quick Tasks Completed
+
+| #   | Description                                             | Date       | Commit  | Directory                                                                                         |
+| --- | ------------------------------------------------------- | ---------- | ------- | ------------------------------------------------------------------------------------------------- |
+| 1   | Add data_type=meta support to data tool for server info | 2026-02-16 | f079d37 | [1-add-data-type-meta-support-to-data-tool-](./quick/1-add-data-type-meta-support-to-data-tool-/) |
 
 ## Session Continuity
 
