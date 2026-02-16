@@ -5,24 +5,24 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** AI assistants can safely read and modify structured configuration files without destroying formatting, comments, or file structure.
-**Current focus:** Phase 7 (in progress)
+**Current focus:** Phase 7 complete, ready for Phase 8
 
 ## Current Position
 
-Phase: 7 of 8 (Architecture Refactoring) - IN PROGRESS
-Plan: 1 of 2 complete
-Status: Plan 07-01 complete
-Last activity: 2026-02-16 — Completed 07-01 Module split and import migration
+Phase: 7 of 8 (Architecture Refactoring) - COMPLETE
+Plan: 2 of 2 complete
+Status: Phase 07 complete
+Last activity: 2026-02-16 -- Completed 07-02 Schema package split, server cleanup, handler parameterization
 
-Progress: [████████░░] 81% (v1.0 complete: 4 phases, v1.1: 3.5/4 phases)
+Progress: [█████████░] 88% (v1.0 complete: 4 phases, v1.1: 4/4 phases)
 
 ## Performance Metrics
 
 **v1.0 Velocity:**
 
-- Total plans completed: 14 (v1.0) + 5 (v1.1) = 19
+- Total plans completed: 14 (v1.0) + 7 (v1.1) = 21
 - Average duration: 9min
-- Total execution time: 165min
+- Total execution time: 182min
 
 **By Phase (v1.0):**
 
@@ -34,7 +34,7 @@ Progress: [████████░░] 81% (v1.0 complete: 4 phases, v1.1: 3
 | 04    | 2     | 25min | 13min    |
 | 05    | 2     | 26min | 13min    |
 | 06    | 2     | 11min | 6min     |
-| 07    | 1     | 5min  | 5min     |
+| 07    | 2     | 17min | 9min     |
 
 _Updated after each plan completion_
 
@@ -45,7 +45,7 @@ _Updated after each plan completion_
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- **Skip research for v1.1**: Internal quality work — code review reports already document all patterns and locations
+- **Skip research for v1.1**: Internal quality work -- code review reports already document all patterns and locations
 - **Layered architecture**: Extract backends, formats, models, services, tools from monolithic server.py (v1.0)
 - **FastMCP 3.x migration**: Upgrade after architecture refactoring to minimize migration surface (v1.0)
 - **60s timeout for file-processing tools, 10s for in-memory tools** (v1.0)
@@ -61,15 +61,18 @@ Recent decisions affecting current work:
 - **Autouse cache fixture for test isolation**: \_clear_config_cache runs before/after every test regardless of fixture usage (v1.1 06-02)
 - **Facade pattern for module splitting**: data_operations.py re-exports from focused sub-modules; server.py imports from facade (v1.1 07-01)
 - **Direct backend imports in production**: Types from backends.base, functions from backends.yq; yq_wrapper shim only for test compat (v1.1 07-01)
+- **Package splitting with re-export facade**: schemas/ package with **init**.py re-exporting all symbols for backward compat (v1.1 07-02)
+- **PLC2701 per-file-ignore for intra-package imports**: Intra-package private imports expected after splitting monolith (v1.1 07-02)
+- **Handler dependency injection**: Tool handlers accept schema_manager as parameter for testability (v1.1 07-02)
 
 ### Pending Todos
 
-From .planning/todos/pending/ — 4 pending todos:
+From .planning/todos/pending/ -- 4 pending todos:
 
-1. **Fix systemic code quality issues** (area: services) — dict returns, DRY violations, exception patterns, print logging
-2. **Refactor god modules and deprecated shims** (area: services) — split data_operations.py/schemas.py, migrate yq_wrapper imports
-3. **Improve test quality and coverage gaps** (area: testing) — private method tests, behavioral naming, edge case coverage
-4. **Integrate loguru for structured logging** (area: services) — evaluate loguru vs stdlib logging for Phase 6 print() replacement
+1. **Fix systemic code quality issues** (area: services) -- dict returns, DRY violations, exception patterns, print logging
+2. **Refactor god modules and deprecated shims** (area: services) -- split data_operations.py/schemas.py, migrate yq_wrapper imports
+3. **Improve test quality and coverage gaps** (area: testing) -- private method tests, behavioral naming, edge case coverage
+4. **Integrate loguru for structured logging** (area: services) -- evaluate loguru vs stdlib logging for Phase 6 print() replacement
 
 ### Blockers/Concerns
 
@@ -78,5 +81,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16 (plan execution)
-Stopped at: Completed 07-01-PLAN.md
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None
