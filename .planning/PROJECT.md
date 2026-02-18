@@ -46,7 +46,11 @@ AI assistants can safely read and modify structured configuration files without 
 
 ### Active
 
-(No active requirements — run `/gsd:new-milestone` to define next milestone)
+#### M3 Logging & Validation
+
+- [ ] Replace stdlib logging with loguru across the entire codebase
+- [ ] Schema validation returns JSON path, validator keyword, and all errors (not first-only)
+- [ ] Pre-write syntax and schema validation for CRUD operations (GH#1)
 
 ### Out of Scope
 
@@ -57,14 +61,13 @@ AI assistants can safely read and modify structured configuration files without 
 
 ## Context
 
-The project is mature and production-deployed. Two milestones shipped:
+The project is mature and production-deployed. Three milestones:
 
 - **v1.0** (2026-02-14): Full architecture refactoring from monolithic server.py to layered architecture with FastMCP 3.x. 4 phases, 12 plans.
 - **v1.1** (2026-02-17): Internal quality remediation — type safety, DRY extraction, god module splits, test standardization. 4 phases, 8 plans.
+- **M3** (active): Loguru logging replacement and schema validation improvements.
 
 **Codebase:** 14,647 LOC Python, 428 tests at 82.5% coverage. Comprehensive linting (ruff, mypy, basedpyright). Uses hatchling for builds with hatch-vcs for versioning.
-
-**Pending todos:** `.planning/todos/pending/` contains 7 structured todos for future work (loguru evaluation, schema validation errors, pre-write validation, multi-document YAML).
 
 ## Constraints
 
@@ -75,21 +78,21 @@ The project is mature and production-deployed. Two milestones shipped:
 
 ## Key Decisions
 
-| Decision                        | Rationale                                                                                    | Outcome |
-| ------------------------------- | -------------------------------------------------------------------------------------------- | ------- |
-| Research before building        | Domain is evolving (FastMCP 3, dasel ecosystem) — need current information before committing | ✓ Good  |
-| Keep existing tool names        | Production clients depend on current API surface                                             | ✓ Good  |
-| Stay on yq                      | dasel destroys comments and anchors, eliminating it as backend alternative                   | ✓ Good  |
-| Layered architecture            | Extract backends, formats, models, services, tools from monolithic server.py                 | ✓ Good  |
-| FastMCP 3.x migration           | Upgrade after architecture refactoring to minimize migration surface                         | ✓ Good  |
-| Skip research for v1.1          | Internal quality work — code review reports already document all patterns and locations      | ✓ Good  |
-| Selective DRY extraction        | Directory paths and output paths kept inline; only input file paths use resolve_file_path()  | ✓ Good  |
-| Facade pattern for splits       | data_operations.py and schemas/ use re-export facades for backward compat                    | ✓ Good  |
-| stdlib logging over loguru      | Matches existing architecture for binary_manager.py, no new dependency                       | ✓ Good  |
-| Handler dependency injection    | Tool handlers accept schema_manager as parameter for testability                             | ✓ Good  |
-| Callable cast for FastMCP tests | FunctionTool not callable in FastMCP 3.x — cast("Callable[..., Any]") pattern                | ✓ Good  |
-| Public API tests                | Route through public API (e.g., \_build_ide_schema_index) instead of testing private methods | ✓ Good  |
+| Decision                        | Rationale                                                                                    | Outcome    |
+| ------------------------------- | -------------------------------------------------------------------------------------------- | ---------- |
+| Research before building        | Domain is evolving (FastMCP 3, dasel ecosystem) — need current information before committing | ✓ Good     |
+| Keep existing tool names        | Production clients depend on current API surface                                             | ✓ Good     |
+| Stay on yq                      | dasel destroys comments and anchors, eliminating it as backend alternative                   | ✓ Good     |
+| Layered architecture            | Extract backends, formats, models, services, tools from monolithic server.py                 | ✓ Good     |
+| FastMCP 3.x migration           | Upgrade after architecture refactoring to minimize migration surface                         | ✓ Good     |
+| Skip research for v1.1          | Internal quality work — code review reports already document all patterns and locations      | ✓ Good     |
+| Selective DRY extraction        | Directory paths and output paths kept inline; only input file paths use resolve_file_path()  | ✓ Good     |
+| Facade pattern for splits       | data_operations.py and schemas/ use re-export facades for backward compat                    | ✓ Good     |
+| stdlib logging over loguru      | Matches existing architecture for binary_manager.py, no new dependency                       | ⚠️ Revisit |
+| Handler dependency injection    | Tool handlers accept schema_manager as parameter for testability                             | ✓ Good     |
+| Callable cast for FastMCP tests | FunctionTool not callable in FastMCP 3.x — cast("Callable[..., Any]") pattern                | ✓ Good     |
+| Public API tests                | Route through public API (e.g., \_build_ide_schema_index) instead of testing private methods | ✓ Good     |
 
 ---
 
-_Last updated: 2026-02-17 after v1.1 milestone completion_
+_Last updated: 2026-02-17 after M3 milestone start_

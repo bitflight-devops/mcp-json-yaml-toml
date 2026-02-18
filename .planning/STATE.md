@@ -5,15 +5,13 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** AI assistants can safely read and modify structured configuration files without destroying formatting, comments, or file structure.
-**Current focus:** Planning next milestone
+**Current focus:** M3 Logging & Validation — defining requirements
 
 ## Current Position
 
-Milestone: v1.1 Internal Quality — SHIPPED 2026-02-17
-Status: Between milestones
-Last activity: 2026-02-17 — Completed v1.1 milestone archival
-
-Progress: [██████████] 100% (v1.0: 4 phases, v1.1: 4 phases — both complete)
+Milestone: M3 Logging & Validation
+Status: Defining requirements
+Last activity: 2026-02-17 — Milestone M3 started
 
 ## Performance Metrics
 
