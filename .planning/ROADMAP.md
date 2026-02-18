@@ -52,12 +52,12 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 2. InterceptHandler captures `mcp_json_yaml_toml.*` namespace stdlib loggers and routes them to loguru (not root logger)
 3. `mypy` and `basedpyright` pass cleanly after adding loguru dependency
 4. pytest caplog fixture works with loguru -- existing tests that use caplog continue to pass
-   **Plans**: TBD
+   **Plans**: 2 plans
 
 Plans:
 
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
+- [ ] 09-01-PLAN.md -- Install loguru, create logging.py with configure_logging() and InterceptHandler, wire **init**.py, verify type checkers
+- [ ] 09-02-PLAN.md -- Override caplog fixture in conftest.py for loguru compatibility, run full quality gate
 
 ### Phase 10: Logger Migration
 
