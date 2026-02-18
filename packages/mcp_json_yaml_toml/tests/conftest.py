@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from loguru import logger
 
 from mcp_json_yaml_toml.config import parse_enabled_formats
 from mcp_json_yaml_toml.tests.mcp_protocol_client import MCPClient
@@ -19,6 +20,7 @@ from mcp_json_yaml_toml.tests.mcp_protocol_client import MCPClient
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    from _pytest.logging import LogCaptureFixture
     from pytest_mock import MockerFixture
 
 # ==============================================================================
@@ -367,6 +369,33 @@ def multi_format_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.setenv("MCP_CONFIG_FORMATS", "json,yaml,toml")
     parse_enabled_formats.cache_clear()
+
+
+# ==============================================================================
+# Logging Fixtures
+# ==============================================================================
+
+
+@pytest.fixture
+def caplog(caplog: LogCaptureFixture) -> Generator[LogCaptureFixture, None, None]:
+    """Override caplog to capture loguru output.
+
+    Routes loguru messages to pytest's caplog handler so that
+    caplog.text, caplog.records, and caplog.at_level() work as expected.
+    This is the official loguru-recommended pattern for pytest integration.
+
+    The filter lambda respects caplog.at_level() calls by checking the
+    loguru record level against the caplog handler's current level.
+    """
+    handler_id = logger.add(
+        caplog.handler,
+        format="{message}",
+        level=0,
+        filter=lambda record: record["level"].no >= caplog.handler.level,
+        enqueue=False,  # Immediate delivery for test assertions
+    )
+    yield caplog
+    logger.remove(handler_id)
 
 
 # ==============================================================================
