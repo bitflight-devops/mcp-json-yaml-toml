@@ -5,13 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** AI assistants can safely read and modify structured configuration files without destroying formatting, comments, or file structure.
-**Current focus:** M3 Logging & Validation — defining requirements
+**Current focus:** M3 Logging & Validation -- Phase 9 Logging Infrastructure
 
 ## Current Position
 
 Milestone: M3 Logging & Validation
-Status: Defining requirements
-Last activity: 2026-02-17 — Milestone M3 started
+Phase: 9 of 12 (Logging Infrastructure)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-02-17 -- Roadmap created for M3
+
+Progress: [████████████████████░░░░░░░░░░] 67% (20/~30 plans est.)
 
 ## Performance Metrics
 
@@ -39,20 +43,16 @@ Last activity: 2026-02-17 — Milestone M3 started
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- M3: Two independent tracks (logging, validation) can be parallelized
+- M3: Targeted InterceptHandler for `mcp_json_yaml_toml.*` namespace only (not root logger)
+- M3: Type checker gate in Phase 9 before proceeding with migration
 
 ### Pending Todos
 
-From .planning/todos/pending/ -- 7 pending todos:
-
-1. **Fix systemic code quality issues** (area: services) -- dict returns, DRY violations, exception patterns, print logging
-2. **Refactor god modules and deprecated shims** (area: services) -- split data_operations.py/schemas.py, migrate yq_wrapper imports
-3. **Improve test quality and coverage gaps** (area: testing) -- private method tests, behavioral naming, edge case coverage
-4. **Integrate loguru for structured logging** (area: services) -- evaluate loguru vs stdlib logging for Phase 6 print() replacement
-5. **Improve schema validation error reporting** (area: services) -- return JSON path, validator keyword, and all errors instead of first-only message string
-6. **Pre-write syntax and schema validation for CRUD operations** (area: services) -- GH#1: validate before writing to disk, add skip_validation param
-7. **Multi-document YAML file handling** (area: services) -- GH#6: parse/query/edit multi-doc YAML, per-document schema validation
-
-Note: Todos 1-3 overlap with v1.1 work already completed. Review and close during next milestone planning.
+From .planning/todos/pending/ -- 7 pending todos.
+Todos 1-3 overlap with completed v1.1 work. Todos 4-6 addressed by M3 requirements. Todo 7 (multi-doc YAML) deferred to future milestone.
 
 ### Blockers/Concerns
 
@@ -66,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-17 (milestone completion)
-Stopped at: Completed v1.1 milestone archival
+Last session: 2026-02-17
+Stopped at: M3 roadmap created, ready to plan Phase 9
 Resume file: None

@@ -44,28 +44,28 @@ Requirements for M3 Logging & Validation milestone. Each maps to roadmap phases.
 
 ## Traceability
 
-| Requirement | Phase   | Status  |
-| ----------- | ------- | ------- |
-| LOG-01      | Pending | Pending |
-| LOG-02      | Pending | Pending |
-| LOG-03      | Pending | Pending |
-| LOG-04      | Pending | Pending |
-| LOG-05      | Pending | Pending |
-| LOG-06      | Pending | Pending |
-| SCHV-01     | Pending | Pending |
-| SCHV-02     | Pending | Pending |
-| SCHV-03     | Pending | Pending |
-| SCHV-04     | Pending | Pending |
-| SCHV-05     | Pending | Pending |
-| SCHV-06     | Pending | Pending |
+| Requirement | Phase    | Status  |
+| ----------- | -------- | ------- |
+| LOG-01      | Phase 10 | Pending |
+| LOG-02      | Phase 9  | Pending |
+| LOG-03      | Phase 9  | Pending |
+| LOG-04      | Phase 10 | Pending |
+| LOG-05      | Phase 9  | Pending |
+| LOG-06      | Phase 9  | Pending |
+| SCHV-01     | Phase 11 | Pending |
+| SCHV-02     | Phase 11 | Pending |
+| SCHV-03     | Phase 11 | Pending |
+| SCHV-04     | Phase 11 | Pending |
+| SCHV-05     | Phase 12 | Pending |
+| SCHV-06     | Phase 12 | Pending |
 
 **Coverage:**
 
 - M3 requirements: 12 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 12
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 
 _Requirements defined: 2026-02-17_
-_Last updated: 2026-02-17 after initial definition_
+_Last updated: 2026-02-17 after roadmap creation_
