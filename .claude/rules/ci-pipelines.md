@@ -7,6 +7,26 @@ paths:
 
 Read workflow files before making claims about what they do. Do not infer behavior from filenames.
 
+## Verification After Pushing to Main
+
+After any push to main, verify the pipeline completed and a release was created:
+
+```bash
+# Check latest workflow run status
+gh run list --workflow=test.yml --limit 3
+
+# Check if the release job ran (not skipped/cancelled)
+gh run view <run-id> --json jobs --jq '.jobs[] | select(.name == "Tag and Release") | {status, conclusion}'
+
+# Check latest releases match the work done
+gh release list --limit 5
+
+# Compare: latest release tag should reflect recent conventional commits
+gh api repos/{owner}/{repo}/tags --jq '.[0:5] | .[].name'
+```
+
+If the release job was skipped or cancelled, investigate which prerequisite job failed. The release job requires ALL quality gate jobs to pass.
+
 ## Release Pipeline (push to main → PyPI)
 
 ```
@@ -60,3 +80,7 @@ Triggers: weekly cron (Monday 9:00 UTC), manual dispatch.
 5. Runs `pytest -x -q` against new version (lines 131-139)
 6. Creates PR if tests pass (lines 141-175)
 7. Reports failure if tests fail (lines 177-183)
+
+## Known Issues
+
+**Windows test hangs (as of 2026-02-17):** All 4 Windows matrix jobs (Python 3.11-3.14) hang indefinitely during the "Run tests with coverage" step — no pytest output is produced, and jobs run until the 6-hour GitHub Actions timeout. This blocks the `release` job on every push to main. Linux and macOS jobs pass. No automatic release has been created since v0.8.0 (2026-02-01).
