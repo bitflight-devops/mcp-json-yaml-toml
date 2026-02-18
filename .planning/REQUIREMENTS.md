@@ -10,11 +10,11 @@ Requirements for M3 Logging & Validation milestone. Each maps to roadmap phases.
 ### Logging
 
 - [ ] **LOG-01**: Application uses loguru for all logging (replaces stdlib logging in 3 files, ~18 call sites)
-- [ ] **LOG-02**: Centralized logging configuration via `logging.py` module with `configure_logging()`
-- [ ] **LOG-03**: InterceptHandler captures project-namespace stdlib loggers (`mcp_json_yaml_toml.*`) and routes to loguru
+- [x] **LOG-02**: Centralized logging configuration via `logging.py` module with `configure_logging()`
+- [x] **LOG-03**: InterceptHandler captures project-namespace stdlib loggers (`mcp_json_yaml_toml.*`) and routes to loguru
 - [ ] **LOG-04**: FastMCP LoggingMiddleware added for MCP request/response protocol logging
 - [ ] **LOG-05**: pytest caplog fixture overridden in conftest.py for loguru compatibility
-- [ ] **LOG-06**: All logging writes to stderr only (MCP stdout protocol safety)
+- [x] **LOG-06**: All logging writes to stderr only (MCP stdout protocol safety)
 
 ### Schema Validation
 
@@ -44,20 +44,20 @@ Requirements for M3 Logging & Validation milestone. Each maps to roadmap phases.
 
 ## Traceability
 
-| Requirement | Phase    | Status  |
-| ----------- | -------- | ------- |
-| LOG-01      | Phase 10 | Pending |
-| LOG-02      | Phase 9  | Pending |
-| LOG-03      | Phase 9  | Pending |
-| LOG-04      | Phase 10 | Pending |
-| LOG-05      | Phase 9  | Pending |
-| LOG-06      | Phase 9  | Pending |
-| SCHV-01     | Phase 11 | Pending |
-| SCHV-02     | Phase 11 | Pending |
-| SCHV-03     | Phase 11 | Pending |
-| SCHV-04     | Phase 11 | Pending |
-| SCHV-05     | Phase 12 | Pending |
-| SCHV-06     | Phase 12 | Pending |
+| Requirement | Phase    | Status   |
+| ----------- | -------- | -------- |
+| LOG-01      | Phase 10 | Pending  |
+| LOG-02      | Phase 9  | Complete |
+| LOG-03      | Phase 9  | Complete |
+| LOG-04      | Phase 10 | Pending  |
+| LOG-05      | Phase 9  | Pending  |
+| LOG-06      | Phase 9  | Complete |
+| SCHV-01     | Phase 11 | Pending  |
+| SCHV-02     | Phase 11 | Pending  |
+| SCHV-03     | Phase 11 | Pending  |
+| SCHV-04     | Phase 11 | Pending  |
+| SCHV-05     | Phase 12 | Pending  |
+| SCHV-06     | Phase 12 | Pending  |
 
 **Coverage:**
 
