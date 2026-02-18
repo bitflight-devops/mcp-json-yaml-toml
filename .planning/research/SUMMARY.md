@@ -1,250 +1,91 @@
-# Project Research Summary
+# Research Summary: Loguru Logging + Enhanced Schema Validation
 
-**Project:** mcp-json-yaml-toml MCP server upgrade/enhancement
-**Domain:** MCP server for structured data manipulation (JSON/YAML/TOML)
-**Researched:** 2026-02-14
-**Confidence:** MEDIUM-HIGH
+**Domain:** MCP server instrumentation and schema validation improvements
+**Researched:** 2026-02-17
+**Overall confidence:** HIGH
 
 ## Executive Summary
 
-This project is an MCP server providing advanced structured data manipulation for JSON, YAML, and TOML files through a unified query interface. The research reveals a mature codebase with strong format preservation capabilities but significant architectural technical debt (1880-line server.py god module, 934-line binary wrapper) and a critical decision point: FastMCP 3.x upgrade and potential backend migration.
+This research covers two independent feature areas for a subsequent milestone on the mcp-json-yaml-toml server: replacing stdlib logging with loguru structured logging, and enhancing JSON Schema validation to report all errors with JSON path locations.
 
-The recommended approach is phased architectural refactoring followed by selective feature enhancement. Priority 1 is extracting backend abstraction and splitting the god module into a layered architecture (tools/, services/, backends/, formats/) while maintaining format preservation as the core differentiator. Priority 2 is upgrading to FastMCP 3.x when stable (currently 3.0.0rc2), unlocking automatic threadpool execution, tool timeouts, and structured output. The dasel backend evaluation shows it destroys YAML/TOML comments on write — a dealbreaker that eliminates backend migration as viable. Stay with yq for query/read operations and maintain ruamel.yaml/tomlkit for write operations.
+The loguru replacement requires adding a single new runtime dependency (`loguru>=0.7.3`) and migrating 3 files with ~18 stdlib logging call sites. The critical integration challenge is FastMCP's independent logging configuration -- FastMCP creates its own `fastmcp` logger namespace with `propagate=False` and `RichHandler` on stderr. The standard loguru InterceptHandler pattern (intercepting the root logger) will NOT capture FastMCP logs and may cause conflicts. The correct approach is targeted interception of only the project's own `mcp_json_yaml_toml` namespace, leaving FastMCP's logging untouched.
 
-Key risks are comment/anchor destruction during any write-path refactoring, breaking existing client tool names, and expression syntax incompatibility if backend changes are attempted. Mitigation centers on format preservation test gates, tool name stability contracts, and keeping the abstraction layer while maintaining yq as the backend. The architecture research provides a clear six-phase build order with independent deliverables and test gates.
+The schema validation enhancement requires zero new dependencies. The installed `jsonschema>=4.26.0` already provides `iter_errors()` for collecting all validation errors, `ValidationError.json_path` for RFC 9535 JSON Path notation (e.g., `$.database.port`), and `best_match()` for identifying the most relevant error. All of these were verified by direct execution against the installed package in the project's virtual environment. The implementation changes exactly one core function (`_validate_against_schema`) and updates two callers.
+
+Both features are independent -- they can be built in parallel or either order. However, implementing loguru first provides structured logging for debugging the schema validation changes.
 
 ## Key Findings
 
-### Recommended Stack
+**Stack:** Add `loguru>=0.7.3` as the sole new runtime dependency. Zero new dependencies for schema validation -- `jsonschema 4.26.0` already has `iter_errors()`, `json_path`, and `best_match()`.
 
-The current stack is sound and should be maintained with selective upgrades. FastMCP 3.x (when stable) is the only significant upgrade needed. The dasel backend switch is explicitly NOT recommended due to comment preservation failures.
+**Architecture:** New `logging.py` module for centralized loguru configuration. Modified `_validate_against_schema()` returning `ValidationResult` dataclass instead of `tuple[bool, str]`. Two callers updated. No architectural changes -- features slot into existing layered structure.
 
-**Core technologies:**
-
-- **FastMCP 2.14.4 → 3.0.0 (when stable):** MCP framework — v3 adds automatic threadpool for sync tools (eliminates subprocess blocking), tool timeouts, component versioning, and structured output support
-- **yq (mikefarah) v4.52.2:** Query backend — jq-compatible syntax well-understood by LLMs, mature, stable. Do NOT replace with dasel.
-- **ruamel.yaml >=0.18.0,<0.19:** YAML write operations — only Python library preserving comments and anchors. Pin <0.19 to avoid build issues.
-- **tomlkit >=0.14.0:** TOML write operations — preserves comments, formatting, and ordering. Required because yq cannot write TOML.
-- **orjson >=3.11.6:** JSON parsing — 3-10x faster than stdlib, already in dependencies
-
-**Supporting decisions:**
-
-- Reject dasel as backend (destroys comments/anchors on write)
-- Defer pure Python backend to Phase 2 evaluation (requires expression translation layer)
-- Maintain binary management pattern (download/verify/cache) for yq
-- Keep dual-library write path (ruamel.yaml for YAML, tomlkit for TOML) as correct architecture
-
-### Expected Features
-
-Current server ships 7 tools (data, data_query, data_schema, data_convert, data_merge, constraint_validate, constraint_list) with strong capabilities but incomplete MCP spec compliance and missing competitive features.
-
-**Must have (table stakes):**
-
-- **Structured output (outputSchema)** — MCP 2025-06-18 spec requirement. Clients need typed tool results. FastMCP 3.x auto-generates this from Pydantic response models.
-- **Complete tool annotations** — MCP 2025-06-18. Add idempotentHint on GET operations, openWorldHint=False globally. Currently partial (readOnlyHint only).
-- **Full bidirectional format conversion** — JSON↔YAML↔TOML. Currently blocked by yq's TOML write limitation. Fix with tomlkit Python-native encoding.
-- **JSON Schema 2020-12 as default** — MCP 2025-11-25 spec mandates this. Currently defaults to Draft 7. One-line fix.
-
-**Should have (competitive):**
-
-- **Config file diffing** — New data_diff tool. High user value, no existing MCP server does this. Independent of backend.
-- **Expanded format support (INI/HCL)** — DevOps users need these. yq supports HCL/properties. Defer until demand confirmed.
-- **Tool versioning** — FastMCP 3.x feature. Serve v1 and v2 tools side-by-side during API evolution (e.g., expression syntax changes).
-- **OpenTelemetry observability** — FastMCP 3.x native instrumentation. Production deployments need tracing. Drop-in config.
-
-**Defer (v2+):**
-
-- **Elicitation support** — Human-in-the-loop workflows. FastMCP 3.x supports this, but UX design is complex and protocol adoption is sparse.
-- **Async tasks** — Only matters for very large files (>10MB) or directory operations. Current pagination handles typical cases.
-- **Multi-file query** — Powerful but requires careful pagination design for cross-file results.
-- **Native Python parsing** — Eliminate subprocess overhead by using pure Python. High migration cost, requires expression translation layer.
-
-### Architecture Approach
-
-Current architecture suffers from god module anti-pattern (server.py: 1880 lines, 7 responsibilities) and tight coupling to yq binary. Target architecture separates concerns into five layers: transport (FastMCP), tool registration (thin decorators), service logic (format routing, validation), backend abstraction (query execution), and format handlers (parse/serialize per format).
-
-**Major components:**
-
-1. **tools/ layer (5 files)** — Thin @mcp.tool decorators with parameter validation only. Delegates to services. Under 100 lines per file.
-2. **services/ layer** — data_service.py (format routing, schema orchestration), pagination.py (cursor handling), response_builder.py (consistent output). Business logic with zero FastMCP dependency.
-3. **backends/ layer** — QueryBackend protocol, YqBackend implementation, BinaryManager (extracted from yq_wrapper.py). Abstraction boundary enabling future backend swaps without touching tools or services.
-4. **formats/ layer** — FormatHandler protocol, json_handler.py (orjson), yaml_handler.py (ruamel.yaml + optimizer), toml_handler.py (tomlkit). Centralizes format-specific parsing and serialization logic.
-5. **Domain services (unchanged)** — schemas.py (Schema Store), lmql_constraints.py (constraint registry), config.py (environment settings).
-
-**Key patterns:**
-
-- Backend Protocol (Strategy Pattern): QueryBackend interface decouples 14 execute_yq() call sites from implementation
-- Format Handler Registry: Each format owns parse/serialize, eliminating scattered if-format-is-toml branching
-- Thin Tool Registration: Tool functions contain only validation, business logic lives in services
-
-### Critical Pitfalls
-
-1. **Dasel destroys YAML/TOML comments on write** — dasel uses Go parsers that discard comments. Switching write backend destroys the core differentiator. Avoid by: never using dasel for write operations; keep ruamel.yaml/tomlkit write paths.
-2. **Dasel cannot preserve YAML anchors/aliases** — The yaml_optimizer.py module (372 lines) creates anchors to deduplicate structures. dasel expands anchors on write. Avoid by: maintaining YAML write pipeline through ruamel.yaml.
-3. **MCP tool name changes cause silent client failures** — Production MCP clients maintain tool allowlists. Renamed tools silently disappear from LLM agent. Avoid by: treating tool names as immutable public API; add new tools, never rename.
-4. **yq expression syntax incompatible with dasel selectors** — data_query exposes yq jq-like expressions. dasel uses CSS-like selectors. No automatic translation. Avoid by: if adopting dasel, require expression translation layer; or use dasel only for read/convert, keep yq for queries.
-5. **FastMCP 3.0 decorator behavior change breaks tests** — v2.x decorators return FunctionTool objects, v3.x returns functions. Test mocking may break. Avoid by: audit tests for FunctionTool assumptions; use FASTMCP_DECORATOR_MODE=object bridge during migration.
+**Critical pitfall:** FastMCP's logging system fights the standard loguru InterceptHandler. FastMCP sets `propagate=False` on its logger and strips injected handlers on reconfiguration. Intercept only the project's own loggers, not the root logger.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure follows architectural dependencies with independent deliverables and test gates:
+Based on research, suggested phase structure for this milestone:
 
-### Phase 1: Extract Utilities & Backend Abstraction
+1. **Phase 1: Logging Infrastructure** - Create `logging.py` with InterceptHandler and `configure_logging()`. Add loguru dependency. Verify type checkers pass.
+   - Addresses: Centralized logging foundation
+   - Avoids: FastMCP logging conflict (targeted interception, not root interception)
 
-**Rationale:** Foundation for all subsequent work. Reduces server.py complexity without behavior changes. Enables parallel development on services and backends.
-**Delivers:**
+2. **Phase 2: Stdlib Logging Migration** - Replace `import logging` in 3 files with `from loguru import logger`. Update format strings from `%s` to `{}`.
+   - Addresses: Unified structured logging across all modules
+   - Avoids: caplog fixture breakage (add loguru-caplog bridge in conftest.py first)
 
-- services/pagination.py (cursor handling, 130-215 lines extracted)
-- services/response_builder.py (consistent responses)
-- formats/base.py (FormatType enum, detection logic)
-- backends/base.py (QueryBackend protocol)
-- backends/binary_manager.py (extracted from yq_wrapper.py)
-- backends/yq.py (YqBackend implementing protocol)
-- yq_wrapper.py becomes backward-compatible shim
-  **Addresses:** Architecture Technical Debt (god module)
-  **Avoids:** Pitfall #2 (binary management in execution module)
-  **Research needs:** SKIP — well-documented patterns, existing code provides reference
+3. **Phase 3: Schema Validation Models** - Create `SchemaValidationError` and `ValidationResult` dataclasses. Update `ValidationResponse` model.
+   - Addresses: Structured error output foundation
+   - Avoids: API contract breakage (`.message` property preserves backward compatibility)
 
-### Phase 2: Format Handlers & Service Layer
+4. **Phase 4: Enhanced Validation Logic** - Replace `validate()` with `iter_errors()` in `_validate_against_schema()`. Update callers in mutation_operations.py and tools/schema.py.
+   - Addresses: All-errors reporting, JSON path in errors, pre-write validation enhancement
+   - Avoids: Error message overwhelming (cap at 20 errors, sort by relevance)
 
-**Rationale:** Centralizes format-specific logic scattered across 4+ files. Prerequisite for unified TOML handling and full bidirectional conversion.
-**Delivers:**
+**Phase ordering rationale:**
 
-- formats/json_handler.py, yaml_handler.py, toml_handler.py (FormatHandler implementations)
-- services/data_service.py (query, set_value, delete_value, convert, merge functions)
-- Absorbs toml_utils.py into formats/toml_handler.py
-- Absorbs yaml_optimizer.py into formats/yaml_handler.py
-  **Uses:** Backend abstraction from Phase 1
-  **Implements:** Format Handler Registry pattern
-  **Addresses:** Full Bidirectional Conversion (TOML encoding fix)
-  **Avoids:** Pitfall #1 (comment destruction) via explicit format preservation tests
-  **Research needs:** SKIP — existing code demonstrates pattern
+- Phases 1-2 (logging) and Phases 3-4 (schema validation) are independent tracks
+- Phase 1 before Phase 2: InterceptHandler must be configured before removing stdlib logging
+- Phase 3 before Phase 4: ValidationResult model must exist before the function can return it
+- Both tracks can run in parallel
 
-### Phase 3: Split Tool Registration & Pydantic Models
+**Research flags for phases:**
 
-**Rationale:** Reduces server.py to <50 lines, enables independent tool testing. Pydantic response models are prerequisite for structured output in Phase 5.
-**Delivers:**
-
-- tools/data.py, query.py, schema.py, convert.py, constraints.py (thin decorators)
-- Pydantic response models for all tool return types
-- server.py becomes entry point (FastMCP init + tool registration imports)
-  **Uses:** Service layer from Phase 2
-  **Implements:** Thin Tool Registration pattern
-  **Addresses:** Complete Tool Annotations (idempotentHint, openWorldHint), Structured Output foundation
-  **Avoids:** Pitfall #3 (tool name changes) via stability contract test
-  **Research needs:** SKIP — FastMCP decorator patterns are established
-
-### Phase 4: FastMCP 3.x Migration
-
-**Rationale:** Unlocks automatic threadpool, tool timeouts, component versioning. Must happen after tool split (Phase 3) to minimize migration surface per file.
-**Delivers:**
-
-- pyproject.toml pin update (fastmcp>=3.0.0,<4)
-- Removal of .fn extraction patterns from tests
-- Addition of timeout=30.0 to tool decorators
-- mask_error_details parameter verification/replacement
-- ToolAnnotations import updates (if needed)
-  **Trigger:** FastMCP 3.0.0 stable release (currently 3.0.0rc2)
-  **Avoids:** Pitfall #5 (decorator behavior change), Pitfall #6 (deprecated API removal), Pitfall #7 (import errors)
-  **Research needs:** SKIP — official upgrade guide provides checklist
-
-### Phase 5: MCP Spec 2025-11-25 Compliance
-
-**Rationale:** Quick wins for spec compliance after FastMCP upgrade. Structured output auto-wires from Pydantic models (Phase 3). Component icons are cosmetic.
-**Delivers:**
-
-- Structured output (outputSchema) enabled via FastMCP 3.x auto-generation
-- JSON Schema 2020-12 as default validator
-- Component icons for tools/resources/prompts
-- Complete tool annotations (from Phase 3 plus verification)
-  **Uses:** Pydantic models from Phase 3, FastMCP 3.x from Phase 4
-  **Addresses:** Table Stakes features (structured output, annotations, 2020-12 default)
-  **Research needs:** SKIP — MCP spec 2025-11-25 is well-documented
-
-### Phase 6: Competitive Features (Config Diff, OpenTelemetry)
-
-**Rationale:** High-value differentiators with low implementation cost. Config diff is independent of backend. OpenTelemetry is drop-in FastMCP 3.x config.
-**Delivers:**
-
-- data_diff tool (structured diff using deepdiff library)
-- OpenTelemetry instrumentation configuration
-- Tool versioning examples (if needed for future API evolution)
-  **Uses:** Service layer from Phase 2, FastMCP 3.x from Phase 4
-  **Addresses:** Competitive features (diffing, observability)
-  **Research needs:** MINOR for deepdiff library integration patterns
-
-### Phase Ordering Rationale
-
-- **Phases 1-3 are independent of FastMCP 3.x.** Architecture refactoring happens on FastMCP 2.x, reducing migration risk.
-- **Phase 1 before Phase 2:** Backend abstraction is prerequisite for format handlers (YqBackend dependency)
-- **Phase 2 before Phase 3:** Service layer is prerequisite for thin tool wrappers (delegation target)
-- **Phase 3 before Phase 4:** Smaller files = smaller migration surface = lower FastMCP upgrade risk
-- **Phase 4 before Phase 5:** FastMCP 3.x is prerequisite for auto-generated structured output
-- **Phase 6 deferred until after compliance:** Competitive features add value but table stakes come first
-- **Backend migration (dasel) REJECTED:** Comment/anchor preservation failures eliminate this path
-
-### Research Flags
-
-Phases with standard patterns (skip research-phase):
-
-- **Phase 1:** Extraction refactoring — existing code provides reference implementation
-- **Phase 2:** Service layer — format handler pattern is well-established (similar to adapter pattern)
-- **Phase 3:** Tool splitting — FastMCP decorator patterns are documented
-- **Phase 4:** FastMCP upgrade — official upgrade guide at gofastmcp.com/development/upgrade-guide
-- **Phase 5:** MCP spec compliance — spec 2025-11-25 is ratified and documented
-
-Phases with minor research needs:
-
-- **Phase 6:** Config diffing — research deepdiff vs alternatives (difflib, dictdiffer) for structured data
-
-No phases require deep /gsd:research-phase calls. All patterns are established.
+- All phases: Standard patterns, no deep research needed
+- Phase 1: Verify type checker compatibility after adding loguru dependency (gate)
+- Phase 2: Verify caplog fixture override before migrating any logger calls (gate)
+- Phase 4: Verify max_errors behavior with deeply nested schemas containing anyOf/oneOf (edge case)
 
 ## Confidence Assessment
 
-| Area         | Confidence  | Notes                                                                                                                                                                                              |
-| ------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stack        | HIGH        | Current stack verified against PyPI, yq/dasel capabilities confirmed via official docs. FastMCP 3.x features verified via upgrade guide and release notes.                                         |
-| Features     | MEDIUM-HIGH | MCP spec requirements are definitive (HIGH). FastMCP 3.x feature availability is documented (HIGH). Competitive feature value is estimated based on user patterns (MEDIUM).                        |
-| Architecture | HIGH        | Current codebase analysis is direct source evidence. Target architecture patterns (Strategy, Registry) are well-established. FastMCP 3.x migration impact verified via official upgrade guide.     |
-| Pitfalls     | HIGH        | Dasel comment/anchor limitations confirmed via GitHub issues (#178). FastMCP breaking changes verified via official upgrade guide. MCP tool name stability issues documented in community reports. |
+| Area         | Confidence | Notes                                                                                                                                                                                    |
+| ------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stack        | HIGH       | loguru 0.7.3 verified on PyPI. jsonschema 4.26.0 capabilities verified by direct execution in project venv.                                                                              |
+| Features     | HIGH       | All jsonschema APIs (`iter_errors`, `json_path`, `best_match`) tested live. loguru InterceptHandler pattern documented in official issues.                                               |
+| Architecture | HIGH       | All modified files identified by codebase analysis. Component boundaries are clear. 2 callers of `_validate_against_schema` confirmed.                                                   |
+| Pitfalls     | HIGH       | FastMCP logging internals verified against installed source code. caplog incompatibility documented in loguru Issue #59. Pre-write atomicity verified by reading mutation_operations.py. |
 
-**Overall confidence:** MEDIUM-HIGH
+## Gaps to Address
 
-Backend evaluation (yq vs dasel) is definitive: dasel's comment destruction is a documented, unfixable limitation. Architecture refactoring is well-understood (standard extraction patterns). FastMCP migration is low-risk (narrow API surface, official upgrade guide). The main uncertainty is user demand for expanded format support (INI/HCL) and competitive feature prioritization (defer to user feedback during Phase 6).
-
-### Gaps to Address
-
-- **ruamel.yaml 0.19 compatibility:** Pin <0.19 explicitly in pyproject.toml until build toolchain (setuptools-zig vs ruamel.yaml.clib) is validated across deployment targets. LOW priority.
-- **FastMCP 3.0.0 stable release timing:** Currently 3.0.0rc2 (2026-02-14). Phase 4 timing depends on stable release (estimated Q1 2026). Monitor github.com/jlowin/fastmcp/releases. MEDIUM priority.
-- **mask_error_details parameter in FastMCP 3.x:** Current code uses `FastMCP(mask_error_details=False)`. Upgrade guide does not list this as removed, but verify during Phase 4 testing. Test with 3.0.0rc2 before stable upgrade. LOW priority.
-- **Expression translation layer viability:** If future work requires dasel for specific formats (e.g., INI-only operations), expression translation from yq to dasel syntax is HIGH effort (pipes, filters, functions). Defer indefinitely; dasel is NOT recommended. BACKLOG.
-- **Pagination cursor format stability:** Current implementation uses base64-encoded JSON with offset field. Ensure backend abstraction (Phase 1) does not change cursor format (breaks existing client state). Add cursor round-trip test as gate. MEDIUM priority.
+- **Ruff G rules interaction with loguru:** Ruff's G001-G202 rules target stdlib logging format. loguru uses `{}` format syntax. The project already ignores most G rules (only G201/G202 enabled). Verify these don't false-positive on loguru calls during implementation. LOW priority.
+- **loguru-mypy plugin decision:** The plugin is effectively unmaintained but loguru's built-in stubs work. If mypy reports issues, consider adding the plugin as a dev dependency. Verify during Phase 1 type checker gate. LOW priority.
+- **max_errors cap for deeply nested schemas:** Schemas with many `anyOf`/`oneOf` alternatives (e.g., GitHub Actions workflows) can produce hundreds of errors. A cap at 20 errors is recommended but the exact number should be tuned during implementation. MEDIUM priority.
+- **caplog fixture testing with pytest-xdist:** The project runs tests with `-n auto`. The loguru caplog override must be safe for parallel execution. Verify by running full test suite 3 times with `-n auto` after adding the fixture. MEDIUM priority.
 
 ## Sources
 
-### Primary (HIGH confidence)
-
-- FastMCP Upgrade Guide (<https://gofastmcp.com/development/upgrade-guide>) — breaking changes, migration steps
-- FastMCP GitHub Releases (<https://github.com/jlowin/fastmcp/releases>) — v3.0.0rc2, v2.14.x release notes
-- FastMCP 3.0 What's New (<https://www.jlowin.dev/blog/fastmcp-3-whats-new>) — new features, rationale
-- MCP Specification 2025-11-25 (<https://modelcontextprotocol.io/specification/2025-11-25>) — protocol requirements
-- Dasel GitHub Issue #178 (<https://github.com/TomWright/dasel/issues/178>) — comment preservation limitation (confirmed open)
-- yq GitHub (<https://github.com/mikefarah/yq>) — current backend capabilities
-- Current codebase (direct file reading) — architecture analysis, line counts, dependency patterns
-
-### Secondary (MEDIUM confidence)
-
-- Context7 FastMCP docs (/llmstxt/gofastmcp_llms-full_txt) — migration patterns
-- Context7 dasel docs (/websites/daseldocs_tomwright_me) — dasel v3 capabilities
-- Dasel documentation (<https://daseldocs.tomwright.me/v3>) — official v3 docs, "in active development" status
-- WorkOS MCP spec analysis (<https://workos.com/blog/mcp-2025-11-25-spec-update>) — third-party spec overview
-- Cisco MCP elicitation analysis (<https://blogs.cisco.com/developer/whats-new-in-mcp-elicitation-structured-content-and-oauth-enhancements>) — protocol feature analysis
-
-### Tertiary (LOW confidence)
-
-- Bright Coding dasel blog (<https://www.blog.brightcoding.dev/2025/09/09/dasel-the-universal-swiss-army-knife-for-json-yaml-toml-xml-and-csv-on-the-command-line>) — performance claims unverified
+- [loguru PyPI](https://pypi.org/project/loguru/) -- version 0.7.3 confirmed
+- [loguru documentation](https://loguru.readthedocs.io/) -- InterceptHandler, serialize, bind
+- [loguru GitHub Issue #78](https://github.com/Delgan/loguru/issues/78) -- canonical InterceptHandler pattern
+- [loguru GitHub Issue #59](https://github.com/Delgan/loguru/issues/59) -- pytest caplog incompatibility
+- [loguru-mypy GitHub](https://github.com/kornicameister/loguru-mypy) -- maintenance status
+- [jsonschema error handling](https://python-jsonschema.readthedocs.io/en/latest/errors/) -- iter_errors, best_match, json_path
+- [jsonschema exceptions API](https://python-jsonschema.readthedocs.io/en/stable/api/jsonschema/exceptions/) -- ValidationError attributes
+- [FastMCP logging source](https://gofastmcp.com/python-sdk/fastmcp-utilities-logging) -- stdlib logging + RichHandler
+- FastMCP installed source (`fastmcp/utilities/logging.py`) -- propagate=False, handler stripping confirmed
+- Direct execution in project venv -- all jsonschema API capabilities verified
 
 ---
 
-_Research completed: 2026-02-14_
+_Research completed: 2026-02-17_
 _Ready for roadmap: yes_

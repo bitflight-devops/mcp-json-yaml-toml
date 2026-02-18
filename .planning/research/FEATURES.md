@@ -1,263 +1,298 @@
 # Feature Research
 
-**Domain:** MCP server for structured config file manipulation (JSON/YAML/TOML)
-**Researched:** 2026-02-14
-**Confidence:** MEDIUM (FastMCP 3.x is RC-stage; dasel v3 is in active development; MCP spec 2025-11-25 is ratified)
+**Domain:** Loguru logging replacement and enhanced schema validation for MCP JSON/YAML/TOML server
+**Researched:** 2026-02-17
+**Confidence:** HIGH (verified against installed jsonschema 4.26.x source code and official loguru documentation)
 
 ## Current State Inventory
 
-Before mapping the feature landscape, here is what the server already ships:
+### Logging (stdlib)
 
-| Existing Tool            | Capability                                                  |
-| ------------------------ | ----------------------------------------------------------- |
-| `data`                   | CRUD on JSON/YAML/TOML via yq + native TOML libs            |
-| `data_query`             | Read-only yq expression evaluation                          |
-| `data_schema`            | Schema Store discovery, validation, association             |
-| `data_convert`           | Format conversion (JSON<->YAML, TOML->JSON/YAML)            |
-| `data_merge`             | Deep merge of two files                                     |
-| `constraint_validate`    | LMQL constraint checking                                    |
-| `constraint_list`        | Constraint catalog                                          |
-| Pagination               | Cursor-based 10KB chunking with advisories                  |
-| Format preservation      | ruamel.yaml (comments/anchors), tomlkit (comments/ordering) |
-| YAML anchor optimization | Post-write deduplication                                    |
-| Schema validation        | Draft 7 + Draft 2020-12 with remote $ref resolution         |
+The server uses Python stdlib `logging` in three modules:
 
-### Known Limitations (Current Stack)
+| Module                       | Usage                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `backends/binary_manager.py` | `logging.getLogger(__name__)` with `.info()`, `.debug()`, `.warning()` for yq binary download lifecycle |
+| `schemas/manager.py`         | `logging.debug()` for schema config loading failures                                                    |
+| `schemas/scanning.py`        | `logging.debug()` for IDE pattern loading failures                                                      |
 
-| Limitation                               | Root Cause                                                               |
-| ---------------------------------------- | ------------------------------------------------------------------------ |
-| No JSON/YAML -> TOML conversion          | yq TOML encoder only supports scalar values                              |
-| Binary management complexity             | yq auto-download with checksum verification, version pinning, lock files |
-| Subprocess overhead                      | Every operation spawns a yq child process                                |
-| No INI/HCL/CSV/properties format support | yq supports them but server does not expose them                         |
-| YAML anchor optimization is post-hoc     | Write via yq, re-read, optimize -- three I/O passes                      |
+Total: 3 files with `import logging`, ~15 log call sites. No structured data, no JSON output, no context binding. All messages are positional `%s` format strings.
+
+### Schema Validation (current)
+
+The `_validate_against_schema()` function in `services/schema_validation.py`:
+
+- Uses `Draft7Validator.validate()` or `Draft202012Validator.validate()` (single-call)
+- `.validate()` raises on the **first** `ValidationError` only
+- Catches `ValidationError` and returns `(False, f"Schema validation failed: {e.message}")`
+- Returns a plain string message with no JSON path, no validator keyword, no error count
+- No support for collecting all errors
+
+### Pre-Write Validation (partially exists)
+
+The `_validate_and_write_content()` function in `services/mutation_operations.py`:
+
+- Already gates writes behind schema validation when a `schema_path` is available
+- Calls `_validate_against_schema()` before `path.write_text()`
+- Returns ToolError on failure with the single error message
+- **Gap**: No `skip_validation` parameter exposed to tool callers
+- **Gap**: Only validates schema, not syntax (syntax is implicitly validated by yq/tomlkit parse)
+- **Gap**: Returns only first error, not all errors
+
+GH#1 (open issue) requests: pre-write syntax + schema validation pipeline, atomic operations, `skip_validation` opt-out parameter.
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-Features users of an MCP config file server assume exist. Missing these = product feels incomplete or falls behind MCP spec evolution.
+Features that users of a schema-validating MCP server and well-instrumented Python service assume exist. Missing these makes the product feel incomplete.
 
-| Feature                                                            | Why Expected                                                                                                                  | Complexity | Notes                                                                                                                                                                                                              |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Structured output (outputSchema)**                               | MCP 2025-06-18 spec. Clients need typed tool results they can validate and deserialize. Without this, clients parse raw text. | MEDIUM     | FastMCP 3.x auto-generates outputSchema from return type annotations. On FastMCP 2.x this requires manual schema attachment. Current server returns `dict[str, Any]` everywhere -- needs Pydantic response models. |
-| **Tool annotations (readOnlyHint, idempotentHint, openWorldHint)** | MCP 2025-06-18 spec. Clients use hints for caching, retry, and safety decisions.                                              | LOW        | Already partially implemented (`data_query` and `constraint_*` use `readOnlyHint`). Missing: `idempotentHint` on GET operations, `openWorldHint=False` (local-only server).                                        |
-| **Full bidirectional format conversion**                           | Users expect JSON<->YAML<->TOML round-trips. The current TOML encoding limitation blocks this.                                | HIGH       | yq cannot encode complex nested structures to TOML. Switching to dasel or using native Python libs (tomlkit) for the TOML encoding path would fix this.                                                            |
-| **MCP spec 2025-11-25 compliance (JSON Schema 2020-12 default)**   | Spec mandates 2020-12 as default dialect. Current server supports it but defaults to Draft 7.                                 | LOW        | Change default validator selection. Already has Draft202012Validator imported.                                                                                                                                     |
-| **Component icons**                                                | MCP 2025-11-25. Servers can expose icons for tools, resources, prompts. Visual UIs display them.                              | LOW        | FastMCP 3.x supports icon metadata on components. Pure cosmetic but signals spec compliance.                                                                                                                       |
+| Feature                               | Why Expected                                                                                                                                                                                                 | Complexity | Dependencies                                                                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **All-errors schema validation**      | Returning only the first error forces repeated fix-validate cycles. Every IDE, linter, and CI tool reports all errors at once.                                                                               | LOW        | Already installed: `jsonschema>=4.26.0` has `iter_errors()`. Zero new deps.                                                                         |
+| **JSON path in validation errors**    | Users need to know WHERE the error is, not just WHAT failed. Every modern validator (ajv, jsonschema-rs, IDE validators) reports paths.                                                                      | LOW        | Already available: `ValidationError.json_path` property exists in installed jsonschema (verified in source). Returns `$.foo.bar[0]` format.         |
+| **Validator keyword in error output** | Knowing the keyword (`type`, `required`, `minimum`, `additionalProperties`) tells the caller what kind of fix is needed.                                                                                     | LOW        | Already available: `ValidationError.validator` attribute on every error object.                                                                     |
+| **Pre-write validation gate (GH#1)**  | Writing invalid data to config files is the primary risk of a CRUD MCP server. Validation before write is table stakes for data integrity.                                                                   | LOW        | Infrastructure already exists in `_validate_and_write_content()`. Needs: syntax validation step, all-errors reporting, `skip_validation` parameter. |
+| **Structured logging (loguru)**       | stdlib logging provides no structured output, no automatic context binding, no serialized JSON format. Production MCP servers need structured, parseable logs for debugging tool calls and binary downloads. | MEDIUM     | New dependency: `loguru>=0.7.3`. Requires InterceptHandler for stdlib compatibility (FastMCP and other deps use stdlib logging).                    |
 
 ### Differentiators (Competitive Advantage)
 
-Features that set the product apart. Not required, but valuable for adoption and retention.
+Features that go beyond what users minimally expect. These add value but are not blocking if deferred.
 
-| Feature                                                | Value Proposition                                                                                                                                                                                    | Complexity | Notes                                                                                                                                                                                                                   |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Expanded format support: INI, HCL, CSV, properties** | No competing MCP server handles INI/HCL files. DevOps users edit `.ini` configs, Terraform `.tfvars` (HCL), and `.properties` files regularly. Covering these makes this the one-stop config server. | MEDIUM     | dasel supports JSON/YAML/TOML/XML/CSV/HCL/INI natively. yq supports YAML/JSON/XML/CSV/TOML/HCL/properties. Either backend covers it. Server needs format enum expansion and enablement config.                          |
-| **Elicitation support (human-in-the-loop)**            | MCP 2025-06-18. Server can ask user for missing info mid-operation (e.g., "Which section should I merge into?"). Enables guided config workflows.                                                    | HIGH       | Requires FastMCP 3.x or manual protocol handling. The server currently has no conversational flow.                                                                                                                      |
-| **Async tasks for large file operations**              | MCP 2025-11-25 experimental Tasks primitive. Large file conversions, multi-file merges, or schema scans across directories could return task handles instead of blocking.                            | HIGH       | FastMCP 3.x has background task support (Docket integration). Not available in 2.x. Only matters for files >10MB or directory-wide operations.                                                                          |
-| **Tool versioning**                                    | FastMCP 3.x: serve v1 and v2 of a tool side-by-side. Enables breaking changes (e.g., new query syntax) without disrupting existing clients.                                                          | LOW        | Purely a FastMCP 3.x feature (`@tool(version="2.0")`). No equivalent in 2.x. Useful when migrating from yq expression syntax to dasel selector syntax.                                                                  |
-| **OpenTelemetry observability**                        | FastMCP 3.x: native OTEL instrumentation. Every tool call, resource read traced. Production deployments need this for monitoring and debugging.                                                      | LOW        | Drop-in configuration in FastMCP 3.x. No code changes to tools. Not available in 2.x.                                                                                                                                   |
-| **Response size limiting**                             | FastMCP 3.x: automatic text truncation at UTF-8 boundaries with metadata. Prevents token budget blowout from large config files.                                                                     | LOW        | Already have cursor-based pagination. FastMCP 3.x adds server-level guardrail as defense-in-depth. These are complementary, not competing.                                                                              |
-| **Config file diffing**                                | New tool: compare two versions of a config file, return structured diff. No existing MCP server does this. High value for code review and change validation.                                         | MEDIUM     | Implement using Python `deepdiff` or similar. Not dependent on backend (yq/dasel). Orthogonal to format choice.                                                                                                         |
-| **Multi-file query (glob patterns)**                   | Query across multiple config files matching a glob. E.g., "find all services where `port == 8080` across `configs/*.yaml`".                                                                          | MEDIUM     | Requires new tool or parameter. Both yq and dasel support multi-file input. Pagination becomes critical here.                                                                                                           |
-| **Native Python parsing (eliminate subprocess)**       | Replace yq subprocess calls with native Python libraries for JSON (orjson), YAML (ruamel.yaml), TOML (tomlkit). Faster, no binary management, better error messages.                                 | HIGH       | Already using ruamel.yaml and tomlkit for format-preserving writes. Could extend to reads/queries, but would need to implement a query/selector engine or adopt a Python query library. Loses yq's expression language. |
-| **OAuth / auth support**                               | FastMCP 3.x: CIMD-based OAuth. Enables authenticated access to config servers in enterprise environments.                                                                                            | MEDIUM     | Only matters for remote/shared deployments. Current server is local-only (stdio transport).                                                                                                                             |
-| **Provider-based composition**                         | FastMCP 3.x: mount sub-servers, namespace tools. Could expose format-specific sub-servers (e.g., `yaml_*`, `toml_*`) while keeping unified tools as primary.                                         | LOW        | Architectural flexibility. Enables modular deployment where users only load formats they need.                                                                                                                          |
+| Feature                                 | Value Proposition                                                                                                                                                                                              | Complexity | Dependencies                                                                                        |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------- |
+| **Structured validation error objects** | Return errors as typed dicts/Pydantic models with `json_path`, `validator`, `validator_value`, `message`, `schema_path` fields instead of formatted strings. Enables programmatic error handling by AI agents. | LOW        | Pydantic already in deps (via FastMCP). jsonschema error attributes already available.              |
+| **best_match error ranking**            | `jsonschema.exceptions.best_match()` identifies the most relevant error from a set. Return both best match (for quick display) and all errors (for complete picture).                                          | LOW        | Already in jsonschema. `best_match(validator.iter_errors(instance))` is a one-liner.                |
+| **Contextual logging with bind()**      | Loguru `bind()` attaches operation context (file_path, format, tool_name) to all downstream log calls. Enables filtering/searching logs by file or operation.                                                  | LOW        | Requires loguru. Pattern: `logger.bind(file=path, op="set").info(...)`                              |
+| **JSON-serialized log output**          | Loguru `serialize=True` produces JSONL output. Machine-parseable for log aggregation (Grafana Loki, ELK, CloudWatch). Complements existing OpenTelemetry traces.                                               | LOW        | Requires loguru. Configuration-only: `logger.add(sink, serialize=True)`.                            |
+| **skip_validation parameter**           | Allow callers to bypass pre-write validation when intentionally fixing invalid files. Without this, the validation gate becomes a trap for repair operations.                                                  | LOW        | Pure parameter threading from `data()` tool through dispatch to `_validate_and_write_content()`.    |
+| **Syntax validation before write**      | Explicitly re-parse modified content (JSON/YAML/TOML) before writing to catch cases where yq expression produces syntactically invalid output. Belt-and-suspenders safety.                                     | LOW        | Already have parsers: yq for JSON/YAML, tomlkit for TOML. Re-parse the content string before write. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### Anti-Features (Explicitly Do NOT Build)
 
-Features that seem good but create problems. Deliberately NOT building these.
+Features to avoid in this milestone. Building these would add complexity without proportional value.
 
-| Feature                                                 | Why Requested                                | Why Problematic                                                                                                                                                                                                     | Alternative                                                                                                                                                                     |
-| ------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Direct file creation from scratch**                   | "Let me create a new config file."           | MCP tools should transform, not generate. LLMs should write file content; the server should validate and set values. Creating files from nothing invites hallucinated structures with no schema basis.              | Use `data(operation="set")` on an empty file the LLM creates via filesystem tools. Or add a `data_schema(action="scaffold")` that generates a minimal valid file from a schema. |
-| **Embedded text editor / full-file rewrite**            | "Replace the entire file content."           | Bypasses format preservation, schema validation, and anchor optimization. A full rewrite tool would be an escape hatch that undermines every safety feature.                                                        | Use `data(operation="set")` at root path (`.`) for bulk updates. Preserves format handling pipeline.                                                                            |
-| **Real-time file watching**                             | "Watch config files for changes and notify." | MCP servers are request-response, not event-driven. File watching requires persistent state, OS-specific watchers, and has no MCP protocol support. Adds complexity with no protocol path to deliver notifications. | Clients should poll or use their own filesystem watchers. The server validates on demand.                                                                                       |
-| **Remote file access (HTTP/S3/GCS URLs)**               | "Read config from a URL."                    | Adds network dependencies, auth complexity, caching concerns, and security surface. Violates the "100% local processing" principle.                                                                                 | Users download files first using filesystem or HTTP tools, then use this server to manipulate them locally.                                                                     |
-| **Custom query language**                               | "Build our own selector syntax."             | Maintenance burden of a custom parser. Users already know yq or jq syntax. Dasel's selector syntax is well-documented. Inventing a new one fragments the ecosystem.                                                 | Adopt an existing query syntax (yq expressions or dasel selectors).                                                                                                             |
-| **Automatic backup/versioning**                         | "Keep history of file changes."              | Duplicates git functionality. Adds disk I/O, storage management, and cleanup concerns.                                                                                                                              | Users should use git. The server could optionally report "file modified" in structured output so agents can commit.                                                             |
-| **Native MCP from CLI tools (dasel/yq as MCP servers)** | "Can dasel or yq serve MCP directly?"        | Neither tool has MCP support. Wrapping a CLI as an MCP server loses type safety, structured output, pagination, schema validation, and format preservation. The wrapper IS the product.                             | Continue building the Python server that uses these tools as backends. The value is in the orchestration layer, not the CLI.                                                    |
+| Anti-Feature                                | Why Avoid                                                                                                                                                                                           | What to Do Instead                                                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Custom logging framework**                | Loguru already solves structured logging, context binding, and stdlib interception. Rolling a custom solution is wasted effort.                                                                     | Use loguru as-is with InterceptHandler for stdlib compatibility.                                   |
+| **JSON Schema error auto-fix suggestions**  | Generating fix suggestions from validation errors is complex, error-prone, and varies wildly by schema. AI agents can interpret the structured errors themselves.                                   | Return rich structured errors with json_path + validator keyword. Let the AI agent decide the fix. |
+| **Async/streaming validation**              | Schema validation of config files is sub-millisecond. Async adds complexity with zero user-visible benefit for typical file sizes (<1MB).                                                           | Keep synchronous validation. Only revisit if profiling shows a bottleneck.                         |
+| **Custom log sinks for specific services**  | Building Grafana/ELK/CloudWatch sinks couples the server to specific infrastructure.                                                                                                                | Output JSONL via loguru `serialize=True`. Let the deployment environment handle log routing.       |
+| **Replacing jsonschema with jsonschema-rs** | jsonschema-rs (Rust-based) is faster but has a different API. The current jsonschema library is adequate for config file sizes and already installed. Migration risk outweighs marginal speed gain. | Keep python-jsonschema. Validate performance with profiling first.                                 |
+| **Log file rotation management**            | The MCP server is a short-lived process per invocation (stdio transport). Log rotation is meaningless for the typical deployment model.                                                             | Use stderr output. Let the host process (Claude Desktop, IDE) manage log capture.                  |
 
 ## Feature Dependencies
 
 ```
-[Structured Output (outputSchema)]
-    requires [Pydantic Response Models]
-                  enhances [Tool Annotations (complete)]
+                    loguru installation
+                           |
+                    +------+------+
+                    |             |
+            InterceptHandler   logger.bind()
+            (stdlib compat)    (context)
+                    |             |
+                    +------+------+
+                           |
+                  Structured logging operational
+                           |
+                  JSON serialization (serialize=True)
 
-[Full Bidirectional Conversion]
-    requires [TOML Encoding Fix]
-                  option-a: [Switch to dasel backend]
-                  option-b: [Native Python TOML encoding via tomlkit]
 
-[Expanded Format Support (INI/HCL/CSV)]
-    requires [Format Enum Expansion]
-    requires [Backend supporting those formats]
-                  option-a: [dasel (all formats natively)]
-                  option-b: [yq (HCL/CSV/properties already supported)]
-                  option-c: [Native Python libs per format]
-
-[Elicitation Support]
-    requires [FastMCP 3.x Upgrade]
-    enhances [Config File Diffing] (ask user which diff to apply)
-
-[Async Tasks]
-    requires [FastMCP 3.x Upgrade]
-    enhances [Multi-file Query] (large result sets)
-
-[Tool Versioning]
-    requires [FastMCP 3.x Upgrade]
-    enhances [Backend Migration] (serve yq-syntax and dasel-syntax tools simultaneously)
-
-[OpenTelemetry]
-    requires [FastMCP 3.x Upgrade]
-
-[Provider Composition]
-    requires [FastMCP 3.x Upgrade]
-
-[OAuth / Auth]
-    requires [FastMCP 3.x Upgrade]
-    requires [HTTP/SSE transport] (not stdio)
-
-[Config File Diffing]
-    independent (no backend dependency)
-
-[Multi-file Query]
-    enhances [Pagination] (already exists)
-    requires [Glob pattern support in tool params]
-
-[Native Python Parsing]
-    conflicts-with [yq expression language retention]
-    enhances [Performance] (no subprocess overhead)
-    requires [Query engine replacement or new selector implementation]
+            iter_errors() change
+                    |
+            +-------+-------+
+            |               |
+    All-errors reporting   JSON path extraction
+            |               |
+            +-------+-------+
+                    |
+          Structured error objects
+            (Pydantic models)
+                    |
+          +--------+--------+
+          |                 |
+    best_match ranking   Pre-write validation
+                         (GH#1 complete)
+                              |
+                    skip_validation parameter
 ```
 
-### Dependency Notes
+Key ordering constraints:
 
-- **Structured Output requires Pydantic Response Models:** Current tools return `dict[str, Any]`. FastMCP auto-generates outputSchema from typed return annotations. Migrating to Pydantic models is prerequisite regardless of FastMCP version.
-- **Full Bidirectional Conversion requires TOML Encoding Fix:** Two paths -- dasel handles this natively; alternatively, use tomlkit in Python to encode complex structures to TOML without yq.
-- **Five features require FastMCP 3.x:** Elicitation, async tasks, tool versioning, OpenTelemetry, and provider composition all require upgrading from FastMCP 2.x. This is the single largest dependency.
-- **Native Python Parsing conflicts with yq expression language:** If the server drops yq as backend, it loses the jq-like expression language that `data_query` exposes. Would need to either adopt dasel selectors, implement a Python query engine, or accept reduced query power.
-- **OAuth requires HTTP transport:** Current server uses stdio. OAuth only matters for remote deployments over HTTP/SSE.
+1. `loguru` must be installed before any logging changes (obvious but critical -- don't partially migrate)
+2. `InterceptHandler` must be configured before removing stdlib logging calls (FastMCP, httpx, and other deps emit stdlib logs)
+3. `iter_errors()` change is prerequisite for all-errors reporting and structured error objects
+4. Structured error objects should be defined before updating pre-write validation to use them
+5. `skip_validation` depends on pre-write validation being fully implemented first
 
-## MVP Definition
+## Detailed Feature Specifications
 
-### Launch With (v1 -- next milestone, stay on FastMCP 2.x)
+### 1. All-Errors Schema Validation
 
-These features can ship without the FastMCP 3.x upgrade.
+**Current behavior** (verified in codebase):
 
-- [ ] **Pydantic Response Models** -- Foundation for structured output. Define typed models for all tool return values. Can be used with FastMCP 2.x and carries forward to 3.x.
-- [ ] **Complete Tool Annotations** -- Add `idempotentHint` on read operations, `openWorldHint=False` on all tools. Low effort, high spec compliance signal.
-- [ ] **Full Bidirectional Conversion** -- Fix TOML encoding using tomlkit Python-native path. Eliminates the most visible user-facing limitation without switching backends.
-- [ ] **Config File Diffing** -- New `data_diff` tool. High user value, independent of backend. Implement with deepdiff library.
-- [ ] **JSON Schema 2020-12 as default** -- Flip the default validator. One-line change with test updates.
+```python
+# services/schema_validation.py line 74-80
+Draft202012Validator(schema, registry=registry).validate(data)
+# ...
+except ValidationError as e:
+    return False, f"Schema validation failed: {e.message}"
+```
 
-### Add After Validation (v1.x -- FastMCP 3.x upgrade)
+`.validate()` raises on first error. Only `e.message` (string) is captured.
 
-Features to add once FastMCP 3.x reaches stable release and the upgrade is complete.
+**Target behavior** (verified against installed jsonschema source):
 
-- [ ] **FastMCP 3.x Upgrade** -- Trigger: FastMCP 3.0.0 stable release (currently RC2). Unlocks five dependent features. Migration requires: namespace changes, enable/disable API migration, provider architecture changes.
-- [ ] **Structured Output (outputSchema)** -- Trigger: Pydantic models already in place from v1. FastMCP 3.x auto-wires them.
-- [ ] **Tool Versioning** -- Trigger: When planning backend migration (yq -> dasel). Serve both query syntaxes during transition.
-- [ ] **OpenTelemetry** -- Trigger: First production deployment request. Drop-in config in 3.x.
-- [ ] **Expanded Format Support (INI/HCL)** -- Trigger: User requests for Terraform/Java properties editing. Evaluate dasel vs yq for backend at this point.
+```python
+validator = Draft202012Validator(schema, registry=registry)
+errors = sorted(validator.iter_errors(data), key=lambda e: list(e.absolute_path))
+# Each error has: .json_path, .validator, .validator_value, .message, .schema_path, .instance
+```
 
-### Future Consideration (v2+)
+`iter_errors()` returns a generator of ALL `ValidationError` objects. Each has rich attributes.
 
-Features to defer until product-market fit is established.
+**Verified attributes** (tested against jsonschema 4.26.x in this repo's venv):
 
-- [ ] **Elicitation Support** -- Defer: Requires significant UX design for guided workflows. Protocol support is new and client implementations vary.
-- [ ] **Async Tasks** -- Defer: Only matters for very large files or directory-wide operations. Current pagination handles most cases.
-- [ ] **Multi-file Query** -- Defer: Powerful but complex. Needs careful pagination design for cross-file results.
-- [ ] **Native Python Parsing (eliminate subprocess)** -- Defer: Major architectural change. yq/dasel backend works. Only pursue if subprocess overhead becomes measurable bottleneck.
-- [ ] **OAuth / Auth** -- Defer: Only matters for remote deployments. Current user base is local stdio.
-- [ ] **Provider Composition** -- Defer: Architectural flexibility. Not user-facing value until there are multiple deployment patterns.
+| Attribute         | Type              | Example Value                                    | Purpose                              |
+| ----------------- | ----------------- | ------------------------------------------------ | ------------------------------------ |
+| `json_path`       | `str`             | `$.tags[1]`                                      | JSONPath to failing instance element |
+| `validator`       | `str`             | `type`, `required`, `minimum`                    | Failed keyword name                  |
+| `validator_value` | `Any`             | `"string"`, `["name"]`, `0`                      | Expected value for the keyword       |
+| `message`         | `str`             | `42 is not of type 'string'`                     | Human-readable description           |
+| `absolute_path`   | `deque[str\|int]` | `deque(['tags', 1])`                             | Path components for sorting          |
+| `schema_path`     | `deque[str\|int]` | `deque(['properties', 'tags', 'items', 'type'])` | Path within schema                   |
 
-## Feature Prioritization Matrix
+**Confidence:** HIGH -- tested with `uv run python` in this repo's venv. 4 errors returned for a test instance with type violations, missing required fields, additional properties, and minimum violations.
 
-| Feature                                  | User Value | Implementation Cost | Priority |
-| ---------------------------------------- | ---------- | ------------------- | -------- |
-| Pydantic Response Models                 | HIGH       | MEDIUM              | P1       |
-| Complete Tool Annotations                | MEDIUM     | LOW                 | P1       |
-| Full Bidirectional Conversion (TOML fix) | HIGH       | MEDIUM              | P1       |
-| JSON Schema 2020-12 default              | MEDIUM     | LOW                 | P1       |
-| Config File Diffing                      | HIGH       | MEDIUM              | P1       |
-| FastMCP 3.x Upgrade                      | HIGH       | HIGH                | P2       |
-| Structured Output (outputSchema)         | HIGH       | LOW (after models)  | P2       |
-| Tool Versioning                          | MEDIUM     | LOW                 | P2       |
-| OpenTelemetry                            | MEDIUM     | LOW                 | P2       |
-| Expanded Format Support (INI/HCL)        | MEDIUM     | MEDIUM              | P2       |
-| Component Icons                          | LOW        | LOW                 | P2       |
-| Elicitation Support                      | MEDIUM     | HIGH                | P3       |
-| Async Tasks                              | LOW        | HIGH                | P3       |
-| Multi-file Query                         | HIGH       | MEDIUM              | P3       |
-| Native Python Parsing                    | MEDIUM     | HIGH                | P3       |
-| OAuth / Auth                             | LOW        | MEDIUM              | P3       |
-| Provider Composition                     | LOW        | LOW                 | P3       |
+### 2. Structured Validation Error Response
 
-**Priority key:**
+**Current return type**: `tuple[bool, str]` -- a boolean and a plain message string.
 
-- P1: Ship in next milestone (no FastMCP 3.x dependency)
-- P2: Ship after FastMCP 3.x stable upgrade
-- P3: Future consideration, defer until clear demand
+**Target return type**: A structured object that the tool response can include directly.
 
-## Competitor Feature Analysis
+Proposed error structure per error:
 
-| Feature             | filesystem MCP server | Generic YAML/JSON tools                  | This Server (current)      | This Server (proposed)          |
-| ------------------- | --------------------- | ---------------------------------------- | -------------------------- | ------------------------------- |
-| Read config files   | Yes (raw text)        | N/A (CLI only)                           | Yes (structured)           | Yes (structured + outputSchema) |
-| Modify config files | Yes (full rewrite)    | Yes (CLI)                                | Yes (key-path CRUD)        | Yes (key-path CRUD + diff)      |
-| Format preservation | No                    | Varies (yq: partial, dasel: no comments) | Yes (ruamel.yaml, tomlkit) | Yes (maintained)                |
-| Schema validation   | No                    | No                                       | Yes (Schema Store)         | Yes (2020-12 default)           |
-| Format conversion   | No                    | Yes (CLI)                                | Partial (no X->TOML)       | Full bidirectional              |
-| Pagination          | No                    | No                                       | Yes (cursor-based)         | Yes (+ response limiting)       |
-| Query language      | No                    | Yes (yq/jq/dasel)                        | Yes (yq expressions)       | Yes (yq or dasel)               |
-| Multi-format (>3)   | N/A                   | Yes (7+ formats)                         | 3 (JSON/YAML/TOML)         | 5-7 (+ INI/HCL/CSV)             |
-| Structured output   | No                    | N/A                                      | No                         | Yes (outputSchema)              |
-| Observability       | No                    | No                                       | No                         | Yes (OTEL)                      |
+```python
+{
+    "json_path": "$.tags[1]",
+    "validator": "type",
+    "validator_value": "string",
+    "message": "42 is not of type 'string'",
+    "schema_path": "properties.tags.items.type"
+}
+```
 
-## Backend Decision: yq vs dasel
+Proposed validation result:
 
-This is a critical architectural decision that affects multiple features. Summary based on research:
+```python
+{
+    "valid": False,
+    "error_count": 4,
+    "best_match": { ... },  # Most relevant error via best_match()
+    "errors": [ ... ],      # All errors sorted by path
+}
+```
 
-| Criterion            | yq (mikefarah)                                | dasel (TomWright)                                                                |
-| -------------------- | --------------------------------------------- | -------------------------------------------------------------------------------- |
-| Format support       | JSON, YAML, XML, CSV, TOML, HCL, properties   | JSON, YAML, TOML, XML, CSV, HCL, INI                                             |
-| TOML encoding        | Scalar-only (cannot encode nested structures) | Full support                                                                     |
-| Query syntax         | jq-like (widely known)                        | CSS-like selectors (20+ functions)                                               |
-| Performance          | Baseline                                      | Up to 3x faster than jq, 15x faster than yq (per dasel benchmarks -- UNVERIFIED) |
-| Comment preservation | YAML: partial (via output flags)              | YAML/TOML: comments discarded on write                                           |
-| YAML anchors         | Preserved on read, expanded on write          | Not preserved                                                                    |
-| Maturity             | v4.52.2 (stable, widely adopted)              | v3 (in active development, syntax revamp)                                        |
-| Go module            | Yes                                           | Yes                                                                              |
-| Binary size          | ~14MB                                         | ~5MB (UNVERIFIED)                                                                |
+This replaces the `(bool, str)` return with a richer dict/Pydantic model.
 
-**Recommendation:** Do NOT switch wholesale from yq to dasel. The reasons:
+### 3. Loguru Replacement
 
-1. **Comment preservation is a core differentiator.** dasel discards YAML/TOML comments on write. The current server uses ruamel.yaml and tomlkit specifically to preserve them. Switching to dasel for writes would regress this.
-2. **YAML anchor handling matters.** The server has a YAML anchor optimizer. dasel does not preserve anchors.
-3. **dasel v3 is in active development.** Its query syntax changed significantly from v2. Betting on a moving target adds risk.
-4. **The TOML encoding limitation has a Python-native fix.** Use tomlkit (already a dependency) to encode nested structures to TOML. No need to switch backends for this one issue.
+**Scope of change**: 3 files with stdlib logging, ~15 call sites.
 
-**Where dasel adds value:** If expanding to INI format support (yq does not support INI; dasel does). Could use dasel as a secondary backend for INI-only operations while keeping yq as primary.
+**InterceptHandler requirement**: FastMCP, httpx, and other dependencies use stdlib logging internally. The InterceptHandler routes their messages through loguru so all log output is unified.
+
+**Standard InterceptHandler pattern** (from loguru official docs):
+
+```python
+import logging
+from loguru import logger
+
+class InterceptHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+        frame, depth = logging.currentframe(), 2
+        while frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+```
+
+**Migration steps per file**:
+
+1. Replace `import logging` with `from loguru import logger`
+2. Replace `logger = logging.getLogger(__name__)` with nothing (loguru has single global logger)
+3. Replace `logger.info("msg %s", arg)` with `logger.info("msg {}", arg)` (loguru uses `{}` format)
+4. Add `.bind(context_key=value)` where context is useful (e.g., `logger.bind(binary=binary_name)`)
+
+**Production safety**: Set `diagnose=False` in production to prevent leaking sensitive data in tracebacks. Loguru's `diagnose=True` (default) shows local variable values in exceptions.
+
+**Confidence:** HIGH -- loguru 0.7.3 is stable, supports Python 3.11+, the InterceptHandler pattern is well-documented.
+
+### 4. Pre-Write Validation Gate (GH#1)
+
+**Current state** (verified in codebase):
+
+The `_validate_and_write_content()` function in `services/mutation_operations.py` already:
+
+- Accepts `schema_path: Path | None`
+- Validates content against schema before writing
+- Raises `ToolError` on validation failure
+- Writes to file only after validation passes
+
+**What's missing** (per GH#1 analysis):
+
+1. **Syntax validation step**: The content string should be re-parsed to verify syntax before writing. Currently, if yq produces invalid output, it gets written to disk.
+2. **All-errors reporting**: Uses `_validate_against_schema()` which returns first error only.
+3. **`skip_validation` parameter**: No way to bypass validation for repair operations.
+4. **Explicit syntax validation in response**: The `data_schema(action="validate")` tool checks syntax and schema separately, but the write path does not report syntax status independently.
+
+**Implementation approach**:
+
+- Add syntax validation: re-parse content with the appropriate parser (json.loads for JSON, ruamel.yaml for YAML, tomlkit.parse for TOML) before schema validation
+- Wire in all-errors `_validate_against_schema()` (from feature #1 above)
+- Thread `skip_validation: bool = False` from `data()` tool through dispatch to `_validate_and_write_content()`
+- Return structured validation errors in the ToolError message when validation fails
+
+## MVP Recommendation
+
+Prioritize in this order:
+
+1. **All-errors schema validation + JSON paths + validator keywords** -- Highest impact, lowest effort. Changes one function (`_validate_against_schema`). Uses existing library capabilities already verified in the venv.
+
+2. **Structured validation error objects** -- Direct consumer of #1. Define a Pydantic model or TypedDict for validation errors. Changes the return type of `_validate_against_schema` and updates its callers.
+
+3. **Pre-write validation gate completion (GH#1)** -- Builds on #1 and #2. Add syntax validation step, wire through `skip_validation` parameter, update `_validate_and_write_content()` to use structured errors.
+
+4. **Loguru replacement** -- Independent of validation features. Can be done in parallel but is medium complexity due to InterceptHandler setup and ensuring no stdlib logging calls are missed.
+
+Defer:
+
+- **JSON serialized log output**: Configuration-only after loguru is in place. Not worth a separate phase.
+- **best_match ranking**: One-liner addition after all-errors is working. Bundle with #2.
 
 ## Sources
 
-- [FastMCP 3.0 What's New (blog post by author)](https://www.jlowin.dev/blog/fastmcp-3-whats-new) -- HIGH confidence (primary source)
-- [FastMCP changelog](https://gofastmcp.com/changelog) -- HIGH confidence (official)
-- [FastMCP v3.0.0rc2 migration notes via Context7](https://github.com/jlowin/fastmcp/blob/v3.0.0rc2/v3-notes/) -- HIGH confidence (source code)
-- [FastMCP 3.0 Beta 2 blog](https://www.jlowin.dev/blog/fastmcp-3-beta-2) -- HIGH confidence (primary source)
-- [MCP spec 2025-06-18 changelog](https://modelcontextprotocol.io/specification/2025-11-25/changelog) -- HIGH confidence (protocol spec)
-- [MCP spec 2025-11-25 overview (WorkOS)](https://workos.com/blog/mcp-2025-11-25-spec-update) -- MEDIUM confidence (third-party analysis)
-- [Cisco MCP elicitation analysis](https://blogs.cisco.com/developer/whats-new-in-mcp-elicitation-structured-content-and-oauth-enhancements) -- MEDIUM confidence
-- [dasel GitHub repository](https://github.com/TomWright/dasel) -- HIGH confidence (primary source)
-- [dasel v3 documentation](https://daseldocs.tomwright.me/v3) -- HIGH confidence (official docs)
-- [dasel selector overview](https://daseldocs.tomwright.me/functions/selector-overview) -- HIGH confidence (official docs)
-- [yq GitHub repository (mikefarah)](https://github.com/mikefarah/yq) -- HIGH confidence (primary source)
-- [yq TOML documentation](https://mikefarah.gitbook.io/yq/usage/toml) -- HIGH confidence (official docs)
-- [dasel "swiss army knife" analysis](https://www.blog.brightcoding.dev/2025/09/09/dasel-the-universal-swiss-army-knife-for-json-yaml-toml-xml-and-csv-on-the-command-line) -- LOW confidence (blog, performance claims unverified)
+**Verified against installed source code:**
 
----
+- jsonschema `ValidationError.json_path` property: `/home/ubuntulinuxqa2/repos/mcp-json-yaml-toml/.venv/lib/python3.11/site-packages/jsonschema/exceptions.py` lines 152-163
+- jsonschema `iter_errors` method: verified via `uv run python` against installed jsonschema 4.26.x
+- Current validation implementation: `packages/mcp_json_yaml_toml/services/schema_validation.py`
+- Current pre-write validation: `packages/mcp_json_yaml_toml/services/mutation_operations.py`
+- GH#1 issue: `gh issue view 1` -- pre-write syntax and schema validation for CRUD operations
 
-_Feature research for: MCP config file server tooling (mcp-json-yaml-toml)_
-_Researched: 2026-02-14_
+**Official documentation:**
+
+- [jsonschema Handling Validation Errors (stable)](https://python-jsonschema.readthedocs.io/en/stable/errors/) -- iter_errors, best_match, ValidationError attributes
+- [jsonschema Handling Validation Errors (latest)](https://python-jsonschema.readthedocs.io/en/latest/errors/) -- json_path property documentation
+- [loguru Overview](https://loguru.readthedocs.io/en/stable/overview.html?highlight=intercept+stdlib) -- InterceptHandler pattern, structured logging
+- [loguru Migration Guide](https://loguru.readthedocs.io/en/stable/resources/migration.html) -- stdlib to loguru migration
+- [loguru API Reference](https://loguru.readthedocs.io/en/stable/api/logger.html) -- bind(), serialize, diagnose parameters
+- [loguru PyPI](https://pypi.org/project/loguru/) -- version 0.7.3, Python >=3.5,<4.0
+- [loguru GitHub](https://github.com/Delgan/loguru) -- InterceptHandler reference implementation
+- [loguru Issue #78](https://github.com/Delgan/loguru/issues/78) -- canonical InterceptHandler discussion
+- [Production Loguru Guide (Dash0)](https://www.dash0.com/guides/python-logging-with-loguru) -- production best practices, diagnose=False

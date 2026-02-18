@@ -1,628 +1,643 @@
-# Architecture Research
+# Architecture Research: Loguru Logging & Enhanced Schema Validation
 
 **Domain:** MCP server for structured data manipulation (JSON/YAML/TOML)
-**Researched:** 2026-02-14
-**Confidence:** HIGH (current codebase analysis) / MEDIUM (FastMCP 3.x migration specifics)
+**Researched:** 2026-02-17
+**Focus:** Integration of loguru logging replacement and enhanced schema validation into existing layered architecture
+**Confidence:** HIGH (codebase analysis + verified library documentation)
 
-## Current Architecture (As-Is)
+## Current Architecture Snapshot
 
-### System Overview
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                       MCP Transport Layer                           │
-│                   (FastMCP 2.x runtime, stdio)                      │
-├─────────────────────────────────────────────────────────────────────┤
-│                        server.py (1880 lines)                       │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌──────────────────┐ │
-│  │  7 @tools  │ │ 2 @resource│ │ 3 @prompt  │ │  ~30 _handle_*   │ │
-│  │ decorators │ │ decorators │ │ decorators │ │  helper funcs    │ │
-│  └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └───────┬──────────┘ │
-│        │              │              │                 │            │
-│        └──────────────┴──────────────┴─────────────────┘            │
-│                              │                                      │
-├──────────────────────────────┼──────────────────────────────────────┤
-│                     Domain Services Layer                           │
-│  ┌──────────────┐ ┌──────────────┐ ┌────────────────────────────┐  │
-│  │ schemas.py   │ │lmql_const.py │ │      config.py             │  │
-│  │ (1195 lines) │ │ (846 lines)  │ │      (129 lines)           │  │
-│  │ SchemaManager│ │ConstraintReg │ │ format enable/disable      │  │
-│  └──────────────┘ └──────────────┘ └────────────────────────────┘  │
-│                                                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                     Execution Backend Layer                          │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │               yq_wrapper.py (934 lines)                       │  │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐  │  │
-│  │  │ Binary Mgmt     │  │ Query Execution │  │ Error Parse  │  │  │
-│  │  │ (~560 lines)    │  │ (~230 lines)    │  │ (~40 lines)  │  │  │
-│  │  │ download/verify │  │ build cmd, run  │  │ AI-friendly  │  │  │
-│  │  │ locate/validate │  │ subprocess call │  │ messages     │  │  │
-│  │  └─────────────────┘  └─────────────────┘  └──────────────┘  │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                                                     │
-│  ┌──────────────┐  ┌──────────────────┐                            │
-│  │ toml_utils.py│  │ yaml_optimizer.py│                            │
-│  │ (87 lines)   │  │ (372 lines)      │                            │
-│  │ tomlkit r/w  │  │ anchor/alias opt │                            │
-│  └──────────────┘  └──────────────────┘                            │
-│                                                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                     External Binaries / Libraries                    │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐           │
-│  │ yq binary│  │ tomlkit  │  │ruamel.yml│  │ orjson   │           │
-│  │(mikefarah│  │ (TOML    │  │ (YAML    │  │ (JSON    │           │
-│  │  /yq)    │  │  write)  │  │  fidelity│  │  fast)   │           │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘           │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Current Component Responsibilities
-
-| Component             | Responsibility                                                                                                                                  | Lines | Communicates With                                                         |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------- |
-| `server.py`           | Tool/resource/prompt registration, request dispatch, pagination, response formatting, format detection, schema validation orchestration         | 1880  | yq_wrapper, schemas, lmql_constraints, config, toml_utils, yaml_optimizer |
-| `yq_wrapper.py`       | Binary resolution (env/cache/system/download), platform detection, checksum verification, subprocess execution, command building, error parsing | 934   | yq binary (subprocess), GitHub API (httpx)                                |
-| `schemas.py`          | Schema Store catalog fetching, IDE extension schema discovery, file-to-schema matching, schema caching                                          | 1195  | httpx (Schema Store), filesystem (IDE extensions)                         |
-| `lmql_constraints.py` | Regex-based input validation, constraint registry, partial validation support                                                                   | 846   | lmql.ops.regex                                                            |
-| `config.py`           | Environment variable parsing for enabled formats                                                                                                | 129   | yq_wrapper (FormatType enum)                                              |
-| `toml_utils.py`       | TOML-specific set/delete using tomlkit (yq can't write TOML)                                                                                    | 87    | tomlkit                                                                   |
-| `yaml_optimizer.py`   | YAML anchor/alias deduplication                                                                                                                 | 372   | ruamel.yaml, orjson                                                       |
-
-### Current Data Flow
+The codebase completed a v1.1 refactoring that decomposed a monolithic `server.py` into a layered architecture:
 
 ```
-MCP Client Request
-    │
-    ▼
-FastMCP runtime deserializes → @mcp.tool decorator
-    │
-    ▼
-Tool function (server.py)
-    ├── _detect_file_format(path) → FormatType
-    ├── is_format_enabled(format) → bool
-    ├── schema_manager.get_schema_info_for_file(path) → SchemaInfo?
-    │
-    ├── [GET operations]
-    │   ├── execute_yq(expression, input_file, input_format, output_format)
-    │   │       └── get_yq_binary_path() → resolves binary → subprocess.run()
-    │   ├── _paginate_result(result_str, cursor)
-    │   └── return dict response
-    │
-    ├── [SET operations]
-    │   ├── TOML → _set_toml_value_handler() → toml_utils.set_toml_value()
-    │   ├── YAML/JSON → execute_yq(..., in_place=True)
-    │   │   └── _optimize_yaml_if_needed(path) → yaml_optimizer
-    │   └── _validate_and_write_content(path, content, schema)
-    │
-    └── [DELETE operations]
-        ├── TOML → _delete_toml_key_handler() → toml_utils.delete_toml_key()
-        └── YAML/JSON → execute_yq(..., in_place=True)
+server.py              ~84 lines   Entry point: FastMCP init + tool imports
+tools/                 6 files     Thin @mcp.tool decorators delegating to services
+services/              7 files     Business logic (get, mutation, query, diff, schema_validation, pagination)
+backends/              3 files     yq binary management + execution abstraction
+formats/               2 files     Format detection, content parsing, value parsing
+schemas/               5 files     Schema discovery, loading, scanning, IDE cache, manager facade
+models/                2 files     Pydantic response models, schema dataclasses
+config.py                          Environment-based format configuration
+telemetry.py                       OpenTelemetry tracer helper (no-op when SDK absent)
+lmql_constraints.py                LMQL constraint validation
 ```
 
-## Identified Architectural Problems
+### Current Logging State
 
-### Problem 1: server.py Is a God Module
+Three stdlib `logging` usage sites exist, all at DEBUG level:
 
-**Observed:** 1880 lines mixing tool registration, business logic, pagination, format detection, value parsing, schema validation orchestration, and response formatting. Thirty-plus internal helper functions.
+| File                         | Usage                                                                           | Logger Pattern                 |
+| ---------------------------- | ------------------------------------------------------------------------------- | ------------------------------ |
+| `backends/binary_manager.py` | `logger = logging.getLogger(__name__)` with `.debug()`, `.info()`, `.warning()` | Module-level named logger      |
+| `schemas/manager.py`         | `logging.debug()` (module-level calls)                                          | Direct `logging.debug()` calls |
+| `schemas/scanning.py`        | `logging.debug()` (1 call)                                                      | Direct `logging.debug()` call  |
 
-**Impact:** Adding a new tool requires understanding the entire file. Testing business logic requires FastMCP context. The file has seven distinct responsibilities (tool registration, dispatch, pagination, format handling, value parsing, schema orchestration, response building).
+No centralized logging configuration exists. No log output is visible by default because no handlers are configured for the `mcp_json_yaml_toml` namespace.
 
-### Problem 2: yq_wrapper.py Mixes Two Unrelated Concerns
+### Current Schema Validation State
 
-**Observed:** Binary lifecycle management (~560 lines: download, verify, locate, version check, platform detection, cleanup) is entangled with query execution (~230 lines: build command, run subprocess, parse output). These change for completely different reasons.
+Schema validation lives in `services/schema_validation.py`:
 
-**Impact:** Changing binary management (e.g., adding a new download source) forces re-testing query execution. Swapping execution backends (dasel, native) requires navigating binary management code.
+- `_validate_against_schema(data, schema_path)` returns `tuple[bool, str]`
+- Uses `Draft7Validator` or `Draft202012Validator` based on `$schema` field
+- `referencing.Registry` with httpx retrieval for remote `$ref` resolution
+- Catches **first** `ValidationError` only, returns `e.message` as a string
+- Called from `_validate_and_write_content()` in mutation_operations.py (pre-write validation)
+- Called from `_handle_schema_validate()` in tools/schema.py (explicit validation action)
 
-### Problem 3: Format-Specific Logic Scattered Across Modules
+## Integration Analysis: Loguru Logging
 
-**Observed:** TOML write operations bypass yq entirely (`toml_utils.py`). YAML post-processing lives in `yaml_optimizer.py`. JSON parsing uses `orjson` directly in server.py. Format detection is in server.py but FormatType is in yq_wrapper.py.
+### What Changes
 
-**Impact:** No clear boundary for "how does format X work." Adding a new format requires changes in 4+ files with no guiding interface.
+**NEW file:** `packages/mcp_json_yaml_toml/logging.py` -- centralized logging configuration
 
-### Problem 4: Direct Coupling to yq Binary
+This module provides:
 
-**Observed:** `execute_yq()` is called 14 times directly from server.py. The function name, parameters, and error types (`YQError`, `YQExecutionError`) leak yq-specific concepts into the business logic layer.
+1. Loguru configuration (remove default sink, add controlled sinks)
+2. InterceptHandler for stdlib logging compatibility
+3. Environment-variable-driven sink setup
+4. A single `configure_logging()` function called from server startup
 
-**Impact:** Cannot swap execution backends without changing every call site in server.py.
+**MODIFIED files (logging consumers):**
 
-## Recommended Architecture (To-Be)
+| File                         | Current                                          | After                                              |
+| ---------------------------- | ------------------------------------------------ | -------------------------------------------------- |
+| `backends/binary_manager.py` | `import logging` + `logging.getLogger(__name__)` | `from loguru import logger`                        |
+| `schemas/manager.py`         | `import logging` + `logging.debug(...)`          | `from loguru import logger`                        |
+| `schemas/scanning.py`        | `import logging` + `logging.debug(...)`          | `from loguru import logger`                        |
+| `server.py`                  | No logging                                       | Add `configure_logging()` call before tool imports |
 
-### Target System Overview
+**NEW logging sites (should be added during integration):**
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                       MCP Transport Layer                           │
-│               (FastMCP 3.x runtime, StreamableHTTP)                 │
-├─────────────────────────────────────────────────────────────────────┤
-│                       Tool Registration Layer                       │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │tools/    │ │tools/    │ │tools/    │ │tools/    │ │tools/    │ │
-│  │data.py   │ │query.py  │ │schema.py │ │convert.py│ │constrain │ │
-│  │(get/set/ │ │(yq expr) │ │(validate │ │(format   │ │_tools.py │ │
-│  │ delete)  │ │          │ │ scan etc)│ │ convert) │ │          │ │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ │
-│       └─────────────┴────────────┴─────────────┴────────────┘       │
-│                              │                                      │
-├──────────────────────────────┼──────────────────────────────────────┤
-│                      Service Layer (new)                             │
-│  ┌────────────────────┐  ┌───────────┐  ┌───────────────────────┐  │
-│  │  data_service.py   │  │ pagination│  │  response_builder.py  │  │
-│  │  (format routing,  │  │ .py       │  │  (consistent response │  │
-│  │   validation, r/w) │  │           │  │   formatting)         │  │
-│  └─────────┬──────────┘  └───────────┘  └───────────────────────┘  │
-│            │                                                        │
-├────────────┼────────────────────────────────────────────────────────┤
-│            │      Backend Abstraction Layer (new)                    │
-│  ┌─────────┴──────────────────────────────────────────────────┐    │
-│  │              QueryBackend (Protocol / ABC)                  │    │
-│  │  query(expr, input, in_fmt, out_fmt) → QueryResult          │    │
-│  │  supports_format(fmt) → bool                                │    │
-│  │  validate_expression(expr) → bool                           │    │
-│  └─────────┬───────────────────┬───────────────────┬──────────┘    │
-│            │                   │                   │               │
-│  ┌─────────┴────┐  ┌──────────┴────┐  ┌──────────┴─────────┐     │
-│  │ YqBackend    │  │ DaselBackend  │  │ NativeBackend      │     │
-│  │ (default)    │  │ (future)      │  │ (future, no binary)│     │
-│  └─────────┬────┘  └───────────────┘  └────────────────────┘     │
-│            │                                                       │
-├────────────┼───────────────────────────────────────────────────────┤
-│            │       Binary Management Layer (extracted)              │
-│  ┌─────────┴──────────────────────────────────────────────────┐   │
-│  │            BinaryManager (Protocol / ABC)                   │   │
-│  │  get_binary_path() → Path                                   │   │
-│  │  validate_binary() → (bool, str)                            │   │
-│  └─────────┬────────────────────┬─────────────────────────┐   │   │
-│  ┌─────────┴────┐  ┌───────────┴────┐  ┌─────────────────┘   │   │
-│  │ YqBinaryMgr  │  │ DaselBinaryMgr│  │ (future impls)      │   │
-│  │ download,    │  │               │  │                      │   │
-│  │ verify, cache│  │               │  │                      │   │
-│  └──────────────┘  └───────────────┘  └──────────────────────┘   │
-│                                                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
-│  │ schemas.py   │  │constraints.py│  │ config.py    │             │
-│  │ (unchanged)  │  │ (unchanged)  │  │ (unchanged)  │             │
-│  └──────────────┘  └──────────────┘  └──────────────┘             │
-│                                                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                    Format Handlers Layer (new)                       │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
-│  │FormatHandler │  │FormatHandler │  │FormatHandler │             │
-│  │  (JSON)      │  │  (YAML)      │  │  (TOML)      │             │
-│  │ parse, write │  │ parse, write │  │ parse, write │             │
-│  │ orjson       │  │ ruamel+optim │  │ tomlkit      │             │
-│  └──────────────┘  └──────────────┘  └──────────────┘             │
-└─────────────────────────────────────────────────────────────────────┘
-```
+| File                              | What to Log                                     | Level         |
+| --------------------------------- | ----------------------------------------------- | ------------- |
+| `backends/yq.py`                  | yq subprocess commands, execution times, errors | DEBUG/WARNING |
+| `services/schema_validation.py`   | Validation results, schema load failures        | DEBUG/WARNING |
+| `services/mutation_operations.py` | File write operations, optimization results     | DEBUG         |
+| `tools/data.py`                   | Tool invocations with file paths                | DEBUG         |
+| `config.py`                       | Format enable/disable decisions                 | DEBUG         |
 
-### Component Boundaries
-
-| Component                      | Responsibility                                                                    | Communicates With                          |
-| ------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------ |
-| `tools/*.py` (5 files)         | Thin tool registration, parameter validation, delegate to services                | data_service, pagination, response_builder |
-| `services/data_service.py`     | Format routing, schema validation orchestration, read/write coordination          | QueryBackend, FormatHandler, SchemaManager |
-| `services/pagination.py`       | Cursor encode/decode, page extraction, advisory hints                             | None (pure utility)                        |
-| `services/response_builder.py` | Consistent response dict construction                                             | None (pure utility)                        |
-| `backends/base.py`             | `QueryBackend` protocol definition, `QueryResult` model, `BackendError` hierarchy | None (interface only)                      |
-| `backends/yq.py`               | yq-specific command building, subprocess execution, error parsing                 | BinaryManager                              |
-| `backends/binary_manager.py`   | Binary resolution, download, verification, caching                                | GitHub API, filesystem                     |
-| `formats/base.py`              | `FormatHandler` protocol: parse, serialize, detect                                | None (interface only)                      |
-| `formats/json_handler.py`      | JSON parse/serialize via orjson                                                   | orjson                                     |
-| `formats/yaml_handler.py`      | YAML parse/serialize via ruamel.yaml, anchor optimization                         | ruamel.yaml, yaml_optimizer                |
-| `formats/toml_handler.py`      | TOML parse/serialize via tomlkit                                                  | tomlkit                                    |
-| `schemas.py`                   | Schema discovery, caching, validation (unchanged)                                 | httpx, filesystem                          |
-| `constraints.py`               | LMQL constraint validation (unchanged)                                            | lmql                                       |
-| `config.py`                    | Environment-based format configuration (unchanged)                                | None                                       |
-
-### Recommended Project Structure
-
-```
-packages/mcp_json_yaml_toml/
-├── __init__.py
-├── config.py                    # Environment config (unchanged)
-├── version.py                   # Version (unchanged)
-├── server.py                    # Entry point: FastMCP init + tool imports (< 50 lines)
-│
-├── tools/                       # Tool registration layer (thin)
-│   ├── __init__.py
-│   ├── data.py                  # data() tool: get/set/delete
-│   ├── query.py                 # data_query() tool
-│   ├── schema.py                # data_schema() tool
-│   ├── convert.py               # data_convert(), data_merge() tools
-│   └── constraints.py           # constraint_validate(), constraint_list() tools
-│                                  + resources and prompts
-│
-├── services/                    # Business logic layer
-│   ├── __init__.py
-│   ├── data_service.py          # Format routing, validation orchestration
-│   ├── pagination.py            # Cursor-based pagination
-│   └── response_builder.py      # Response dict construction
-│
-├── backends/                    # Execution backend abstraction
-│   ├── __init__.py
-│   ├── base.py                  # QueryBackend protocol, QueryResult, BackendError
-│   ├── yq.py                   # YqBackend implementation
-│   └── binary_manager.py       # Binary lifecycle (download, verify, cache)
-│
-├── formats/                     # Format-specific handlers
-│   ├── __init__.py
-│   ├── base.py                  # FormatHandler protocol, FormatType enum
-│   ├── json_handler.py          # JSON via orjson
-│   ├── yaml_handler.py          # YAML via ruamel.yaml + optimizer
-│   └── toml_handler.py          # TOML via tomlkit
-│
-├── schemas.py                   # Schema management (unchanged initially)
-├── lmql_constraints.py          # Constraint validation (unchanged initially)
-├── yaml_optimizer.py            # Anchor optimization (moved into formats/ later)
-│
-└── tests/                       # Tests (existing structure)
-    └── ...
-```
-
-### Structure Rationale
-
-- **tools/**: Each file contains one or two `@mcp.tool` decorators with minimal logic. Thin wrappers that validate input and delegate. Keeps the MCP registration surface small and testable without FastMCP runtime.
-- **services/**: Business logic with no dependency on FastMCP. Functions can be unit-tested with plain Python. This is where pagination, format detection, and response construction live.
-- **backends/**: The abstraction boundary that enables swapping yq for dasel or a native implementation. Each backend implements the same `QueryBackend` protocol.
-- **formats/**: Encapsulates format-specific parsing and serialization. Eliminates the scattered pattern where TOML bypasses yq while YAML uses yq then post-processes with ruamel.yaml.
-
-## Architectural Patterns
-
-### Pattern 1: Backend Protocol (Strategy Pattern)
-
-**What:** Define a `QueryBackend` protocol that all execution engines implement. The service layer programs against the protocol, not the concrete backend.
-
-**When to use:** When the execution engine may change (yq to dasel) or when multiple backends coexist (yq for query, native for write).
-
-**Trade-offs:** Adds an interface layer (+1 file, +1 import hop). Worth it because it decouples 14 direct `execute_yq()` calls from the business logic.
-
-**Example:**
+### Architecture of logging.py
 
 ```python
-from typing import Protocol, runtime_checkable
-from pathlib import Path
-from dataclasses import dataclass
+"""Centralized logging configuration for MCP JSON/YAML/TOML server.
+
+Provides loguru-based structured logging with:
+- Stdlib logging interception (captures httpx, jsonschema, etc.)
+- Environment-variable-driven configuration
+- MCP-safe defaults (stderr only, never stdout)
+"""
+from __future__ import annotations
+
+import logging
+import os
+import sys
+
+from loguru import logger
+
+
+class InterceptHandler(logging.Handler):
+    """Route stdlib logging to loguru.
+
+    Captures log messages from third-party libraries (httpx, jsonschema,
+    opentelemetry) and routes them through loguru's unified pipeline.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        # Get corresponding loguru level
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = str(record.levelno)
+
+        # Find caller from where the logged message originated
+        frame, depth = logging.currentframe(), 0
+        while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(
+            level, record.getMessage()
+        )
+
+
+def configure_logging() -> None:
+    """Configure logging for the MCP server.
+
+    Environment variables:
+        MCP_LOG_LEVEL: Minimum log level for stderr output (default: none/disabled)
+        MCP_LOG_DIR: Directory for file logging with rotation (default: disabled)
+        MCP_LOG_FORMAT: Log format string (default: loguru default)
+
+    CRITICAL: Never writes to stdout -- MCP protocol uses stdout for messages.
+    """
+    # Remove loguru's default stderr handler
+    logger.remove()
+
+    # Stderr logging (opt-in via MCP_LOG_LEVEL)
+    log_level = os.getenv("MCP_LOG_LEVEL", "").strip().upper()
+    if log_level:
+        logger.add(
+            sys.stderr,
+            level=log_level,
+            format="<level>{level: <8}</level> | "
+                   "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+                   "<level>{message}</level>",
+            diagnose=False,  # No sensitive data in tracebacks
+        )
+
+    # File logging (opt-in via MCP_LOG_DIR)
+    log_dir = os.getenv("MCP_LOG_DIR", "").strip()
+    if log_dir:
+        logger.add(
+            f"{log_dir}/mcp-json-yaml-toml.log",
+            rotation="10 MB",
+            retention="3 days",
+            level=log_level or "DEBUG",
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | "
+                   "{name}:{function}:{line} - {message}",
+            serialize=False,  # Human-readable by default; set True for JSON
+            diagnose=False,
+        )
+
+    # Intercept stdlib logging -> loguru
+    logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+```
+
+### Integration Point: server.py
+
+```python
+# server.py -- add before tool imports
+from mcp_json_yaml_toml.logging import configure_logging
+
+configure_logging()  # Must run before any library imports that log
+
+mcp = FastMCP("mcp-json-yaml-toml")
+schema_manager = SchemaManager()
+```
+
+### MCP Protocol Safety
+
+The MCP stdio transport uses stdout for protocol messages. Loguru's default handler writes to stderr, which is correct. The `configure_logging()` function explicitly targets `sys.stderr` and never adds a stdout sink. This is enforced by design, not by accident.
+
+### Stdlib Interception Scope
+
+The InterceptHandler captures logging from:
+
+- `httpx` (HTTP request logging in binary_manager.py and schemas/manager.py)
+- `jsonschema` (validation warnings)
+- `opentelemetry` (if SDK configured)
+- Any future library that uses stdlib logging
+
+### Dependency Impact
+
+Adding `loguru>=0.7.3` to `dependencies` in pyproject.toml. Loguru has zero dependencies (pure Python). No transitive dependency conflicts.
+
+### Type Checking Compatibility
+
+Loguru provides type stubs in its package. The `loguru-mypy` plugin (optional, add to dev dependencies) enables better type inference for `logger.opt()` and `logger.bind()`. Basedpyright works with loguru's built-in stubs without additional plugins.
+
+## Integration Analysis: Enhanced Schema Validation
+
+### What Changes
+
+**MODIFIED file:** `services/schema_validation.py` -- the core change
+
+Current signature and behavior:
+
+```python
+def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]
+```
+
+New signature:
+
+```python
+def _validate_against_schema(
+    data: Any, schema_path: Path, *, collect_all: bool = True
+) -> ValidationResult
+```
+
+**NEW model:** Add `ValidationResult` dataclass to `models/responses.py` (or a new `models/validation.py`):
+
+```python
+@dataclass
+class SchemaValidationError:
+    """A single schema validation error with path context."""
+    message: str
+    json_path: str           # e.g., "$.database.port"
+    schema_path: str         # e.g., "/properties/database/properties/port/type"
+    validator: str           # e.g., "type", "required", "enum"
+    context: list[str] = field(default_factory=list)  # Sub-errors for anyOf/oneOf
 
 @dataclass
-class QueryResult:
-    """Backend-agnostic query result."""
-    stdout: str
-    data: Any = None
-    stderr: str = ""
+class ValidationResult:
+    """Result of schema validation with all errors collected."""
+    is_valid: bool
+    errors: list[SchemaValidationError] = field(default_factory=list)
+    error_count: int = 0
 
-class BackendError(Exception):
-    """Base error for backend execution failures."""
-    def __init__(self, message: str, stderr: str = "", returncode: int = -1) -> None:
-        super().__init__(message)
-        self.stderr = stderr
-        self.returncode = returncode
+    @property
+    def message(self) -> str:
+        """Backward-compatible single message string."""
+        if self.is_valid:
+            return "Schema validation passed"
+        if not self.errors:
+            return "Schema validation failed"
+        return self.errors[0].message
 
-@runtime_checkable
-class QueryBackend(Protocol):
-    """Protocol for data query/manipulation backends."""
-
-    def query(
-        self,
-        expression: str,
-        input_file: Path | None = None,
-        input_data: str | None = None,
-        input_format: str = "yaml",
-        output_format: str = "json",
-        in_place: bool = False,
-    ) -> QueryResult: ...
-
-    def supports_format(self, fmt: str) -> bool: ...
+    def to_dict(self) -> dict[str, Any]:
+        """Structured error output for tool responses."""
+        ...
 ```
 
-### Pattern 2: Format Handler Registry
+### Changes to Callers
 
-**What:** Each format (JSON, YAML, TOML) has a handler that owns parsing and serialization. A registry maps FormatType to handler.
-
-**When to use:** When format-specific logic is scattered (TOML write uses tomlkit, YAML write goes through yq then ruamel.yaml post-processing, JSON uses orjson directly).
-
-**Trade-offs:** Slight overhead for simple operations. Eliminates the `if format == "toml": use_tomlkit() elif format == "yaml": use_yq_then_ruamel()` branching scattered through server.py.
-
-**Example:**
+**`services/mutation_operations.py` -- `_validate_and_write_content()`:**
 
 ```python
-from typing import Protocol, Any
-from pathlib import Path
+# Before:
+is_valid, msg = _validate_against_schema(validation_data, schema_path)
+if not is_valid:
+    raise ToolError(f"Schema validation failed: {msg}")
 
-class FormatHandler(Protocol):
-    """Protocol for format-specific parse/serialize operations."""
-
-    def parse(self, content: str) -> Any: ...
-    def serialize(self, data: Any) -> str: ...
-    def detect(self, path: Path) -> bool: ...
-
-class TomlHandler:
-    """TOML format handler using tomlkit for comment-preserving operations."""
-
-    def parse(self, content: str) -> Any:
-        return tomlkit.parse(content)
-
-    def serialize(self, data: Any) -> str:
-        return tomlkit.dumps(data)
-
-    def detect(self, path: Path) -> bool:
-        return path.suffix.lower() == ".toml"
+# After:
+result = _validate_against_schema(validation_data, schema_path)
+if not result.is_valid:
+    # Include structured errors in ToolError for AI context
+    error_details = "; ".join(
+        f"{e.json_path}: {e.message}" for e in result.errors[:5]
+    )
+    raise ToolError(f"Schema validation failed ({result.error_count} errors): {error_details}")
 ```
 
-### Pattern 3: Thin Tool Registration
-
-**What:** Tool functions contain only parameter validation and delegation. Business logic lives in services.
-
-**When to use:** Always. This is the primary mechanism for reducing server.py from 1880 lines to under 50.
-
-**Trade-offs:** More files to navigate. Mitigated by clear naming and the project structure.
-
-**Example:**
+**`tools/schema.py` -- `_handle_schema_validate()`:**
 
 ```python
-# tools/query.py
-from fastmcp import FastMCP
-from pydantic import Field
-from typing import Annotated, Any
+# Before:
+is_valid, message = _validate_against_schema(result.data, schema_file)
+validation_results["schema_validated"] = is_valid
+validation_results["schema_message"] = message
 
-def register_query_tools(mcp: FastMCP) -> None:
-    """Register query-related MCP tools."""
-
-    @mcp.tool(annotations={"readOnlyHint": True})
-    def data_query(
-        file_path: Annotated[str, Field(description="Path to file")],
-        expression: Annotated[str, Field(description="yq expression")],
-        output_format: Annotated[str | None, Field(description="Output format")] = None,
-        cursor: Annotated[str | None, Field(description="Pagination cursor")] = None,
-    ) -> dict[str, Any]:
-        """Extract data using expressions."""
-        return data_service.query(file_path, expression, output_format, cursor)
+# After:
+validation = _validate_against_schema(result.data, schema_file)
+validation_results["schema_validated"] = validation.is_valid
+validation_results["schema_message"] = validation.message
+validation_results["schema_errors"] = [
+    {
+        "path": e.json_path,
+        "message": e.message,
+        "validator": e.validator,
+    }
+    for e in validation.errors
+]
+validation_results["schema_error_count"] = validation.error_count
 ```
 
-## Data Flow (Target Architecture)
+### Implementation Detail: iter_errors
 
-### Read (Query) Flow
+The key change in `_validate_against_schema` is replacing:
 
-```
-MCP Client
-    │
-    ▼
-FastMCP 3.x runtime
-    │
-    ▼
-tools/query.py::data_query()          ← param validation only
-    │
-    ▼
-services/data_service.py::query()      ← format detection, enabled check
-    ├── config.is_format_enabled()
-    ├── formats/base.py::detect_format(path) → FormatType
-    │
-    ▼
-backends/yq.py::YqBackend.query()      ← backend-specific execution
-    ├── binary_manager.get_binary_path()
-    ├── _build_command()
-    ├── _run_subprocess()
-    └── return QueryResult
-    │
-    ▼
-services/pagination.py::paginate()     ← cursor handling
-    │
-    ▼
-services/response_builder.py::build()  ← consistent dict
-    │
-    ▼
-Return to MCP Client
+```python
+# Current: raises on first error
+Draft202012Validator(schema, registry=registry).validate(data)
 ```
 
-### Write (Set) Flow
+With:
 
-```
-MCP Client
-    │
-    ▼
-tools/data.py::data(operation="set")   ← param validation
-    │
-    ▼
-services/data_service.py::set_value()  ← format routing
-    │
-    ├── [TOML path]
-    │   ├── formats/toml_handler.py::parse() → data
-    │   ├── modify data in-memory
-    │   ├── formats/toml_handler.py::serialize() → content
-    │   └── schema validation → write file
-    │
-    ├── [YAML/JSON path]
-    │   ├── backends/yq.py::YqBackend.query(..., in_place=True)
-    │   ├── [YAML only] formats/yaml_handler.py::optimize()
-    │   └── schema validation (post-write reparse)
-    │
-    ▼
-Return to MCP Client
+```python
+# New: collects all errors
+validator_cls = Draft7Validator if "draft-07" in schema_dialect else Draft202012Validator
+validator = validator_cls(schema, registry=registry)
+errors = sorted(validator.iter_errors(data), key=lambda e: list(e.absolute_path))
 ```
 
-### Key Data Flows
+`iter_errors()` is a built-in method on all jsonschema validators. It yields `ValidationError` objects without raising. Each error provides `.absolute_path`, `.schema_path`, `.message`, `.validator`, and `.context` (sub-errors for compound validators like `anyOf`/`oneOf`).
 
-1. **Query flow:** Client request -> tool (thin) -> data_service (routing) -> backend (execution) -> pagination -> response builder -> client. Data crosses 4 boundaries, each with a single responsibility.
+### Backward Compatibility
 
-2. **Write flow:** Client request -> tool -> data_service -> format handler OR backend -> schema validation -> filesystem write -> client. The fork at format handler vs. backend is the key design decision: TOML always uses the native handler (yq cannot write TOML), while YAML/JSON use the backend with optional post-processing.
+The `ValidationResult.message` property provides a single-string summary identical to the current output. Callers that previously destructured `tuple[bool, str]` need updating, but there are exactly **2 call sites** (identified above). The response dict format is additive -- `schema_message` and `schema_validated` fields are preserved, new `schema_errors` and `schema_error_count` fields are added.
 
-3. **Schema flow:** Unchanged from current. SchemaManager resolves schemas via catalog + IDE extensions + file associations.
+### Response Model Changes
 
-4. **Constraint flow:** Unchanged from current. ConstraintRegistry validates inputs via LMQL regex.
+The `ValidationResponse` model in `models/responses.py` gains optional fields:
 
-## FastMCP 3.x Migration Analysis
+```python
+class ValidationResponse(ToolResponse):
+    format: str | None = None
+    syntax_valid: bool = False
+    schema_validated: bool = False
+    syntax_message: str | None = None
+    schema_message: str | None = None
+    schema_file: str | None = None
+    overall_valid: bool = False
+    # NEW:
+    schema_errors: list[dict[str, str]] | None = None
+    schema_error_count: int = 0
+```
 
-**Source:** [FastMCP upgrade guide](https://github.com/jlowin/fastmcp/blob/main/docs/development/upgrade-guide.mdx), [Context7 v3.0.0rc2 docs](/jlowin/fastmcp/v3.0.0rc2)
-**Confidence:** HIGH (official upgrade guide verified)
+## Component Boundary Map
 
-### Changes Required for This Codebase
+### New Components
 
-| Breaking Change                                                                                | Impact on This Project                                                                                                  | Action Required                         |
-| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Import path change (`from mcp.server.fastmcp import FastMCP` -> `from fastmcp import FastMCP`) | **None.** Already using `from fastmcp import FastMCP`.                                                                  | No change needed                        |
-| `mask_error_details` constructor kwarg removed                                                 | **Yes.** `FastMCP("mcp-json-yaml-toml", mask_error_details=False)` will fail.                                           | Remove kwarg or find replacement        |
-| `@mcp.tool(annotations={"readOnlyHint": True})` syntax                                         | **Verify.** The v3 docs show `annotations=ToolAnnotations(readOnlyHint=True)` in MCPMixin but dict form may still work. | Test; may need `ToolAnnotations` import |
-| Decorators return functions instead of component objects                                       | **None.** No code treats decorated functions as component objects.                                                      | No change needed                        |
-| `enable()`/`disable()` moved to server                                                         | **None.** Not used in current codebase.                                                                                 | No change needed                        |
-| Metadata namespace `_fastmcp` -> `fastmcp`                                                     | **None.** Not accessing FastMCP metadata.                                                                               | No change needed                        |
-| `ToolError` import path                                                                        | **Verify.** Currently `from fastmcp.exceptions import ToolError`.                                                       | Verify path unchanged in v3             |
-| Resource return types (lists must be JSON string or ResourceResult)                            | **Potential.** `list_all_constraints()` returns a dict (fine). `get_constraint_definition()` returns a dict (fine).     | Likely no change                        |
+| Component               | Location                                          | Responsibility                                                   | Depends On             |
+| ----------------------- | ------------------------------------------------- | ---------------------------------------------------------------- | ---------------------- |
+| `logging.py`            | `packages/mcp_json_yaml_toml/logging.py`          | Loguru configuration, InterceptHandler, environment-driven sinks | loguru, stdlib logging |
+| `SchemaValidationError` | `models/responses.py` (or `models/validation.py`) | Single validation error with path context                        | None (dataclass)       |
+| `ValidationResult`      | `models/responses.py` (or `models/validation.py`) | Aggregated validation result with backward-compatible `.message` | SchemaValidationError  |
 
-### Migration Risk Assessment
+### Modified Components
 
-The migration from FastMCP 2.x to 3.x is **low risk** for this codebase. The project uses a narrow surface of the FastMCP API:
+| Component                         | What Changes                                                                 | Why                                           |
+| --------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------- |
+| `server.py`                       | Add `configure_logging()` call                                               | Initialize logging before any module loads    |
+| `backends/binary_manager.py`      | Replace `import logging` with `from loguru import logger`                    | Unified logging pipeline                      |
+| `schemas/manager.py`              | Replace `logging.debug()` with `logger.debug()`                              | Unified logging pipeline                      |
+| `schemas/scanning.py`             | Replace `logging.debug()` with `logger.debug()`                              | Unified logging pipeline                      |
+| `services/schema_validation.py`   | Return `ValidationResult` instead of `tuple[bool, str]`; use `iter_errors()` | Collect all errors, provide structured output |
+| `services/mutation_operations.py` | Update `_validate_and_write_content()` to use `ValidationResult`             | Caller adapts to new return type              |
+| `tools/schema.py`                 | Update `_handle_schema_validate()` to include structured errors              | Caller adapts to new return type              |
+| `models/responses.py`             | Add `schema_errors` and `schema_error_count` to `ValidationResponse`         | Structured error output                       |
 
-- `FastMCP()` constructor (1 call site)
-- `@mcp.tool()` decorator (7 call sites)
-- `@mcp.resource()` decorator (2 call sites)
-- `@mcp.prompt()` decorator (3 call sites)
-- `ToolError` exception (60+ usage sites, but import path is the only concern)
-- `mcp.run()` (1 call site)
+### Unchanged Components
 
-The primary risk is the `mask_error_details=False` constructor parameter removal. The dependency pin `fastmcp>=2.14.4,<3` in `pyproject.toml` explicitly blocks v3 upgrades until ready.
+| Component              | Why Unchanged                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| `backends/base.py`     | No logging, no schema validation                                                     |
+| `backends/yq.py`       | No stdlib logging (uses telemetry spans); logging additions are optional enhancement |
+| `formats/base.py`      | Pure utilities, no logging needed                                                    |
+| `tools/data.py`        | Delegates to services; logging happens at service level                              |
+| `tools/query.py`       | Delegates to services                                                                |
+| `tools/convert.py`     | Delegates to services                                                                |
+| `tools/diff.py`        | Delegates to services                                                                |
+| `config.py`            | Pure functions; logging additions are optional enhancement                           |
+| `telemetry.py`         | OpenTelemetry traces are orthogonal to loguru logging                                |
+| `lmql_constraints.py`  | No logging, no schema validation                                                     |
+| `schemas/models.py`    | Pure dataclasses                                                                     |
+| `schemas/loading.py`   | Pure extraction functions                                                            |
+| `schemas/ide_cache.py` | No direct logging                                                                    |
 
-### Recommended Migration Strategy
+## Data Flow Changes
 
-1. **Decouple first, migrate second.** The architecture restructuring (splitting server.py, extracting backends) should happen on FastMCP 2.x. This reduces the migration surface -- instead of changing 1880 lines in one file, each thin tool file has a small, testable FastMCP surface.
-2. **Test with rc2.** Pin `fastmcp>=3.0.0rc2,<4` in a separate branch, run the test suite, identify failures.
-3. **Address `mask_error_details`.** Check if there's a replacement config or if the default behavior in v3 matches the desired behavior (exposing error details to clients).
-4. **Update `pyproject.toml` pin.** Change `fastmcp>=2.14.4,<3` to `fastmcp>=3.0.0,<4` once stable.
+### Logging Data Flow (New)
 
-## Pluggable Backend Analysis
+```
+Application startup (server.py)
+    |
+    v
+configure_logging()
+    |-- Remove loguru default sink
+    |-- Add stderr sink (if MCP_LOG_LEVEL set)
+    |-- Add file sink (if MCP_LOG_DIR set)
+    |-- Install InterceptHandler on stdlib root logger
+    |
+    v
+All subsequent code:
+    |
+    |-- loguru.logger.debug/info/warning/error()  --> loguru pipeline
+    |-- stdlib logging.debug/info/warning/error()  --> InterceptHandler --> loguru pipeline
+    |-- httpx internal logging                     --> InterceptHandler --> loguru pipeline
+    |
+    v
+Sinks (configured):
+    |-- sys.stderr (filtered by MCP_LOG_LEVEL)
+    |-- file (rotated, if MCP_LOG_DIR set)
+```
 
-### yq vs. dasel Comparison
+### Schema Validation Data Flow (Changed)
 
-**Sources:** [dasel docs](https://daseldocs.tomwright.me/), [yq GitHub](https://github.com/mikefarah/yq), Context7 research
-**Confidence:** MEDIUM (documentation-based, not tested in this codebase)
+```
+BEFORE:
+    _validate_against_schema(data, schema_path) -> (bool, str)
+        |-- Validator.validate(data)  # raises on FIRST error
+        |-- catch ValidationError -> return (False, e.message)
 
-| Criterion            | yq (current)                                              | dasel (candidate)                  |
-| -------------------- | --------------------------------------------------------- | ---------------------------------- |
-| Query syntax         | jq-like (`.users[0].name`)                                | Dot notation (`users.[0].name`)    |
-| TOML write           | Cannot write TOML (read only)                             | Full TOML read/write               |
-| Format coverage      | YAML, JSON, TOML, XML, CSV, TSV, props                    | JSON, YAML, TOML, XML, CSV, HCL    |
-| Binary size          | ~14 MB                                                    | ~8 MB                              |
-| Expression power     | Full jq expression language (pipes, filters, map, select) | Query + filter + map, more limited |
-| Community            | ~12k GitHub stars                                         | ~5k GitHub stars                   |
-| Comment preservation | No (yq strips comments)                                   | No                                 |
+AFTER:
+    _validate_against_schema(data, schema_path) -> ValidationResult
+        |-- validator.iter_errors(data)  # yields ALL errors
+        |-- for each error:
+        |       |-- extract absolute_path -> json_path string
+        |       |-- extract schema_path -> schema location
+        |       |-- extract validator keyword
+        |       |-- extract context (sub-errors for anyOf/oneOf)
+        |       |-- build SchemaValidationError
+        |-- return ValidationResult(is_valid, errors, error_count)
+```
 
-### Backend Abstraction Trade-offs
+## Patterns to Follow
 
-**Pro: Unified TOML handling.** The most compelling reason to support dasel is TOML write. Currently, TOML set/delete bypasses yq entirely via `toml_utils.py`, creating a split code path. dasel's native TOML write would unify this.
+### Pattern: Environment-Gated Logging
 
-**Con: Expression language gap.** yq's jq-like expressions are significantly more powerful than dasel's query syntax. The `data_query` tool exposes raw yq expressions to clients. Switching backends would break client-side expressions.
+Logging is disabled by default. No file output, no stderr output unless opted in. This matches the existing telemetry pattern (`telemetry.py` returns no-op tracer when OTEL SDK not configured).
 
-**Recommendation:** Implement the backend abstraction layer but keep yq as the default and only backend. The abstraction's value is in separating binary management from execution, not in actually running dasel today. dasel becomes an option when specific use cases demand it (e.g., environments where yq isn't available).
+```python
+# Zero overhead when logging disabled
+logger.remove()  # Remove default handler
 
-### Native Backend Possibility
+# Opt-in only
+if os.getenv("MCP_LOG_LEVEL"):
+    logger.add(sys.stderr, level=...)
+```
 
-A "NativeBackend" using only Python libraries (orjson, ruamel.yaml, tomlkit) for basic get/set/delete operations is viable for simple paths but cannot replicate yq's expression language. It could serve as a fallback for environments where external binaries are prohibited.
+### Pattern: Structured Context with bind()
 
-## Anti-Patterns
+Loguru's `bind()` adds context to log messages without changing the message string:
 
-### Anti-Pattern 1: God Module
+```python
+# In binary_manager.py
+logger.bind(yq_version=version, platform=f"{system}/{arch}").info("Downloading yq binary")
 
-**What people do:** Put all tool definitions, business logic, and utility functions in one file.
-**Why it's wrong:** 1880 lines with 7 distinct responsibilities. Every change risks unrelated breakage. Testing requires loading the entire module.
-**Do this instead:** Split into tools/ (registration), services/ (logic), backends/ (execution). Each file under 300 lines with a single responsibility.
+# In mutation_operations.py
+logger.bind(file=str(path), operation="set", format=input_format).debug("Executing mutation")
+```
 
-### Anti-Pattern 2: Leaky Backend Abstraction
+### Pattern: Backward-Compatible Return Type Evolution
 
-**What people do:** Use `execute_yq()` directly from tool functions, binding business logic to a specific binary.
-**Why it's wrong:** 14 direct call sites means 14 places to change when swapping backends. Error types (`YQError`, `YQExecutionError`) leak into service layer.
-**Do this instead:** Service layer calls `backend.query()`. Backend-specific errors are caught and re-raised as `BackendError`. Tool layer never imports from backends/.
+The schema validation change uses a dataclass with a `.message` property that returns the same string the old `tuple[bool, str]` provided. This allows incremental migration of callers.
 
-### Anti-Pattern 3: Binary Management in Execution Module
+## Anti-Patterns to Avoid
 
-**What people do:** Combine binary download/verification/caching with query execution in one module.
-**Why it's wrong:** Binary management changes independently of execution logic (new download source, new platform, version bump vs. new query feature). ~560 lines of binary management obfuscate the ~230 lines of actual execution logic.
-**Do this instead:** Extract `BinaryManager` class. `YqBackend` depends on `BinaryManager` via constructor injection.
+### Anti-Pattern: Logging to stdout
 
-## Scaling Considerations
+MCP servers use stdout for protocol messages. Any loguru sink pointing to `sys.stdout` will corrupt the MCP protocol. The `configure_logging()` function explicitly prevents this.
 
-| Concern             | Current Scale                  | 10x Scale                                         | 100x Scale                                             |
-| ------------------- | ------------------------------ | ------------------------------------------------- | ------------------------------------------------------ |
-| Subprocess overhead | Acceptable for single-user MCP | Each tool call spawns a process; could bottleneck | Consider connection pooling or long-running yq process |
-| Binary management   | One-time download per version  | Works fine                                        | Works fine                                             |
-| Schema catalog      | Fetched on first use, cached   | Memory usage grows with catalog size              | Add LRU eviction or lazy loading                       |
-| Pagination          | 10KB pages, cursor-based       | Works fine                                        | Works fine                                             |
+### Anti-Pattern: Per-Module Logger Configuration
 
-### Scaling Priorities
+Loguru uses a single global `logger` object. Do not configure sinks in individual modules. All configuration happens in `logging.py` and is called once from `server.py`.
 
-1. **First bottleneck:** Subprocess spawn latency. Each `execute_yq()` call spawns a new process. For high-frequency tool calls, this becomes the dominant cost. Mitigation: batch operations or persistent process.
-2. **Second bottleneck:** Schema catalog memory. The full Schema Store catalog is loaded into memory. Mitigation: lazy loading with LRU cache.
+```python
+# WRONG: configuring loguru in a module
+# backends/binary_manager.py
+from loguru import logger
+logger.add("binary.log")  # NO -- creates duplicate sinks
 
-## Build Order (Implementation Dependencies)
+# RIGHT: just use the global logger
+from loguru import logger
+logger.info("message")  # Sinks configured centrally
+```
 
-The restructuring should proceed in this order, with each phase independently shippable:
+### Anti-Pattern: Catching All Validation Errors in a Loop
 
-### Phase 1: Extract Utilities (no behavior change)
+Don't manually iterate and try/except. Use `iter_errors()` which is specifically designed for collecting all errors:
 
-Extract from server.py into independent modules:
+```python
+# WRONG: catching one at a time
+errors = []
+try:
+    validator.validate(data)
+except ValidationError as e:
+    errors.append(e)  # Only gets the first one
 
-1. `services/pagination.py` — cursor encode/decode, page extraction (lines 130-215 of server.py)
-2. `services/response_builder.py` — response dict construction
-3. Move `FormatType` enum and `_detect_file_format()` to `formats/base.py`
+# RIGHT: iter_errors yields all
+errors = list(validator.iter_errors(data))
+```
 
-**Dependency:** None. These are leaf extractions.
-**Risk:** Low. Pure refactor with existing tests as safety net.
+## Build Order
 
-### Phase 2: Backend Abstraction (decouple execution)
+The two features are independent and can be built in either order. However, building loguru first provides logging for schema validation debugging.
 
-1. Define `QueryBackend` protocol in `backends/base.py`
-2. Extract `binary_manager.py` from yq_wrapper.py (lines 100-663)
-3. Create `backends/yq.py` implementing `QueryBackend` using extracted execution logic (lines 700-898 of yq_wrapper.py)
-4. Keep `yq_wrapper.py` as a backward-compatible shim that delegates to `backends/yq.py`
+### Recommended Order
 
-**Dependency:** Phase 1 (FormatType in formats/base.py).
-**Risk:** Medium. Changes the execution path. Requires careful testing of the shim layer.
+**Step 1: Loguru logging infrastructure (logging.py + server.py integration)**
 
-### Phase 3: Format Handlers (unify format-specific logic)
+- Create `logging.py` with `configure_logging()`
+- Add `configure_logging()` call to `server.py`
+- Add `loguru>=0.7.3` to dependencies
+- No behavior change until env vars are set
 
-1. Define `FormatHandler` protocol in `formats/base.py`
-2. Create `formats/json_handler.py`, `formats/yaml_handler.py`, `formats/toml_handler.py`
-3. Absorb `toml_utils.py` into `formats/toml_handler.py`
-4. Absorb YAML optimization into `formats/yaml_handler.py`
+**Step 2: Replace stdlib logging in existing files**
 
-**Dependency:** Phase 1 (FormatType enum location).
-**Risk:** Medium. TOML handler must preserve tomlkit's comment-preserving behavior. YAML handler must preserve anchor optimization.
+- `backends/binary_manager.py`: Replace `import logging` / `logging.getLogger` with `from loguru import logger`
+- `schemas/manager.py`: Replace `logging.debug()` with `logger.debug()`
+- `schemas/scanning.py`: Replace `logging.debug()` with `logger.debug()`
+- Total: 3 files, mechanical replacement
 
-### Phase 4: Service Layer (extract business logic)
+**Step 3: Add logging to key code paths (optional, can be deferred)**
 
-1. Create `services/data_service.py` with query, set_value, delete_value, convert, merge functions
-2. Wire data_service to use `QueryBackend` and `FormatHandler`
+- `backends/yq.py`: Log subprocess commands at DEBUG
+- `services/mutation_operations.py`: Log file write operations
+- `tools/*.py`: Log tool invocations
 
-**Dependency:** Phases 2 and 3.
-**Risk:** Medium. This is where the 14 `execute_yq()` call sites get replaced.
+**Step 4: Schema validation models**
 
-### Phase 5: Split Tool Registration (reduce server.py)
+- Create `SchemaValidationError` and `ValidationResult` in `models/`
+- Update `ValidationResponse` in `models/responses.py`
 
-1. Create `tools/data.py`, `tools/query.py`, `tools/schema.py`, `tools/convert.py`, `tools/constraints.py`
-2. Each file contains thin `@mcp.tool` functions that delegate to services
-3. `server.py` becomes ~50 lines: FastMCP init + imports of tool registration functions
+**Step 5: Enhanced schema validation logic**
 
-**Dependency:** Phase 4.
-**Risk:** Low. Thin wrappers with clear delegation.
+- Modify `_validate_against_schema()` in `services/schema_validation.py`
+- Replace `validate()` with `iter_errors()`
+- Build `ValidationResult` from error list
 
-### Phase 6: FastMCP 3.x Migration
+**Step 6: Update callers**
 
-1. Update `pyproject.toml` pin
-2. Address `mask_error_details` removal
-3. Verify `ToolAnnotations` vs dict syntax
-4. Test full suite
+- `services/mutation_operations.py`: Update `_validate_and_write_content()`
+- `tools/schema.py`: Update `_handle_schema_validate()`
 
-**Dependency:** Phase 5 (smaller files = smaller migration surface per file).
-**Risk:** Low. Migration guide confirms minimal breaking changes for this usage pattern.
+**Step 7: Tests**
+
+- Test `configure_logging()` with env vars
+- Test InterceptHandler captures stdlib logging
+- Test `_validate_against_schema()` returns multiple errors
+- Test backward compatibility of `ValidationResult.message`
+- Test `schema_errors` field in validation response
+
+### Dependency Graph
+
+```
+Step 1 (logging.py)
+    |
+    v
+Step 2 (replace stdlib logging)    Step 4 (validation models)
+    |                                   |
+    v                                   v
+Step 3 (add new logging sites)     Step 5 (iter_errors logic)
+                                        |
+                                        v
+                                   Step 6 (update callers)
+                                        |
+                                        v
+                                   Step 7 (tests)
+```
+
+Steps 1-3 (logging) and Steps 4-6 (schema validation) are independent tracks. Step 7 covers both.
+
+## Testing Strategy
+
+### Logging Tests
+
+```python
+# Test that configure_logging removes default handler
+def test_configure_logging_removes_default():
+    configure_logging()
+    # No output when MCP_LOG_LEVEL not set
+
+# Test stderr sink activation
+def test_configure_logging_with_level(monkeypatch, capsys):
+    monkeypatch.setenv("MCP_LOG_LEVEL", "DEBUG")
+    configure_logging()
+    logger.debug("test message")
+    assert "test message" in capsys.readouterr().err
+
+# Test InterceptHandler routes stdlib to loguru
+def test_intercept_handler_captures_stdlib(monkeypatch, capsys):
+    monkeypatch.setenv("MCP_LOG_LEVEL", "DEBUG")
+    configure_logging()
+    import logging
+    logging.getLogger("test").warning("stdlib message")
+    assert "stdlib message" in capsys.readouterr().err
+
+# Test file sink rotation
+def test_file_logging(monkeypatch, tmp_path):
+    monkeypatch.setenv("MCP_LOG_DIR", str(tmp_path))
+    monkeypatch.setenv("MCP_LOG_LEVEL", "DEBUG")
+    configure_logging()
+    logger.info("file test")
+    log_file = tmp_path / "mcp-json-yaml-toml.log"
+    assert log_file.exists()
+```
+
+### Schema Validation Tests
+
+```python
+# Test multiple errors collected
+def test_validate_collects_all_errors(tmp_path):
+    schema = {"type": "object", "properties": {"a": {"type": "integer"}, "b": {"type": "string"}}, "required": ["a", "b"]}
+    schema_file = tmp_path / "schema.json"
+    schema_file.write_text(json.dumps(schema))
+
+    result = _validate_against_schema({"a": "not_int", "b": 42}, schema_file)
+    assert not result.is_valid
+    assert result.error_count == 2  # both type violations
+
+# Test backward-compatible message
+def test_validation_result_message_compat(tmp_path):
+    # ... setup with one error
+    result = _validate_against_schema(invalid_data, schema_file)
+    assert isinstance(result.message, str)
+    assert len(result.message) > 0
+
+# Test json_path extraction
+def test_validation_error_includes_path(tmp_path):
+    # ... nested schema with deep path
+    result = _validate_against_schema(data, schema_file)
+    assert any("database.port" in e.json_path for e in result.errors)
+```
 
 ## Sources
 
-- FastMCP upgrade guide: [https://github.com/jlowin/fastmcp/blob/main/docs/development/upgrade-guide.mdx](https://github.com/jlowin/fastmcp/blob/main/docs/development/upgrade-guide.mdx) — HIGH confidence (official docs)
-- FastMCP v3.0.0rc2 documentation via Context7 (`/jlowin/fastmcp/v3.0.0rc2`) — HIGH confidence (version-pinned source)
-- FastMCP 3.0 announcement: [https://www.jlowin.dev/blog/fastmcp-3](https://www.jlowin.dev/blog/fastmcp-3) — HIGH confidence (author's blog)
-- Dasel documentation via Context7 (`/websites/daseldocs_tomwright_me`) — MEDIUM confidence (official docs, not tested in this codebase)
-- Dasel GitHub: [https://github.com/TomWright/dasel](https://github.com/TomWright/dasel) — MEDIUM confidence
-- yq GitHub: [https://github.com/mikefarah/yq](https://github.com/mikefarah/yq) — HIGH confidence (currently in use)
-- Current codebase analysis: direct file reading of all source modules — HIGH confidence (primary evidence)
+- [Loguru GitHub](https://github.com/Delgan/loguru) -- HIGH confidence (primary source)
+- [Loguru migration guide](https://loguru.readthedocs.io/en/stable/resources/migration.html) -- HIGH confidence (official docs)
+- [Loguru InterceptHandler recipe](https://github.com/Delgan/loguru/issues/78) -- HIGH confidence (author's recipe)
+- [Loguru type hints](https://loguru.readthedocs.io/en/stable/api/type_hints.html) -- HIGH confidence (official docs)
+- [loguru-mypy plugin](https://github.com/kornicameister/loguru-mypy) -- MEDIUM confidence (community plugin)
+- [jsonschema error handling](https://python-jsonschema.readthedocs.io/en/latest/errors/) -- HIGH confidence (official docs)
+- [jsonschema iter_errors](https://python-jsonschema.readthedocs.io/en/stable/errors/) -- HIGH confidence (official docs)
+- [MCP stdio transport logging constraint](https://medium.com/@laurentkubaski/understanding-mcp-stdio-transport-protocol-ae3d5daf64db) -- MEDIUM confidence (community article, verified against MCP spec)
+- [FastMCP logging docs](https://gofastmcp.com/servers/logging) -- HIGH confidence (official FastMCP docs)
+- [Loguru PyPI (v0.7.3)](https://pypi.org/project/loguru/) -- HIGH confidence (primary source)
+- Current codebase analysis: direct file reading of all source modules -- HIGH confidence (primary evidence)
 
 ---
 
-_Architecture research for: MCP server structured data manipulation (JSON/YAML/TOML)_
-_Researched: 2026-02-14_
+_Architecture research for: Loguru logging replacement and enhanced schema validation integration_
+_Researched: 2026-02-17_
