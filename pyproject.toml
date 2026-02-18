@@ -33,6 +33,7 @@ dependencies = [
     "json-strong-typing>=0.4.3",
     "jsonschema>=4.26.0",
     "lmql>=0.7.3",
+    "loguru>=0.7.3",
     "orjson>=3.11.6",
     "portalocker>=3.1.1", # Cross-platform file locking for binary downloads
     "ruamel.yaml>=0.18.0,<0.19",  # 0.19.x requires zig compiler for ruamel.yaml.clibz
