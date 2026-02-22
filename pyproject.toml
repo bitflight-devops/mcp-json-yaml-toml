@@ -92,8 +92,8 @@ addopts = [
     "--cov-report=term-missing",
     "--cov=packages/mcp_json_yaml_toml",
     "-n",
-    "-v",
     "auto",
+    "-v",
 ]
 markers = [
     "integration: integration tests that test multiple components together",
