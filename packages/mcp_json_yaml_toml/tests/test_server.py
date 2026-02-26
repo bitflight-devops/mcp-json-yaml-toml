@@ -9,6 +9,8 @@ In 2.x, .fn was needed to access the underlying function; in 3.x it's not.
 from __future__ import annotations
 
 import json
+import os
+import sys
 import time
 import unittest.mock
 from typing import TYPE_CHECKING, Any, cast
@@ -1162,8 +1164,11 @@ class TestEdgeCases:
     """Edge case tests for MCP tool error handling."""
 
     @pytest.mark.skipif(
-        hasattr(__import__("os"), "getuid") and __import__("os").getuid() == 0,
-        reason="root bypasses permissions",
+        sys.platform == "win32",
+        reason="Windows file permission model differs from Unix",
+    )
+    @pytest.mark.skipif(
+        hasattr(os, "getuid") and os.getuid() == 0, reason="root bypasses permissions"
     )
     def test_data_query_when_file_not_readable_then_raises_error(
         self, tmp_path: Path
