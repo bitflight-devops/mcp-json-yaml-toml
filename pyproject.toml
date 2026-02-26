@@ -36,7 +36,7 @@ dependencies = [
     "loguru>=0.7.3",
     "orjson>=3.11.7",
     "portalocker>=3.2.0",
-    "ruamel-yaml<0.19",
+    "ruamel-yaml<0.20",
     "tomlkit>=0.14.0",
 ]
 
