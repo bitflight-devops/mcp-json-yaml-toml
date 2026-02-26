@@ -10,6 +10,7 @@ import datetime
 
 from fastmcp import FastMCP
 
+from mcp_json_yaml_toml.logging import configure_logging
 from mcp_json_yaml_toml.schemas import SchemaManager
 
 # ---------------------------------------------------------------------------
@@ -76,6 +77,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 def main() -> None:  # pragma: no cover
     """Entry point for the MCP server."""
+    configure_logging()
     mcp.run()
 
 

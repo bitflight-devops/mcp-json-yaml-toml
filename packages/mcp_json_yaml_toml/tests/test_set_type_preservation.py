@@ -490,7 +490,7 @@ class TestNumericTypePreservation:
         assert isinstance(actual_value, (int, float)), (
             f"Expected numeric, got {type(actual_value).__name__}: {actual_value!r}"
         )
-        assert actual_value == 5.0
+        assert actual_value == pytest.approx(5.0)
 
 
 # ==============================================================================

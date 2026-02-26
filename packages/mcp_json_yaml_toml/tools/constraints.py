@@ -44,11 +44,11 @@ def list_all_constraints() -> dict[str, Any]:
 def get_constraint_definition(name: str) -> dict[str, Any]:
     """Retrieve the definition of a named LMQL constraint.
 
-    Raises:
-        ToolError: If the constraint name is not registered; the error message lists available constraints.
-
     Returns:
         dict: Constraint definition containing fields such as pattern, examples, and LMQL syntax.
+
+    Raises:
+        ToolError: If the constraint name is not registered; the error message lists available constraints.
     """
     constraint = ConstraintRegistry.get(name)
     if not constraint:

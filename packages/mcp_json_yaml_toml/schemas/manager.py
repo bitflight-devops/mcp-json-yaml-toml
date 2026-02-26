@@ -35,6 +35,8 @@ from mcp_json_yaml_toml.schemas.scanning import (
 if TYPE_CHECKING:
     from strong_typing.core import Schema
 
+logger = logging.getLogger(__name__)
+
 
 class SchemaManager:
     """Manages JSON schemas with local caching and Schema Store integration."""
@@ -75,7 +77,7 @@ class SchemaManager:
                 JsonTypeError,
                 JsonValueError,
             ) as e:
-                logging.debug("Failed to load schema config: %s", e)
+                logger.debug("Failed to load schema config: %s", e)
 
         # Return default empty config
         return SchemaConfig()
@@ -98,7 +100,7 @@ class SchemaManager:
         try:
             return json_to_object(SchemaCatalog, raw_catalog)
         except (JsonKeyError, JsonTypeError, JsonValueError) as e:
-            logging.debug("Failed to parse catalog as SchemaCatalog: %s", e)
+            logger.debug("Failed to parse catalog as SchemaCatalog: %s", e)
             return None
 
     def get_ide_provider(self) -> IDESchemaProvider:

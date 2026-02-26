@@ -15,6 +15,8 @@ from mcp_json_yaml_toml.schemas.models import DefaultSchemaStores
 SCHEMA_STORE_CATALOG_URL = "https://www.schemastore.org/api/json/catalog.json"
 CACHE_EXPIRY_SECONDS = 24 * 60 * 60  # 24 hours
 
+logger = logging.getLogger(__name__)
+
 
 def _load_default_ide_patterns() -> list[str]:
     """Load default IDE schema patterns from bundled JSON file.
@@ -37,7 +39,7 @@ def _load_default_ide_patterns() -> list[str]:
         JsonTypeError,
         JsonValueError,
     ) as e:
-        logging.debug("Failed to load default IDE patterns: %s", e)
+        logger.debug("Failed to load default IDE patterns: %s", e)
     return []
 
 
