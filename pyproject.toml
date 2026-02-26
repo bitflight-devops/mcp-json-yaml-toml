@@ -27,16 +27,16 @@ keywords = [
 ]
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "deepdiff>=8.0.0",
-    "fastmcp>=3.0.0rc1,<4", # FastMCP 3.x - automatic threadpool, tool timeouts, outputSchema
+    "deepdiff>=8.6.1",
+    "fastmcp>=3.0.2,<4",
     "httpx>=0.28.1",
     "json-strong-typing>=0.4.3",
     "jsonschema>=4.26.0",
     "lmql>=0.7.3",
     "loguru>=0.7.3",
-    "orjson>=3.11.6",
-    "portalocker>=3.1.1", # Cross-platform file locking for binary downloads
-    "ruamel.yaml>=0.18.0,<0.19",  # 0.19.x requires zig compiler for ruamel.yaml.clibz
+    "orjson>=3.11.7",
+    "portalocker>=3.2.0",
+    "ruamel-yaml>=0.18.17,<0.19",
     "tomlkit>=0.14.0",
 ]
 
