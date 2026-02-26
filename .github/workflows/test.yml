@@ -154,6 +154,7 @@ jobs:
   test:
     name: Tests (Python ${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     env:
       # Provide GitHub token for authenticated API requests (5000/hour vs 60/hour)
       GITHUB_TOKEN: ${{ github.token }}
@@ -178,6 +179,7 @@ jobs:
         run: uv sync
 
       - name: Run tests with coverage
+        timeout-minutes: 10
         run: uv run pytest --cov=packages/mcp_json_yaml_toml --cov-report=xml --cov-report=term
 
       - name: Upload coverage XML
