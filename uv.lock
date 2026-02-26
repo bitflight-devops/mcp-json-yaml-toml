@@ -1395,7 +1395,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "deepdiff", specifier = ">=8.6.1" },
-    { name = "fastmcp", specifier = ">=3.0.2,<4" },
+    { name = "fastmcp", specifier = "<4" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "json-strong-typing", specifier = ">=0.4.3" },
     { name = "jsonschema", specifier = ">=4.26.0" },
@@ -1405,7 +1405,7 @@ requires-dist = [
     { name = "opentelemetry-sdk", marker = "extra == 'telemetry'", specifier = ">=1.30.0" },
     { name = "orjson", specifier = ">=3.11.7" },
     { name = "portalocker", specifier = ">=3.2.0" },
-    { name = "ruamel-yaml", specifier = ">=0.18.17,<0.19" },
+    { name = "ruamel-yaml", specifier = "<0.19" },
     { name = "tomlkit", specifier = ">=0.14.0" },
 ]
 provides-extras = ["telemetry"]
