@@ -1162,7 +1162,8 @@ class TestEdgeCases:
     """Edge case tests for MCP tool error handling."""
 
     @pytest.mark.skipif(
-        __import__("os").getuid() == 0, reason="root bypasses permissions"
+        hasattr(__import__("os"), "getuid") and __import__("os").getuid() == 0,
+        reason="root bypasses permissions",
     )
     def test_data_query_when_file_not_readable_then_raises_error(
         self, tmp_path: Path
