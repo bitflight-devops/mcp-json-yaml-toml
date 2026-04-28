@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/bitflight-devops-mcp-json-yaml-toml-badge.png)](https://mseep.ai/app/bitflight-devops-mcp-json-yaml-toml)
+
 <p align="center">
   <img src=".github/logo.png" alt="JYT Logo" width="600">
 </p>
