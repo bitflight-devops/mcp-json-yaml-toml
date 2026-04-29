@@ -62,6 +62,6 @@ jobs:
           unzip -l "mcp-json-yaml-toml-${VERSION}.mcpb"
 
       - name: Upload MCPB to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: mcp-json-yaml-toml-*.mcpb
