@@ -70,19 +70,24 @@ def _parse_content_for_validation(
     except ValueError:
         return None
 
+    parsed: Any | None = None
     try:
         match fmt:
             case FormatType.JSON:
-                return orjson.loads(content)
+                parsed = orjson.loads(content)
             case FormatType.YAML:
                 yaml = YAML(typ="safe", pure=True)
-                return yaml.load(content)
+                documents = list(yaml.load_all(content))
+                if documents:
+                    parsed = documents[0] if len(documents) == 1 else documents
             case FormatType.TOML:
-                return tomlkit.parse(content)
+                parsed = tomlkit.parse(content)
             case _:
-                return None
+                parsed = None
     except Exception as e:
         raise ToolError(f"Failed to parse content for validation: {e}") from e
+    else:
+        return parsed
 
 
 def _parse_typed_json(
@@ -196,6 +201,33 @@ def should_fallback_toml_to_json(
     )
 
 
+def _validate_document_index(document_index: int | None) -> int | None:
+    """Validate optional YAML document index."""
+    if document_index is None:
+        return None
+    if document_index < 0:
+        raise ToolError("document_index must be >= 0")
+    return document_index
+
+
+def wrap_expression_for_document(expression: str, document_index: int | None) -> str:
+    """Wrap a yq expression to target a specific document index."""
+    validated_index = _validate_document_index(document_index)
+    if validated_index is None:
+        return expression
+    return f"select(documentIndex == {validated_index}) | ({expression})"
+
+
+def wrap_mutation_expression_for_document(
+    expression: str, document_index: int | None
+) -> str:
+    """Wrap a yq mutation expression to edit only one document."""
+    validated_index = _validate_document_index(document_index)
+    if validated_index is None:
+        return expression
+    return f"with(select(documentIndex == {validated_index}); {expression})"
+
+
 __all__ = [
     "_detect_file_format",
     "_parse_content_for_validation",
@@ -203,4 +235,6 @@ __all__ = [
     "_parse_typed_json",
     "resolve_file_path",
     "should_fallback_toml_to_json",
+    "wrap_expression_for_document",
+    "wrap_mutation_expression_for_document",
 ]

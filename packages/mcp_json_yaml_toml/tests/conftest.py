@@ -102,6 +102,22 @@ servers:
 
 
 @pytest.fixture
+def sample_multi_document_yaml_config(tmp_path: Path) -> Path:
+    """Create a multi-document YAML file for testing."""
+    yaml_content = """name: app-one
+enabled: true
+env: dev
+---
+name: app-two
+enabled: false
+env: prod
+"""
+    file_path = tmp_path / "multi.yaml"
+    file_path.write_text(yaml_content, encoding="utf-8")
+    return file_path
+
+
+@pytest.fixture
 def sample_toml_config(tmp_path: Path) -> Path:
     """Create sample TOML file for testing.
 
@@ -217,6 +233,46 @@ def sample_json_schema(tmp_path: Path) -> Path:
     schema_path = tmp_path / "config.schema.json"
     schema_path.write_text(json.dumps(schema_data, indent=2), encoding="utf-8")
     return schema_path
+
+
+@pytest.fixture
+def sample_multi_document_yaml_schema(tmp_path: Path) -> Path:
+    """Create a schema for each YAML document in sample_multi_document_yaml_config."""
+    schema_data = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "enabled": {"type": "boolean"},
+            "env": {"type": "string"},
+        },
+        "required": ["name", "enabled", "env"],
+    }
+    schema_path = tmp_path / "multi-doc.schema.json"
+    schema_path.write_text(json.dumps(schema_data, indent=2), encoding="utf-8")
+    return schema_path
+
+
+@pytest.fixture
+def sample_multi_document_yaml_schemas(tmp_path: Path) -> tuple[Path, Path]:
+    """Create two distinct per-document schemas for multi-document YAML tests."""
+    schema1 = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "enabled": {"type": "boolean"}},
+        "required": ["name", "enabled"],
+    }
+    schema2 = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "env": {"enum": ["prod"]}},
+        "required": ["name", "env"],
+    }
+    schema1_path = tmp_path / "doc-0.schema.json"
+    schema2_path = tmp_path / "doc-1.schema.json"
+    schema1_path.write_text(json.dumps(schema1, indent=2), encoding="utf-8")
+    schema2_path.write_text(json.dumps(schema2, indent=2), encoding="utf-8")
+    return schema1_path, schema2_path
 
 
 # ==============================================================================

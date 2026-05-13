@@ -71,6 +71,12 @@ def data(
         Literal["json", "yaml", "toml"] | None, Field(description="Output format")
     ] = None,
     cursor: Annotated[str | None, Field(description="Pagination cursor")] = None,
+    document_index: Annotated[
+        int | None,
+        Field(
+            description="Optional YAML document index for multi-document files (0-based)"
+        ),
+    ] = None,
 ) -> DataResponse | SchemaResponse | MutationResponse | ServerInfoResponse:
     """Get, set, or delete data in JSON, YAML, or TOML files.
 
@@ -106,15 +112,22 @@ def data(
                 output_format,
                 cursor,
                 schema_info,
+                document_index,
                 schema_manager,
             )
         case "set":
             return _dispatch_set_operation(
-                path, key_path, value, value_type, schema_info, schema_manager
+                path,
+                key_path,
+                value,
+                value_type,
+                schema_info,
+                document_index,
+                schema_manager,
             )
         case "delete":
             return _dispatch_delete_operation(
-                path, key_path, schema_info, schema_manager
+                path, key_path, schema_info, document_index, schema_manager
             )
         case _:
             assert_never(operation)

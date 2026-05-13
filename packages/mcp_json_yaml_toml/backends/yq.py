@@ -183,8 +183,16 @@ def _parse_json_output(
         try:
             parsed_data = orjson.loads(stdout)
         except orjson.JSONDecodeError as e:
-            # Don't fail on parse error, just leave data as None
-            stderr = f"{stderr}\nWarning: Failed to parse JSON output: {e}"
+            json_lines = [line for line in stdout.splitlines() if line.strip()]
+            if json_lines:
+                try:
+                    parsed_data = [orjson.loads(line) for line in json_lines]
+                except orjson.JSONDecodeError:
+                    # Don't fail on parse error, just leave data as None
+                    stderr = f"{stderr}\nWarning: Failed to parse JSON output: {e}"
+            else:
+                # Don't fail on parse error, just leave data as None
+                stderr = f"{stderr}\nWarning: Failed to parse JSON output: {e}"
     return parsed_data, stderr
 
 

@@ -14,6 +14,7 @@ from mcp_json_yaml_toml.formats.base import (
     _detect_file_format,
     resolve_file_path,
     should_fallback_toml_to_json,
+    wrap_expression_for_document,
 )
 from mcp_json_yaml_toml.models.responses import (
     DataResponse,  # noqa: TC001 — runtime import required by FastMCP/Pydantic for return-type resolution
@@ -49,6 +50,12 @@ def data_query(
             description="Pagination cursor from previous response (omit for first page)"
         ),
     ] = None,
+    document_index: Annotated[
+        int | None,
+        Field(
+            description="Optional YAML document index for multi-document files (0-based)"
+        ),
+    ] = None,
 ) -> DataResponse:
     """Extract specific data, filter content, or transform structure without modification.
 
@@ -72,10 +79,11 @@ def data_query(
     output_format_value: FormatType = (
         input_format if output_format is None else validate_format(output_format)
     )
+    final_expression = wrap_expression_for_document(expression, document_index)
 
     try:
         result = execute_yq(
-            expression,
+            final_expression,
             input_file=path,
             input_format=input_format,
             output_format=output_format_value,
@@ -87,7 +95,7 @@ def data_query(
             e, output_format_explicit, output_format_value, input_format
         ):
             result = execute_yq(
-                expression,
+                final_expression,
                 input_file=path,
                 input_format=input_format,
                 output_format=FormatType.JSON,

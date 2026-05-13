@@ -18,6 +18,7 @@ from mcp_json_yaml_toml.config import require_format_enabled, validate_format
 from mcp_json_yaml_toml.formats.base import (
     _detect_file_format,
     should_fallback_toml_to_json,
+    wrap_expression_for_document,
 )
 from mcp_json_yaml_toml.models.responses import (
     DataResponse,
@@ -115,6 +116,7 @@ def _handle_data_get_structure(
     input_format: FormatType,
     cursor: str | None,
     schema_info: SchemaInfo | None,
+    document_index: int | None = None,
 ) -> DataResponse:
     """Handle GET operation with return_type='keys'.
 
@@ -124,6 +126,7 @@ def _handle_data_get_structure(
         input_format: File format type
         cursor: Optional pagination cursor
         schema_info: Optional schema information
+        document_index: Optional YAML document index for multi-document files
 
     Returns:
         DataResponse with structure summary
@@ -136,6 +139,7 @@ def _handle_data_get_structure(
         if not key_path
         else (f".{key_path}" if not key_path.startswith(".") else key_path)
     )
+    expression = wrap_expression_for_document(expression, document_index)
     try:
         result = execute_yq(
             expression,
@@ -185,6 +189,7 @@ def _handle_data_get_value(
     cursor: str | None,
     schema_info: SchemaInfo | None,
     output_format_explicit: bool = True,
+    document_index: int | None = None,
 ) -> DataResponse:
     """Handle GET operation with return_type='all' for data values.
 
@@ -196,6 +201,7 @@ def _handle_data_get_value(
         cursor: Optional pagination cursor
         schema_info: Optional schema information
         output_format_explicit: Whether output format was explicitly specified
+        document_index: Optional YAML document index for multi-document files
 
     Returns:
         DataResponse with data value
@@ -204,6 +210,7 @@ def _handle_data_get_value(
         ToolError: If query fails
     """
     expression = f".{key_path}" if not key_path.startswith(".") else key_path
+    expression = wrap_expression_for_document(expression, document_index)
 
     try:
         result = execute_yq(
@@ -254,6 +261,7 @@ def _handle_data_get_value(
                 cursor,
                 schema_info,
                 output_format_explicit=True,
+                document_index=document_index,
             )
         raise ToolError(f"Query failed: {e}") from e
 
@@ -266,6 +274,7 @@ def _dispatch_get_operation(
     output_format: Literal["json", "yaml", "toml"] | None,
     cursor: str | None,
     schema_info: SchemaInfo | None,
+    document_index: int | None = None,
     schema_manager: SchemaManager | None = None,
 ) -> DataResponse | SchemaResponse:
     """Dispatch GET operation to appropriate handler.
@@ -278,6 +287,7 @@ def _dispatch_get_operation(
         output_format: Optional output format
         cursor: Optional pagination cursor
         schema_info: Optional schema information
+        document_index: Optional YAML document index for multi-document files
         schema_manager: Schema manager instance for schema operations
 
     Returns:
@@ -304,7 +314,7 @@ def _dispatch_get_operation(
 
     if return_type == "keys":
         return _handle_data_get_structure(
-            path, key_path, input_format, cursor, schema_info
+            path, key_path, input_format, cursor, schema_info, document_index
         )
 
     if key_path is None:
@@ -320,4 +330,5 @@ def _dispatch_get_operation(
         cursor,
         schema_info,
         output_format_explicit,
+        document_index,
     )
