@@ -80,7 +80,7 @@ def _parse_content_for_validation(
                 yaml = YAML(typ="safe", pure=True)
                 documents = list(yaml.load_all(content))
                 if documents:
-                    # Keep empty-content behavior as None for backward compatibility.
+                    # Keep single-document YAML returning the document directly for backward compatibility.
                     parsed_data = documents[0] if len(documents) == 1 else documents
             case FormatType.TOML:
                 parsed_data = tomlkit.parse(content)
