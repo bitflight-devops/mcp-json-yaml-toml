@@ -190,7 +190,8 @@ def _parse_json_output(
                 except orjson.JSONDecodeError as stream_error:
                     # Don't fail on parse error, just leave data as None
                     stderr = (
-                        f"{stderr}\nWarning: Failed to parse JSON stream output: "
+                        f"{stderr}\nWarning: Expected JSON stream format (one JSON object per line) "
+                        f"from multi-document query, but parsing failed: "
                         f"{stream_error}"
                     )
             else:

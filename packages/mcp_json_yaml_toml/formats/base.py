@@ -70,7 +70,7 @@ def _parse_content_for_validation(
     except ValueError:
         return None
 
-    # Initialized for the non-data fallback case and to keep return flow simple.
+    # Initialize to unify return path across all format cases.
     parsed_data: Any | None = None
     try:
         match fmt:
@@ -80,6 +80,7 @@ def _parse_content_for_validation(
                 yaml = YAML(typ="safe", pure=True)
                 documents = list(yaml.load_all(content))
                 if documents:
+                    # Keep empty-content behavior as None for backward compatibility.
                     parsed_data = documents[0] if len(documents) == 1 else documents
             case FormatType.TOML:
                 parsed_data = tomlkit.parse(content)

@@ -106,7 +106,7 @@ def _validate_with_schema_paths(
     if not isinstance(parsed_data, list):
         return {
             "schema_validated": False,
-            "schema_message": "schema_paths can only be used with multi-document YAML files",
+            "schema_message": "schema_paths parameter requires multi-document YAML input (file contains single document)",
         }
 
     indexes_to_validate = (
@@ -129,7 +129,7 @@ def _validate_with_schema_paths(
             document_results.append({
                 "document_index": idx,
                 "valid": False,
-                "message": "No schema path provided for document index",
+                "message": f"No schema path provided for document index {idx}",
             })
             all_valid = False
             continue
