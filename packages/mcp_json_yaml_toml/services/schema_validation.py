@@ -39,6 +39,7 @@ def _validate_against_schema_documents(
         Tuple of (is_valid, message, per_document_results).
     """
     if not isinstance(data, list):
+        # For single-document content, index 0 refers to that only document.
         if document_index is not None and document_index != 0:
             return (
                 False,
@@ -89,13 +90,6 @@ def _validate_against_schema_documents(
         f"Schema validation failed for document(s): {', '.join(failed_indexes)}",
         per_document_results,
     )
-
-
-__all__ = [
-    "_parse_content_for_validation",
-    "_validate_against_schema",
-    "_validate_against_schema_documents",
-]
 
 
 def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
@@ -157,3 +151,10 @@ def _validate_against_schema(data: Any, schema_path: Path) -> tuple[bool, str]:
         return False, f"Schema validation error: {e}"
     else:
         return True, "Schema validation passed"
+
+
+__all__ = [
+    "_parse_content_for_validation",
+    "_validate_against_schema",
+    "_validate_against_schema_documents",
+]

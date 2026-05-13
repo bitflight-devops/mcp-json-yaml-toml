@@ -70,23 +70,24 @@ def _parse_content_for_validation(
     except ValueError:
         return None
 
-    parsed: Any | None = None
+    # Initialized for the non-data fallback case and to keep return flow simple.
+    parsed_data: Any | None = None
     try:
         match fmt:
             case FormatType.JSON:
-                parsed = orjson.loads(content)
+                parsed_data = orjson.loads(content)
             case FormatType.YAML:
                 yaml = YAML(typ="safe", pure=True)
                 documents = list(yaml.load_all(content))
                 if documents:
-                    parsed = documents[0] if len(documents) == 1 else documents
+                    parsed_data = documents[0] if len(documents) == 1 else documents
             case FormatType.TOML:
-                parsed = tomlkit.parse(content)
+                parsed_data = tomlkit.parse(content)
             case _:
-                parsed = None
+                parsed_data = None
     except Exception as e:
         raise ToolError(f"Failed to parse content for validation: {e}") from e
-    return parsed
+    return parsed_data
 
 
 def _parse_typed_json(
