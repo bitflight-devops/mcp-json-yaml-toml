@@ -39,7 +39,7 @@ def _validate_against_schema_documents(
         Tuple of (is_valid, message, per_document_results).
     """
     if not isinstance(data, list):
-        if document_index not in {None, 0}:
+        if document_index is not None and document_index != 0:
             return (
                 False,
                 f"Document index {document_index} out of range for single document",

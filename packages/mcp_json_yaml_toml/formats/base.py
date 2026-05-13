@@ -86,8 +86,7 @@ def _parse_content_for_validation(
                 parsed = None
     except Exception as e:
         raise ToolError(f"Failed to parse content for validation: {e}") from e
-    else:
-        return parsed
+    return parsed
 
 
 def _parse_typed_json(
