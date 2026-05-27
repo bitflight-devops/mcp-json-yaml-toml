@@ -19,7 +19,7 @@ from mcp_json_yaml_toml.backends.base import FormatType, YQExecutionError
 
 
 class MultiDocumentYaml(UserList[Any]):
-    """Marker list for YAML files parsed from multiple documents."""
+    """Marker type for true YAML multi-document parses, not single-doc sequences."""
 
 
 def _load_yaml_documents(content: str) -> list[Any]:
@@ -239,7 +239,6 @@ def validate_document_index_for_file(
                 f"Document index {validated_index} out of range for single document"
             )
         return validated_index
-    path = Path(file_path)
     path = Path(file_path)
     document_count = len(_load_yaml_documents(path.read_text(encoding="utf-8")))
     if validated_index >= document_count:
