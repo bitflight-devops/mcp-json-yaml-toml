@@ -22,6 +22,12 @@ class MultiDocumentYaml(UserList[Any]):
     """Marker list for YAML files parsed from multiple documents."""
 
 
+def _load_yaml_documents(content: str) -> list[Any]:
+    """Load all YAML documents from a string using the shared safe parser config."""
+    yaml = YAML(typ="safe", pure=True)
+    return list(yaml.load_all(content))
+
+
 def _detect_file_format(file_path: str | Path) -> FormatType:
     """Detect format from file extension.
 
@@ -75,10 +81,6 @@ def _parse_content_for_validation(
     except ValueError:
         return None
 
-    def _load_yaml_documents() -> list[Any]:
-        yaml = YAML(typ="safe", pure=True)
-        return list(yaml.load_all(content))
-
     # Initialize to unify return path across all format cases.
     parsed_data: Any | None = None
     try:
@@ -86,7 +88,7 @@ def _parse_content_for_validation(
             case FormatType.JSON:
                 parsed_data = orjson.loads(content)
             case FormatType.YAML:
-                documents = _load_yaml_documents()
+                documents = _load_yaml_documents(content)
                 if documents:
                     # Keep single-document YAML returning the document directly for backward compatibility.
                     parsed_data = (
@@ -237,10 +239,9 @@ def validate_document_index_for_file(
                 f"Document index {validated_index} out of range for single document"
             )
         return validated_index
-
     path = Path(file_path)
-    yaml = YAML(typ="safe", pure=True)
-    document_count = len(list(yaml.load_all(path.read_text(encoding="utf-8"))))
+    path = Path(file_path)
+    document_count = len(_load_yaml_documents(path.read_text(encoding="utf-8")))
     if validated_index >= document_count:
         raise ToolError(
             f"Document index {validated_index} out of range (found {document_count} documents)"
