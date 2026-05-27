@@ -18,6 +18,7 @@ from mcp_json_yaml_toml.formats.base import (
     _detect_file_format,
     _parse_content_for_validation,
     _parse_set_value,
+    validate_document_index_for_file,
     wrap_mutation_expression_for_document,
 )
 from mcp_json_yaml_toml.models.responses import MutationResponse
@@ -379,6 +380,9 @@ def _dispatch_set_operation(
 
     input_format = _detect_file_format(path)
     require_format_enabled(input_format)
+    document_index = validate_document_index_for_file(
+        path, input_format, document_index
+    )
 
     return _handle_data_set(
         path,
@@ -419,6 +423,9 @@ def _dispatch_delete_operation(
 
     input_format = _detect_file_format(path)
     require_format_enabled(input_format)
+    document_index = validate_document_index_for_file(
+        path, input_format, document_index
+    )
 
     return _handle_data_delete(
         path, key_path, input_format, schema_info, document_index, schema_manager

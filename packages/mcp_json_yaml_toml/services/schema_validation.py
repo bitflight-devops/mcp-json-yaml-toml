@@ -17,6 +17,7 @@ from referencing.exceptions import NoSuchResource
 from mcp_json_yaml_toml.backends.base import FormatType, YQError
 from mcp_json_yaml_toml.backends.yq import execute_yq
 from mcp_json_yaml_toml.formats.base import (
+    MultiDocumentYaml,
     _detect_file_format,
     _parse_content_for_validation,
 )
@@ -38,7 +39,7 @@ def _validate_against_schema_documents(
     Returns:
         Tuple of (is_valid, message, per_document_results).
     """
-    if not isinstance(data, list):
+    if not isinstance(data, MultiDocumentYaml):
         # For single-document content, index 0 refers to the only document.
         if document_index is not None and document_index != 0:
             return (

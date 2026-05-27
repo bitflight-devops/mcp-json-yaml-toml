@@ -14,6 +14,7 @@ from mcp_json_yaml_toml.formats.base import (
     _detect_file_format,
     resolve_file_path,
     should_fallback_toml_to_json,
+    validate_document_index_for_file,
     wrap_expression_for_document,
 )
 from mcp_json_yaml_toml.models.responses import (
@@ -70,6 +71,9 @@ def data_query(
     # Check if format is enabled
     input_format: FormatType = _detect_file_format(path)
     require_format_enabled(input_format)
+    document_index = validate_document_index_for_file(
+        path, input_format, document_index
+    )
 
     # Track whether output format was explicitly provided
     output_format_explicit = output_format is not None

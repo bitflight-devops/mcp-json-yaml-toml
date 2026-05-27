@@ -12,6 +12,7 @@ from mcp_json_yaml_toml.backends.base import FormatType, YQExecutionError
 from mcp_json_yaml_toml.backends.yq import execute_yq
 from mcp_json_yaml_toml.config import require_format_enabled
 from mcp_json_yaml_toml.formats.base import (
+    MultiDocumentYaml,
     _detect_file_format,
     _parse_content_for_validation,
     resolve_file_path,
@@ -103,7 +104,7 @@ def _validate_with_schema_paths(
     parsed_data: Any, per_document_schema_files: list[Path], document_index: int | None
 ) -> dict[str, Any]:
     """Validate multi-document YAML with per-document schema files."""
-    if not isinstance(parsed_data, list):
+    if not isinstance(parsed_data, MultiDocumentYaml):
         return {
             "schema_validated": False,
             "schema_message": "schema_paths parameter requires multi-document YAML input (file contains single document)",
