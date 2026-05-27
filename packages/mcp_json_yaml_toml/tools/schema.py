@@ -11,9 +11,16 @@ from pydantic import Field
 from mcp_json_yaml_toml.backends.base import FormatType, YQExecutionError
 from mcp_json_yaml_toml.backends.yq import execute_yq
 from mcp_json_yaml_toml.config import require_format_enabled
-from mcp_json_yaml_toml.formats.base import _detect_file_format, resolve_file_path
+from mcp_json_yaml_toml.formats.base import (
+    MultiDocumentYaml,
+    _detect_file_format,
+    _parse_content_for_validation,
+    resolve_file_path,
+)
 from mcp_json_yaml_toml.server import mcp, schema_manager
-from mcp_json_yaml_toml.services.schema_validation import _validate_against_schema
+from mcp_json_yaml_toml.services.schema_validation import (
+    _validate_against_schema_documents,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -27,7 +34,11 @@ if TYPE_CHECKING:
 
 
 def _handle_schema_validate(
-    file_path: str | None, schema_path: str | None, schema_manager: SchemaManager
+    file_path: str | None,
+    schema_path: str | None,
+    schema_paths: list[str] | None,
+    document_index: int | None,
+    schema_manager: SchemaManager,
 ) -> dict[str, Any]:
     """Handle validate action."""
     if not file_path:
@@ -45,7 +56,7 @@ def _handle_schema_validate(
     }
 
     try:
-        result = execute_yq(
+        execute_yq(
             ".",
             input_file=file_path_obj,
             input_format=input_format,
@@ -53,30 +64,133 @@ def _handle_schema_validate(
         )
         validation_results["syntax_valid"] = True
         validation_results["syntax_message"] = "Syntax is valid"
-
-        schema_file: Path | None = None
-        if schema_path:
-            schema_file = resolve_file_path(schema_path)
-        else:
-            # Try to get cached schema path from SchemaManager
-            schema_file = schema_manager.get_schema_path_for_file(file_path_obj)
-
-        if schema_file:
-            validation_results["schema_file"] = str(schema_file)
-            is_valid, message = _validate_against_schema(result.data, schema_file)
-            validation_results["schema_validated"] = is_valid
-            validation_results["schema_message"] = message
-        else:
-            validation_results["schema_message"] = "No schema file found or provided"
-
+        parsed_data = _parse_content_for_validation(
+            file_path_obj.read_text(encoding="utf-8"), input_format
+        )
+        schema_file, per_document_schema_files = _resolve_schema_targets(
+            file_path_obj, schema_path, schema_paths, schema_manager
+        )
+        validation_results.update(
+            _run_schema_validation(
+                parsed_data, schema_file, per_document_schema_files, document_index
+            )
+        )
+        schema_was_checked = bool(schema_file or per_document_schema_files)
         validation_results["overall_valid"] = validation_results["syntax_valid"] and (
-            validation_results["schema_validated"] if schema_file else True
+            validation_results["schema_validated"] if schema_was_checked else True
         )
     except YQExecutionError as e:
         validation_results["syntax_message"] = f"Syntax error: {e}"
         validation_results["overall_valid"] = False
 
     return validation_results
+
+
+def _resolve_schema_targets(
+    file_path_obj: Path,
+    schema_path: str | None,
+    schema_paths: list[str] | None,
+    schema_manager: SchemaManager,
+) -> tuple[Path | None, list[Path] | None]:
+    """Resolve schema target(s) for validation."""
+    if schema_paths:
+        return None, [resolve_file_path(path) for path in schema_paths]
+    if schema_path:
+        return resolve_file_path(schema_path), None
+    return schema_manager.get_schema_path_for_file(file_path_obj), None
+
+
+def _validate_with_schema_paths(
+    parsed_data: Any, per_document_schema_files: list[Path], document_index: int | None
+) -> dict[str, Any]:
+    """Validate multi-document YAML with per-document schema files."""
+    if not isinstance(parsed_data, MultiDocumentYaml):
+        return {
+            "schema_validated": False,
+            "schema_message": "schema_paths parameter requires multi-document YAML input (file contains single document)",
+        }
+
+    indexes_to_validate = (
+        [document_index]
+        if document_index is not None
+        else list(range(len(parsed_data)))
+    )
+    if document_index is not None and (
+        document_index < 0 or document_index >= len(parsed_data)
+    ):
+        return {
+            "schema_validated": False,
+            "schema_message": f"Document index {document_index} out of range (found {len(parsed_data)} documents)",
+        }
+
+    document_results: list[dict[str, Any]] = []
+    all_valid = True
+    for idx in indexes_to_validate:
+        if idx >= len(per_document_schema_files):
+            document_results.append({
+                "document_index": idx,
+                "valid": False,
+                "message": f"No schema path provided for document index {idx}",
+            })
+            all_valid = False
+            continue
+        is_valid, message, _ = _validate_against_schema_documents(
+            parsed_data, per_document_schema_files[idx], idx
+        )
+        all_valid = all_valid and is_valid
+        document_results.append({
+            "document_index": idx,
+            "valid": is_valid,
+            "message": message,
+            "schema_file": str(per_document_schema_files[idx]),
+        })
+
+    return {
+        "schema_validated": all_valid,
+        "schema_message": "Schema validation passed for all checked documents"
+        if all_valid
+        else "Schema validation failed for one or more checked documents",
+        "document_results": document_results,
+        "schema_files": [str(path) for path in per_document_schema_files],
+    }
+
+
+def _validate_with_single_schema(
+    parsed_data: Any, schema_file: Path, document_index: int | None
+) -> dict[str, Any]:
+    """Validate parsed content with one schema file."""
+    is_valid = False
+    message = "Unable to parse content for schema validation"
+    document_results: list[dict[str, Any]] | None = None
+    if parsed_data is not None:
+        is_valid, message, document_results = _validate_against_schema_documents(
+            parsed_data, schema_file, document_index
+        )
+
+    response: dict[str, Any] = {
+        "schema_file": str(schema_file),
+        "schema_validated": is_valid,
+        "schema_message": message,
+    }
+    if document_results is not None:
+        response["document_results"] = document_results
+    return response
+
+
+def _run_schema_validation(
+    parsed_data: Any,
+    schema_file: Path | None,
+    per_document_schema_files: list[Path] | None,
+    document_index: int | None,
+) -> dict[str, Any]:
+    """Run schema validation and return response fields."""
+    if per_document_schema_files is not None:
+        return _validate_with_schema_paths(
+            parsed_data, per_document_schema_files, document_index
+        )
+    if schema_file is not None:
+        return _validate_with_single_schema(parsed_data, schema_file, document_index)
+    return {"schema_message": "No schema file found or provided"}
 
 
 def _handle_schema_scan(
@@ -229,6 +343,18 @@ def data_schema(
     schema_path: Annotated[
         str | None, Field(description="Path to schema file (for validate action)")
     ] = None,
+    schema_paths: Annotated[
+        list[str] | None,
+        Field(
+            description="Optional per-document schema file paths for multi-document YAML (for validate action)"
+        ),
+    ] = None,
+    document_index: Annotated[
+        int | None,
+        Field(
+            description="Optional YAML document index for validate action in multi-document files (0-based)"
+        ),
+    ] = None,
     schema_url: Annotated[
         str | None, Field(description="Schema URL (for associate action)")
     ] = None,
@@ -270,7 +396,7 @@ def data_schema(
     """
     handlers: dict[str, Callable[[], dict[str, Any]]] = {
         "validate": lambda: _handle_schema_validate(
-            file_path, schema_path, schema_manager
+            file_path, schema_path, schema_paths, document_index, schema_manager
         ),
         "scan": lambda: _handle_schema_scan(search_paths, max_depth, schema_manager),
         "add_dir": lambda: _handle_schema_add_dir(path, schema_manager),

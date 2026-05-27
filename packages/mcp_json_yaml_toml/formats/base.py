@@ -6,6 +6,7 @@ Extracted from server.py to complete ARCH-02.
 
 from __future__ import annotations
 
+from collections import UserList
 from pathlib import Path
 from typing import Any, Literal
 
@@ -15,6 +16,16 @@ from fastmcp.exceptions import ToolError
 from ruamel.yaml import YAML
 
 from mcp_json_yaml_toml.backends.base import FormatType, YQExecutionError
+
+
+class MultiDocumentYaml(UserList[Any]):
+    """Marker type for true YAML multi-document parses, not single-doc sequences."""
+
+
+def _load_yaml_documents(content: str) -> list[Any]:
+    """Load all YAML documents from a string using the shared safe parser config."""
+    yaml = YAML(typ="safe", pure=True)
+    return list(yaml.load_all(content))
 
 
 def _detect_file_format(file_path: str | Path) -> FormatType:
@@ -70,19 +81,28 @@ def _parse_content_for_validation(
     except ValueError:
         return None
 
+    # Initialize to unify return path across all format cases.
+    parsed_data: Any | None = None
     try:
         match fmt:
             case FormatType.JSON:
-                return orjson.loads(content)
+                parsed_data = orjson.loads(content)
             case FormatType.YAML:
-                yaml = YAML(typ="safe", pure=True)
-                return yaml.load(content)
+                documents = _load_yaml_documents(content)
+                if documents:
+                    # Keep single-document YAML returning the document directly for backward compatibility.
+                    parsed_data = (
+                        documents[0]
+                        if len(documents) == 1
+                        else MultiDocumentYaml(documents)
+                    )
             case FormatType.TOML:
-                return tomlkit.parse(content)
+                parsed_data = tomlkit.parse(content)
             case _:
-                return None
+                parsed_data = None
     except Exception as e:
         raise ToolError(f"Failed to parse content for validation: {e}") from e
+    return parsed_data
 
 
 def _parse_typed_json(
@@ -196,11 +216,65 @@ def should_fallback_toml_to_json(
     )
 
 
+def _validate_document_index(document_index: int | None) -> int | None:
+    """Validate optional YAML document index."""
+    if document_index is None:
+        return None
+    if document_index < 0:
+        raise ToolError("document_index must be >= 0")
+    return document_index
+
+
+def validate_document_index_for_file(
+    file_path: str | Path, input_format: FormatType, document_index: int | None
+) -> int | None:
+    """Validate document_index against the document count for the target file."""
+    validated_index = _validate_document_index(document_index)
+    if validated_index is None:
+        return None
+
+    if input_format != FormatType.YAML:
+        if validated_index != 0:
+            raise ToolError(
+                f"Document index {validated_index} out of range for single document"
+            )
+        return validated_index
+    path = Path(file_path)
+    document_count = len(_load_yaml_documents(path.read_text(encoding="utf-8")))
+    if validated_index >= document_count:
+        raise ToolError(
+            f"Document index {validated_index} out of range (found {document_count} documents)"
+        )
+    return validated_index
+
+
+def wrap_expression_for_document(expression: str, document_index: int | None) -> str:
+    """Wrap a yq expression to target a specific document index."""
+    validated_index = _validate_document_index(document_index)
+    if validated_index is None:
+        return expression
+    return f"select(documentIndex == {validated_index}) | ({expression})"
+
+
+def wrap_mutation_expression_for_document(
+    expression: str, document_index: int | None
+) -> str:
+    """Wrap a yq mutation expression to edit only one document."""
+    validated_index = _validate_document_index(document_index)
+    if validated_index is None:
+        return expression
+    return f"with(select(documentIndex == {validated_index}); {expression})"
+
+
 __all__ = [
+    "MultiDocumentYaml",
     "_detect_file_format",
     "_parse_content_for_validation",
     "_parse_set_value",
     "_parse_typed_json",
     "resolve_file_path",
     "should_fallback_toml_to_json",
+    "validate_document_index_for_file",
+    "wrap_expression_for_document",
+    "wrap_mutation_expression_for_document",
 ]

@@ -115,6 +115,46 @@ class TestDataQuery:
         assert result["format"] == "json"
 
     @pytest.mark.integration
+    def test_data_query_when_multi_document_yaml_then_returns_all_documents(
+        self, sample_multi_document_yaml_config: Path
+    ) -> None:
+        """Test data_query returns values across all YAML documents."""
+        result = data_query_fn(
+            str(sample_multi_document_yaml_config), ".name", output_format="json"
+        )
+
+        assert result["success"] is True
+        assert result["result"] == ["app-one", "app-two"]
+
+    @pytest.mark.integration
+    def test_data_query_when_document_index_set_then_queries_specific_document(
+        self, sample_multi_document_yaml_config: Path
+    ) -> None:
+        """Test data_query targets a specific YAML document by index."""
+        result = data_query_fn(
+            str(sample_multi_document_yaml_config),
+            ".name",
+            output_format="json",
+            document_index=1,
+        )
+
+        assert result["success"] is True
+        assert result["result"] == "app-two"
+
+    @pytest.mark.integration
+    def test_data_query_when_document_index_out_of_range_then_raises_tool_error(
+        self, sample_multi_document_yaml_config: Path
+    ) -> None:
+        """Test data_query rejects out-of-range YAML document indexes."""
+        with pytest.raises(ToolError, match=r"Document index 2 out of range"):
+            data_query_fn(
+                str(sample_multi_document_yaml_config),
+                ".name",
+                output_format="json",
+                document_index=2,
+            )
+
+    @pytest.mark.integration
     def test_data_query_when_file_missing_then_raises_tool_error(self) -> None:
         """Test data_query raises error for missing file.
 
@@ -370,6 +410,40 @@ class TestData:
         modified_data = json.loads(temp_config.read_text())
         assert modified_data["name"] == "modified"
 
+    @pytest.mark.integration
+    def test_data_set_when_multi_document_yaml_then_updates_target_document(
+        self, sample_multi_document_yaml_config: Path
+    ) -> None:
+        """Test data set updates only the selected YAML document."""
+        result = data_fn(
+            str(sample_multi_document_yaml_config),
+            operation="set",
+            key_path="name",
+            value='"updated-doc-two"',
+            document_index=1,
+        )
+
+        assert result["success"] is True
+
+        all_names = data_query_fn(
+            str(sample_multi_document_yaml_config), ".name", output_format="json"
+        )
+        assert all_names["result"] == ["app-one", "updated-doc-two"]
+
+    @pytest.mark.integration
+    def test_data_set_when_document_index_out_of_range_then_raises_tool_error(
+        self, sample_multi_document_yaml_config: Path
+    ) -> None:
+        """Test data set rejects out-of-range YAML document indexes."""
+        with pytest.raises(ToolError, match=r"Document index 2 out of range"):
+            data_fn(
+                str(sample_multi_document_yaml_config),
+                operation="set",
+                key_path="name",
+                value='"updated-doc-three"',
+                document_index=2,
+            )
+
     # --- DELETE Operations ---
 
     @pytest.mark.integration
@@ -599,6 +673,103 @@ class TestDataSchema:
         assert result["schema_validated"] is True
         assert result["overall_valid"] is True
         assert "Schema validation passed" in result["schema_message"]
+
+    @pytest.mark.integration
+    def test_data_schema_when_multi_document_yaml_then_validates_each_document(
+        self,
+        sample_multi_document_yaml_config: Path,
+        sample_multi_document_yaml_schema: Path,
+    ) -> None:
+        """Test data_schema validate reports per-document results for multi-doc YAML."""
+        result = data_schema_fn(
+            action="validate",
+            file_path=str(sample_multi_document_yaml_config),
+            schema_path=str(sample_multi_document_yaml_schema),
+        )
+
+        assert result["syntax_valid"] is True
+        assert result["schema_validated"] is True
+        assert result["overall_valid"] is True
+        assert "document_results" in result
+        assert len(result["document_results"]) == 2
+
+    @pytest.mark.integration
+    def test_data_schema_when_multi_document_yaml_with_schema_paths_then_uses_per_document_schema(
+        self,
+        sample_multi_document_yaml_config: Path,
+        sample_multi_document_yaml_schemas: tuple[Path, Path],
+    ) -> None:
+        """Test data_schema validate supports different schemas per document."""
+        schema0, schema1 = sample_multi_document_yaml_schemas
+        result = data_schema_fn(
+            action="validate",
+            file_path=str(sample_multi_document_yaml_config),
+            schema_paths=[str(schema0), str(schema1)],
+        )
+
+        assert result["syntax_valid"] is True
+        assert result["schema_validated"] is True
+        assert result["overall_valid"] is True
+        assert len(result["document_results"]) == 2
+
+    @pytest.mark.integration
+    def test_data_schema_when_json_array_root_then_validates_as_single_document(
+        self, tmp_path: Path
+    ) -> None:
+        """Test data_schema validates array-root JSON as one document."""
+        file_path = tmp_path / "items.json"
+        file_path.write_text(
+            json.dumps([{"name": "app-one"}, {"name": "app-two"}], indent=2),
+            encoding="utf-8",
+        )
+        schema_path = tmp_path / "items.schema.json"
+        schema_path.write_text(
+            json.dumps(
+                {
+                    "$schema": "http://json-schema.org/draft-07/schema#",
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"name": {"type": "string"}},
+                        "required": ["name"],
+                    },
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        result = data_schema_fn(
+            action="validate", file_path=str(file_path), schema_path=str(schema_path)
+        )
+
+        assert result["syntax_valid"] is True
+        assert result["schema_validated"] is True
+        assert result["overall_valid"] is True
+        assert "document_results" not in result
+
+    @pytest.mark.integration
+    def test_data_schema_when_yaml_sequence_root_with_schema_paths_then_rejects_single_document(
+        self, tmp_path: Path, sample_multi_document_yaml_schemas: tuple[Path, Path]
+    ) -> None:
+        """Test data_schema does not treat YAML sequence roots as multi-doc files."""
+        file_path = tmp_path / "sequence.yaml"
+        file_path.write_text(
+            "- name: app-one\n  enabled: true\n- name: app-two\n  enabled: false\n",
+            encoding="utf-8",
+        )
+        schema0, schema1 = sample_multi_document_yaml_schemas
+
+        result = data_schema_fn(
+            action="validate",
+            file_path=str(file_path),
+            schema_paths=[str(schema0), str(schema1)],
+        )
+
+        assert result["syntax_valid"] is True
+        assert result["schema_validated"] is False
+        assert result["overall_valid"] is False
+        assert "requires multi-document YAML input" in result["schema_message"]
 
     @pytest.mark.integration
     def test_data_schema_when_scan_then_finds_schemas(self, tmp_path: Path) -> None:
