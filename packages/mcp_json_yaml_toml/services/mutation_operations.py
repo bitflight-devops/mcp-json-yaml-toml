@@ -18,9 +18,13 @@ from mcp_json_yaml_toml.formats.base import (
     _detect_file_format,
     _parse_content_for_validation,
     _parse_set_value,
+    validate_document_index_for_file,
+    wrap_mutation_expression_for_document,
 )
 from mcp_json_yaml_toml.models.responses import MutationResponse
-from mcp_json_yaml_toml.services.schema_validation import _validate_against_schema
+from mcp_json_yaml_toml.services.schema_validation import (
+    _validate_against_schema_documents,
+)
 from mcp_json_yaml_toml.toml_utils import delete_toml_key, set_toml_value
 from mcp_json_yaml_toml.yaml_optimizer import optimize_yaml_file
 
@@ -43,7 +47,11 @@ __all__ = [
 
 
 def _validate_and_write_content(
-    path: Path, content: str, schema_path: Path | None, input_format: FormatType | str
+    path: Path,
+    content: str,
+    schema_path: Path | None,
+    input_format: FormatType | str,
+    document_index: int | None = None,
 ) -> None:
     """Validate content against schema (if present) and write to file.
 
@@ -52,6 +60,7 @@ def _validate_and_write_content(
         content: New file content string
         schema_path: Path to schema file or None
         input_format: File format (json, yaml, toml)
+        document_index: Optional YAML document index for multi-document files
 
     Raises:
         ToolError: If validation fails
@@ -59,7 +68,9 @@ def _validate_and_write_content(
     if schema_path:
         validation_data = _parse_content_for_validation(content, input_format)
         if validation_data is not None:
-            is_valid, msg = _validate_against_schema(validation_data, schema_path)
+            is_valid, msg, _ = _validate_against_schema_documents(
+                validation_data, schema_path, document_index
+            )
             if not is_valid:
                 raise ToolError(f"Schema validation failed: {msg}")
 
@@ -135,6 +146,7 @@ def _handle_data_set(
     value_type: Literal["string", "number", "boolean", "null", "json"] | None,
     input_format: FormatType,
     schema_info: SchemaInfo | None,
+    document_index: int | None = None,
     schema_manager: SchemaManager | None = None,
 ) -> MutationResponse:
     """Handle SET operation.
@@ -146,6 +158,7 @@ def _handle_data_set(
         value_type: How to interpret the value parameter
         input_format: File format type
         schema_info: Optional schema information
+        document_index: Optional YAML document index for multi-document files
         schema_manager: Schema manager instance for schema path lookup
 
     Returns:
@@ -173,6 +186,7 @@ def _handle_data_set(
         if not key_path.startswith(".")
         else f"{key_path} = {yq_value}"
     )
+    expression = wrap_mutation_expression_for_document(expression, document_index)
 
     try:
         # Dry run - get modified content
@@ -184,7 +198,9 @@ def _handle_data_set(
             in_place=False,
         )
 
-        _validate_and_write_content(path, result.stdout, schema_path, input_format)
+        _validate_and_write_content(
+            path, result.stdout, schema_path, input_format, document_index
+        )
 
     except YQExecutionError as e:
         raise ToolError(f"Set operation failed: {e}") from e
@@ -246,6 +262,7 @@ def _delete_yq_key_handler(
     input_format: FormatType,
     schema_path: Path | None,
     schema_info: SchemaInfo | None,
+    document_index: int | None = None,
 ) -> MutationResponse:
     """Handle YAML/JSON delete operation using yq.
 
@@ -255,6 +272,7 @@ def _delete_yq_key_handler(
         input_format: File format type
         schema_path: Optional path to schema file
         schema_info: Optional schema information
+        document_index: Optional YAML document index for multi-document files
 
     Returns:
         MutationResponse with operation result
@@ -265,6 +283,7 @@ def _delete_yq_key_handler(
     expression = (
         f"del(.{key_path})" if not key_path.startswith(".") else f"del({key_path})"
     )
+    expression = wrap_mutation_expression_for_document(expression, document_index)
 
     try:
         result = execute_yq(
@@ -274,7 +293,9 @@ def _delete_yq_key_handler(
             output_format=input_format,
             in_place=False,
         )
-        _validate_and_write_content(path, result.stdout, schema_path, input_format)
+        _validate_and_write_content(
+            path, result.stdout, schema_path, input_format, document_index
+        )
     except YQExecutionError as e:
         raise ToolError(f"Delete operation failed: {e}") from e
     except (TypeError, ValueError, OSError) as e:
@@ -293,6 +314,7 @@ def _handle_data_delete(
     key_path: str,
     input_format: FormatType,
     schema_info: SchemaInfo | None,
+    document_index: int | None = None,
     schema_manager: SchemaManager | None = None,
 ) -> MutationResponse:
     """Handle DELETE operation.
@@ -302,6 +324,7 @@ def _handle_data_delete(
         key_path: Key path to delete
         input_format: File format type
         schema_info: Optional schema information
+        document_index: Optional YAML document index for multi-document files
         schema_manager: Schema manager instance for schema path lookup
 
     Returns:
@@ -318,7 +341,7 @@ def _handle_data_delete(
         return _delete_toml_key_handler(path, key_path, schema_path, schema_info)
 
     return _delete_yq_key_handler(
-        path, key_path, input_format, schema_path, schema_info
+        path, key_path, input_format, schema_path, schema_info, document_index
     )
 
 
@@ -328,6 +351,7 @@ def _dispatch_set_operation(
     value: str | None,
     value_type: Literal["string", "number", "boolean", "null", "json"] | None,
     schema_info: SchemaInfo | None,
+    document_index: int | None = None,
     schema_manager: SchemaManager | None = None,
 ) -> MutationResponse:
     """Dispatch SET operation to handler.
@@ -338,6 +362,7 @@ def _dispatch_set_operation(
         value: JSON string value
         value_type: How to interpret the value parameter
         schema_info: Optional schema information
+        document_index: Optional YAML document index for multi-document files
         schema_manager: Schema manager instance for schema path lookup
 
     Returns:
@@ -355,9 +380,19 @@ def _dispatch_set_operation(
 
     input_format = _detect_file_format(path)
     require_format_enabled(input_format)
+    document_index = validate_document_index_for_file(
+        path, input_format, document_index
+    )
 
     return _handle_data_set(
-        path, key_path, value, value_type, input_format, schema_info, schema_manager
+        path,
+        key_path,
+        value,
+        value_type,
+        input_format,
+        schema_info,
+        document_index,
+        schema_manager,
     )
 
 
@@ -365,6 +400,7 @@ def _dispatch_delete_operation(
     path: Path,
     key_path: str | None,
     schema_info: SchemaInfo | None,
+    document_index: int | None = None,
     schema_manager: SchemaManager | None = None,
 ) -> MutationResponse:
     """Dispatch DELETE operation to handler.
@@ -373,6 +409,7 @@ def _dispatch_delete_operation(
         path: Path to configuration file
         key_path: Key path to delete
         schema_info: Optional schema information
+        document_index: Optional YAML document index for multi-document files
         schema_manager: Schema manager instance for schema path lookup
 
     Returns:
@@ -386,7 +423,10 @@ def _dispatch_delete_operation(
 
     input_format = _detect_file_format(path)
     require_format_enabled(input_format)
+    document_index = validate_document_index_for_file(
+        path, input_format, document_index
+    )
 
     return _handle_data_delete(
-        path, key_path, input_format, schema_info, schema_manager
+        path, key_path, input_format, schema_info, document_index, schema_manager
     )
