@@ -16,6 +16,7 @@ from mcp_json_yaml_toml.formats.base import (
     _detect_file_format,
     _parse_content_for_validation,
     resolve_file_path,
+    validate_document_index_for_file,
 )
 from mcp_json_yaml_toml.server import mcp, schema_manager
 from mcp_json_yaml_toml.services.schema_validation import (
@@ -47,6 +48,9 @@ def _handle_schema_validate(
 
     input_format = _detect_file_format(file_path_obj)
     require_format_enabled(input_format)
+    document_index = validate_document_index_for_file(
+        file_path_obj, input_format, document_index
+    )
 
     validation_results: dict[str, Any] = {
         "file": str(file_path_obj),

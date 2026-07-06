@@ -237,7 +237,7 @@ def sample_json_schema(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def sample_multi_document_yaml_schema(tmp_path: Path) -> Path:
-    """Create a schema for each YAML document in sample_multi_document_yaml_config."""
+    """Create one schema file applied to each document in multi-document YAML tests."""
     schema_data = {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",

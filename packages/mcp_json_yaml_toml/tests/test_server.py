@@ -155,6 +155,18 @@ class TestDataQuery:
             )
 
     @pytest.mark.integration
+    def test_data_query_when_json_document_index_set_then_raises_tool_error(
+        self, sample_json_config: Path
+    ) -> None:
+        """Test data_query rejects document_index for non-YAML inputs."""
+        with pytest.raises(
+            ToolError, match="document_index is only supported for YAML input files"
+        ):
+            data_query_fn(
+                str(sample_json_config), ".name", output_format="json", document_index=0
+            )
+
+    @pytest.mark.integration
     def test_data_query_when_file_missing_then_raises_tool_error(self) -> None:
         """Test data_query raises error for missing file.
 
@@ -442,6 +454,21 @@ class TestData:
                 key_path="name",
                 value='"updated-doc-three"',
                 document_index=2,
+            )
+
+    @pytest.mark.integration
+    def test_data_get_when_json_document_index_set_then_raises_tool_error(
+        self, sample_json_config: Path
+    ) -> None:
+        """Test data rejects document_index for non-YAML inputs."""
+        with pytest.raises(
+            ToolError, match="document_index is only supported for YAML input files"
+        ):
+            data_fn(
+                str(sample_json_config),
+                operation="get",
+                key_path="name",
+                document_index=0,
             )
 
     # --- DELETE Operations ---
@@ -747,6 +774,21 @@ class TestDataSchema:
         assert result["schema_validated"] is True
         assert result["overall_valid"] is True
         assert "document_results" not in result
+
+    @pytest.mark.integration
+    def test_data_schema_when_json_document_index_set_then_raises_tool_error(
+        self, sample_json_config: Path, sample_json_schema: Path
+    ) -> None:
+        """Test data_schema rejects document_index for non-YAML inputs."""
+        with pytest.raises(
+            ToolError, match="document_index is only supported for YAML input files"
+        ):
+            data_schema_fn(
+                action="validate",
+                file_path=str(sample_json_config),
+                schema_path=str(sample_json_schema),
+                document_index=0,
+            )
 
     @pytest.mark.integration
     def test_data_schema_when_yaml_sequence_root_with_schema_paths_then_rejects_single_document(

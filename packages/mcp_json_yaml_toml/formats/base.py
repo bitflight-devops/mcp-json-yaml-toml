@@ -234,11 +234,7 @@ def validate_document_index_for_file(
         return None
 
     if input_format != FormatType.YAML:
-        if validated_index != 0:
-            raise ToolError(
-                f"Document index {validated_index} out of range for single document"
-            )
-        return validated_index
+        raise ToolError("document_index is only supported for YAML input files")
     path = Path(file_path)
     document_count = len(_load_yaml_documents(path.read_text(encoding="utf-8")))
     if validated_index >= document_count:
