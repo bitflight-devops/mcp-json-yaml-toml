@@ -17,9 +17,7 @@ from mcp_json_yaml_toml.formats.base import (
     validate_document_index_for_file,
     wrap_expression_for_document,
 )
-from mcp_json_yaml_toml.models.responses import (
-    DataResponse,  # noqa: TC001 — runtime import required by FastMCP/Pydantic for return-type resolution
-)
+from mcp_json_yaml_toml.models.responses import DataResponse
 from mcp_json_yaml_toml.server import mcp
 from mcp_json_yaml_toml.services.data_operations import _build_query_response
 

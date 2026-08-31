@@ -10,6 +10,8 @@ for reading and editing JSON configuration files, including:
 - MCP tool edits (specific updates)
 """
 
+from __future__ import annotations
+
 import json
 import subprocess
 import sys

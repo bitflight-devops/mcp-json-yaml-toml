@@ -69,7 +69,7 @@ dev = [
     "pytest-mock>=3.14.0",
     "pytest-xdist>=3.8.0",
     "pytest>=9.0.2",
-    "ruff>=0.14.14",
+    "ruff==0.15.3",
     "tiktoken>=0.12.0",
     "toml-sort>=0.24.3",
     "ty>=0.0.75",
@@ -119,7 +119,6 @@ testpaths = ["packages/mcp_json_yaml_toml/tests"]
 include = ["packages", "scripts"]
 
 [tool.ruff]
-fix = true
 src = [".github", ".gitlab", "packages", "scripts", "tests", "typings"]
 target-version = "py311"
 unsafe-fixes = true

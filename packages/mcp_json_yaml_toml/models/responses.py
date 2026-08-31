@@ -14,9 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from mcp_json_yaml_toml.schemas import (
-    SchemaInfo,  # noqa: TC001 — Pydantic needs this at runtime for model building
-)
+from mcp_json_yaml_toml.schemas import SchemaInfo
 
 
 class _DictAccessMixin:

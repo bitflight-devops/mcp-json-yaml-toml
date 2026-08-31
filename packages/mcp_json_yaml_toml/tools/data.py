@@ -7,7 +7,7 @@ from typing import Annotated, Literal, assert_never
 from pydantic import Field
 
 from mcp_json_yaml_toml.formats.base import resolve_file_path
-from mcp_json_yaml_toml.models.responses import (  # noqa: TC001 — FastMCP resolves return type at runtime
+from mcp_json_yaml_toml.models.responses import (
     DataResponse,
     MutationResponse,
     SchemaResponse,

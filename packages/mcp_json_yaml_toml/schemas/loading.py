@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from pathlib import Path  # noqa: TC003 — used at runtime in function bodies
+from pathlib import Path
 
 import orjson
 import tomlkit

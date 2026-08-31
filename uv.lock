@@ -1360,7 +1360,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
-    { name = "ruff", specifier = ">=0.14.14" },
+    { name = "ruff", specifier = "==0.15.3" },
     { name = "tiktoken", specifier = ">=0.12.0" },
     { name = "toml-sort", specifier = ">=0.24.3" },
     { name = "ty", specifier = ">=0.0.75" },
