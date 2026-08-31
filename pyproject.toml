@@ -60,10 +60,8 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "basedpyright>=1.37.2",
     "hatch-vcs>=0.5.0",
     "hatchling>=1.14.0",
-    "mypy>=1.19.1",
     "opentelemetry-sdk>=1.30.0",
     "prek>=0.2.19",
     "pytest-asyncio>=1.2.0",
@@ -74,6 +72,7 @@ dev = [
     "ruff>=0.14.14",
     "tiktoken>=0.12.0",
     "toml-sort>=0.24.3",
+    "ty>=0.0.75",
     "types-jsonschema>=4.26.0.20251224",
     "uv-sort>=0.7.0",
 ]
@@ -113,6 +112,11 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 pythonpath = [".", "packages/"]
 testpaths = ["packages/mcp_json_yaml_toml/tests"]
+
+[tool.ty.src]
+# The two directories that hold Python sources. `tests/` is a build artefact
+# directory here (no .py files); the test suite lives under `packages/`.
+include = ["packages", "scripts"]
 
 [tool.ruff]
 fix = true
@@ -187,6 +191,9 @@ ignore = [
     "S603", # subprocess without shell=True
     "S606", # os.exec* without shell - intentional for privilege elevation (safer than with shell)
     "T201", # print() statements are intentional for CI output visibility
+    "TC001",
+    "TC002",
+    "TC003",
     "TRY003", # Long error messages are fine
 ]
 preview = true
@@ -237,48 +244,14 @@ max-line-length = 120
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+# Type checking: Astral ty only (`[tool.ty.*]`, `uv run ty check packages/`, CI + pre-commit).
+# Mypy and Pyright/basedpyright overlap ty; we disable them here so IDEs and one-off CLI runs
+# do not second-guess ty or force duplicate config and edge-case handling.
 [tool.mypy]
-disable_error_code = ["call-arg", "misc"]
-explicit_package_bases = true
-extra_checks = true
-ignore_missing_imports = true
-mypy_path = ["packages", "scripts"]
-pretty = true
-python_version = "3.11"
-show_error_codes = true
-strict = true
-warn_redundant_casts = true
-warn_unused_configs = true
-warn_unused_ignores = true
-
-[[tool.mypy.overrides]]
-disable_error_code = [
-    "attr-defined",
-    "call-arg",
-    "var-annotated",
-    "valid-type",
-    "no-any-return",
-    "index",
-]
-module = [
-    "test.*",
-    "tests.*",
-    ".claude.*",
-    ".claude.utilities.*",
-    "find-temp-documentation.*",
-]
+exclude = [".*"]
 
 [tool.basedpyright]
-extraPaths = ["**/packages", "**/scripts", "**/tests"]
-ignore = ["**/typings", "**/tests"]
-include = ["**/packages", "**/scripts"]
-pythonVersion = "3.11"
-reportImplicitRelativeImport = false
-reportMissingImports = true
-reportMissingTypeStubs = false
-reportPrivateImportUsage = true
-reportUnnecessaryTypeIgnoreComment = "error"
-typeCheckingMode = "basic"
+typeCheckingMode = "off"
 
 [tool.tomlsort]
 in_place = true

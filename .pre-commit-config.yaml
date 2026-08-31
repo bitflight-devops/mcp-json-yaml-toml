@@ -14,7 +14,7 @@ default_stages:
 
 repos:
   - repo: https://github.com/mxr/sync-pre-commit-deps
-    rev: v0.0.3
+    rev: v0.0.5
     hooks:
       - id: sync-pre-commit-deps
 
@@ -51,7 +51,7 @@ repos:
 
   # Python formatting and linting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.10
+    rev: v0.16.5
     hooks:
       - id: ruff
         name: Lint Python with ruff
@@ -60,7 +60,7 @@ repos:
         name: Format Python with ruff
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.20.0
+    rev: v0.23.2
     hooks:
       - id: markdownlint-cli2
 
@@ -73,11 +73,6 @@ repos:
         types_or: [yaml, json, markdown]
         args: [--ignore-path, .prettierignore]
         exclude: (\.lock$|mkdocs\.yml|docs/generated/)
-
-  - repo: https://github.com/DetachHead/basedpyright-prek-mirror
-    rev: 1.36.1
-    hooks:
-      - id: basedpyright
 
   # Shell formatting
   - repo: https://github.com/pecigonzalo/pre-commit-shfmt
@@ -92,7 +87,7 @@ repos:
           - -ci
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
         exclude: ^scripts/apt-fast
@@ -100,13 +95,12 @@ repos:
   # Local hooks for type checking
   - repo: local
     hooks:
-      - id: mypy
-        name: mypy
-        entry: uv run -q --active --inexact --with pep723-loader --with mypy pep723-loader mypy
+      - id: ty
+        name: ty check
+        entry: uv run -q ty check
         language: system
         types: [python]
         pass_filenames: true
-        args: ["--config-file", "pyproject.toml"]
 
 # Configuration for specific hooks
 default_language_version:

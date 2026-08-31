@@ -1,5 +1,5 @@
-# /// script
 # List dependencies for linting only
+# /// script
 # dependencies = [
 #   "hatchling>=1.14.0",
 # ]

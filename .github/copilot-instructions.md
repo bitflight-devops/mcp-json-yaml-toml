@@ -30,7 +30,7 @@ This command:
 
 - Creates `.venv/` virtual environment
 - Installs all Python dependencies from `pyproject.toml`
-- Installs dev dependencies (pytest, ruff, mypy, basedpyright, prek)
+- Installs dev dependencies (pytest, ruff, ty, prek)
 - Is idempotent - safe to run multiple times
 
 **NEVER use `pip install` or bare `python` commands. Always use `uv run <command>`.**
@@ -66,21 +66,15 @@ uv run ruff check
 
 **If it fails**: Run `uv run ruff check --fix` to auto-fix. Some issues require manual fixes.
 
-### 3. Type Checking - Mypy
+### 3. Type Checking - ty
 
 ```bash
-uv run mypy packages/ --show-error-codes
+uv run ty check packages/
 ```
 
 **Critical**: NEVER suppress type errors with `# type: ignore` for structural issues. Fix the root cause.
 
-### 4. Type Checking - Basedpyright
-
-```bash
-uv run basedpyright packages/
-```
-
-### 5. Markdown Linting
+### 4. Markdown Linting
 
 ```bash
 npx -y markdownlint-cli2
@@ -88,7 +82,7 @@ npx -y markdownlint-cli2
 
 Uses `.markdownlint-cli2.jsonc` for configuration.
 
-### 6. YAML/JSON/Markdown Formatting
+### 5. YAML/JSON/Markdown Formatting
 
 ```bash
 npx -y prettier --check "**/*.{md,json,yaml,yml}" --ignore-path .gitignore
@@ -96,7 +90,7 @@ npx -y prettier --check "**/*.{md,json,yaml,yml}" --ignore-path .gitignore
 
 **If it fails**: Run `npx -y prettier --write "**/*.{md,json,yaml,yml}" --ignore-path .gitignore` to auto-fix.
 
-### 7. Tests
+### 6. Tests
 
 ```bash
 uv run pytest
@@ -154,7 +148,7 @@ mcp-json-yaml-toml/
 
 ### Key Configuration Files
 
-- **pyproject.toml**: Single source of truth for all tool configs (ruff, mypy, basedpyright, pytest, hatch)
+- **pyproject.toml**: Single source of truth for all tool configs (ruff, ty, pytest, hatch)
 - **.pre-commit-config.yaml**: Git hooks config (uses `prek`, a Rust-based pre-commit replacement)
 - **manifest.json**: MCPB manifest for MCP server distribution
 - **.gitignore**: Excludes `.venv/`, `__pycache__/`, `binaries/`, build artifacts
@@ -165,13 +159,12 @@ The CI runs these jobs in parallel (all must pass):
 
 1. **format**: `uv run ruff format --check`
 2. **lint**: `uv run ruff check --output-format=github`
-3. **typecheck**: `uv run mypy packages/ --show-error-codes`
-4. **basedpyright**: `uv run basedpyright packages/`
-5. **lint-extra**: markdownlint, prettier, shellcheck, shfmt
-6. **validate-manifest**: `npx -y @anthropic-ai/mcpb validate manifest.json`
-7. **test**: Matrix across Python 3.11-3.14, uploads coverage XML
-8. **coverage-summary**: Comments PR with coverage percentage
-9. **release**: Auto-tags and releases on main branch merges
+3. **typecheck**: `uv run ty check packages/`
+4. **lint-extra**: markdownlint, prettier, shellcheck, shfmt
+5. **validate-manifest**: `npx -y @anthropic-ai/mcpb validate manifest.json`
+6. **test**: Matrix across Python 3.11-3.14, uploads coverage XML
+7. **coverage-summary**: Comments PR with coverage percentage
+8. **release**: Auto-tags and releases on main branch merges
 
 ## Testing Guidelines
 
@@ -211,7 +204,7 @@ uv run pytest -n 0
 
 ### 2. Type Errors
 
-**Problem**: Mypy/basedpyright errors after changes
+**Problem**: ty errors after changes
 **Solution**: Fix the root cause. DO NOT use `# type: ignore` for structural issues. Use proper type annotations.
 
 ### 3. Format/Lint Failures

@@ -19,8 +19,7 @@ updates:
         patterns:
           - "pytest*"
           - "ruff"
-          - "mypy"
-          - "basedpyright"
+          - "ty"
           - "pre-commit"
           - "hatchling"
           - "hatch-vcs"
