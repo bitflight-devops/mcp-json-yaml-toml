@@ -187,6 +187,9 @@ ignore = [
     "S603", # subprocess without shell=True
     "S606", # os.exec* without shell - intentional for privilege elevation (safer than with shell)
     "T201", # print() statements are intentional for CI output visibility
+    "TC001",
+    "TC002",
+    "TC003",
     "TRY003", # Long error messages are fine
 ]
 preview = true
