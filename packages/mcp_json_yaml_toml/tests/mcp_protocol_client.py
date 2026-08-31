@@ -104,7 +104,7 @@ class MCPClient:
     def start(self) -> None:
         """Start the MCP server subprocess.
 
-        Spawns ``uv run mcp-json-yaml-toml`` and performs MCP initialization
+        Spawns ``uv run --no-sync mcp-json-yaml-toml`` and performs MCP initialization
         handshake. Background daemon threads are started to drain stderr and
         read stdout so that Windows pipe buffers never fill.
 
@@ -115,7 +115,7 @@ class MCPClient:
         self._stderr_lines = []
 
         self.process = subprocess.Popen(
-            ["uv", "run", "mcp-json-yaml-toml"],
+            ["uv", "run", "--no-sync", "mcp-json-yaml-toml"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
