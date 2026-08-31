@@ -74,11 +74,6 @@ repos:
         args: [--ignore-path, .prettierignore]
         exclude: (\.lock$|mkdocs\.yml|docs/generated/)
 
-  - repo: https://github.com/DetachHead/basedpyright-prek-mirror
-    rev: 1.36.1
-    hooks:
-      - id: basedpyright
-
   # Shell formatting
   - repo: https://github.com/pecigonzalo/pre-commit-shfmt
     rev: v2.2.0

@@ -52,7 +52,6 @@ All jobs run on push to main and pull requests to main.
 | `format`            | `ruff format --check`                                             | 21-40   |
 | `lint`              | `ruff check --output-format=github`                               | 42-62   |
 | `typecheck`         | `mypy packages/ --show-error-codes`                               | 64-84   |
-| `basedpyright`      | `basedpyright packages/`                                          | 86-106  |
 | `lint-extra`        | markdownlint, prettier, shellcheck, shfmt                         | 108-142 |
 | `validate-manifest` | `mcpb validate manifest.json`                                     | 144-152 |
 | `test`              | pytest + coverage, matrix: Python 3.11-3.14 × Linux/macOS/Windows | 154-189 |

@@ -20,7 +20,6 @@ updates:
           - "pytest*"
           - "ruff"
           - "mypy"
-          - "basedpyright"
           - "pre-commit"
           - "hatchling"
           - "hatch-vcs"

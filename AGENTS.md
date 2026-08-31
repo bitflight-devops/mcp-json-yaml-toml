@@ -95,7 +95,6 @@ uv run prek run --files <file_path1> <file_path2>
 uv run ruff format --check          # Formatting (Black-compatible)
 uv run ruff check                   # Linting (500+ rules)
 uv run mypy packages/ --show-error-codes  # Type checking (mypy)
-uv run basedpyright packages/       # Type checking (strict)
 ```
 
 **Structured Data**:
@@ -172,7 +171,7 @@ Use the specified tools and workflows. Alternative approaches bypass project aut
 
 - Dependency management → Use `uv add/remove` (not manual `pyproject.toml` edits)
 - Python execution → Use `uv run` (not bare `python` or `pip install`)
-- Type checking → Run both `mypy` and `basedpyright` (required gates)
+- Type checking → Run `mypy` (required gate)
 
 **Configuration**:
 

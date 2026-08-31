@@ -60,7 +60,6 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "basedpyright>=1.37.2",
     "hatch-vcs>=0.5.0",
     "hatchling>=1.14.0",
     "mypy>=1.19.1",
@@ -271,17 +270,11 @@ module = [
     "find-temp-documentation.*",
 ]
 
+# Type checking: mypy only (`[tool.mypy]`, `uv run mypy packages/`, CI + pre-commit).
+# Pyright/basedpyright overlaps mypy; we disable it here so IDEs and one-off CLI runs
+# do not second-guess mypy or force duplicate config and edge-case handling.
 [tool.basedpyright]
-extraPaths = ["**/packages", "**/scripts", "**/tests"]
-ignore = ["**/typings", "**/tests"]
-include = ["**/packages", "**/scripts"]
-pythonVersion = "3.11"
-reportImplicitRelativeImport = false
-reportMissingImports = true
-reportMissingTypeStubs = false
-reportPrivateImportUsage = true
-reportUnnecessaryTypeIgnoreComment = "error"
-typeCheckingMode = "basic"
+typeCheckingMode = "off"
 
 [tool.tomlsort]
 in_place = true
