@@ -79,8 +79,8 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Type check with mypy
-        run: uv run mypy packages/ --show-error-codes
+      - name: Type check with ty
+        run: uv run ty check packages/
         continue-on-error: false
 
   lint-extra:
